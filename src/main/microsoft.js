@@ -26,17 +26,20 @@ const crypto = require('node:crypto')
 const { BrowserWindow } = require('electron')
 const { postJson, postForm, fetchJson, HttpError } = require('./http')
 
-/** 微软登录的几个固定地址 */
-const AUTHORIZE_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize'
-const TOKEN_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/token'
-
 /**
- * 登录完跳回哪儿。
- * 【这个地址不是随便选的】它必须和用户在 Azure 上注册应用时填的**一字不差**，
- * 否则微软会直接拒。docs/09 里让用户填的就是这一个。
- * 它叫 "nativeclient"（本地客户端），是桌面程序的惯例地址——
- * 意思是"登录完把结果放在地址栏上就行，我们没有服务器去接它"。
+ * 微软登录的"入口"有两个，**必须和应用的配置对上**，对不上会被当场拒。
+ * （2026-10-08 用户实际踩到的：应用配成"仅个人账户"，代码用 `/common/`，
+ * 微软回一句 `The request is not valid for the application's 'userAudience' configuration`。）
+ *
+ *   consumers → 应用配成「仅个人 Microsoft 帐户」（我们让用户选的那种）
+ *   common    → 应用配成「任何组织目录 + 个人帐户」（也就是 'All'）
+ *
+ * 所以下面**两个都准备着**，哪个被拒就换另一个重试（见 loginEdge）。
  */
+const AUTHORITY = 'https://login.microsoftonline.com'
+const TENANTS = { personal: 'consumers', any: 'common' }
+
+/** 这是**注册在 Azure 上的那一串**，必须一字不差地原样发回去，别跟着 tenant 变 */
 const REDIRECT_URI = 'https://login.microsoftonline.com/common/oauth2/nativeclient'
 
 /** 要的权限：登录 Xbox Live + 允许我们之后不弹窗就续期（offline_access） */
@@ -250,10 +253,10 @@ async function finishChain(msAccessToken, base) {
  * 【为什么用单独的会话（partition）】这样它不会用到毛球别处存的 cookie，
  * 也不会把微软的登录状态留在毛球的常规会话里；而且每次都是干净的开始。
  */
-function askForCode(clientId, parentWindow) {
+function askForCode(clientId, tenant, parentWindow) {
   const { verifier, challenge } = makePkce()
 
-  const url = new URL(AUTHORIZE_URL)
+  const url = new URL(`${AUTHORITY}/${tenant}/oauth2/v2.0/authorize`)
   url.searchParams.set('client_id', clientId)
   url.searchParams.set('response_type', 'code')
   url.searchParams.set('redirect_uri', REDIRECT_URI)
@@ -315,6 +318,10 @@ function askForCode(clientId, parentWindow) {
         finish({ ok: true, code })
       } else if (denied === 'access_denied') {
         finish({ ok: false, error: '你取消了登录', cancelled: true })
+      } else if (/userAudience/i.test(description)) {
+        // 应用的"账户类型"设置和我们用的入口对不上。这不是用户的错，
+        // 上面的 login() 会自动换另一个入口再试一次，所以这儿只标记一下
+        finish({ ok: false, audienceMismatch: true, error: description })
       } else {
         finish({ ok: false, error: `微软那边说了句：${description || denied || '没给出原因'}` })
       }
@@ -350,13 +357,25 @@ async function login(options = {}) {
     }
   }
 
-  const asked = await askForCode(clientId, options.parentWindow)
+  // 先按"我自己注册时选的是仅个人账户"来试（docs/09 让用户选的就是这个）
+  let tenant = TENANTS.personal
+  let asked = await askForCode(clientId, tenant, options.parentWindow)
+
+  // 应用的账户类型和我们用的入口对不上 → 换另一个入口再试一次。
+  // 【为什么要自动重试】这一步完全不该让用户操心：他选"仅个人账户"还是"所有账户"
+  // 都是合理的，错的是我们只认一种。实测踩到过（2026-10-08）
+  if (!asked.ok && asked.audienceMismatch) {
+    tenant = TENANTS.any
+    asked = await askForCode(clientId, tenant, options.parentWindow)
+  }
   if (!asked.ok) return asked
+
+  const tokenEndpoint = `${AUTHORITY}/${tenant}/oauth2/v2.0/token`
 
   let tokens
   try {
     tokens = await postForm(
-      TOKEN_URL,
+      tokenEndpoint,
       {
         client_id: clientId,
         grant_type: 'authorization_code',
@@ -378,7 +397,9 @@ async function login(options = {}) {
   try {
     const account = await finishChain(tokens.access_token, {
       msRefreshToken: tokens.refresh_token || '',
-      clientId
+      clientId,
+      // 记下这次是从哪个入口进的——续期的时候要用同一个，不然又会撞上那个配置不匹配
+      tenant
     })
     return { ok: true, account }
   } catch (error) {
@@ -407,10 +428,13 @@ async function refresh(account) {
     return { ok: false, error: '这个账号缺续期用的信息，得重新登录一次' }
   }
 
+  // 用登录时记下的那个入口；老账号没记过就按"仅个人账户"来
+  const tokenEndpoint = `${AUTHORITY}/${account.tenant || TENANTS.personal}/oauth2/v2.0/token`
+
   let tokens
   try {
     tokens = await postForm(
-      TOKEN_URL,
+      tokenEndpoint,
       {
         client_id: account.clientId,
         grant_type: 'refresh_token',
