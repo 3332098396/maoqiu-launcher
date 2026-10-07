@@ -793,6 +793,57 @@ body {
   font-size: 12.5px;
   line-height: 1.75;
   color: var(--text-dim);
+  /* 说明文字里可能有换行（比如"本机内存…\n警告…"），按原样显示 */
+  white-space: pre-line;
+}
+
+.panel__desc--bad {
+  color: var(--danger);
+}
+
+/* 设置项里的一行：滑块 / 输入框 / 按钮排一排 */
+.setrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.input--num {
+  flex: 0 0 auto;
+  width: 96px;
+  text-align: center;
+}
+
+.setrow__unit {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.setrow__x {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.range {
+  flex: 1 1 220px;
+  min-width: 160px;
+  accent-color: #4a9bff;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.check input {
+  width: 16px;
+  height: 16px;
+  accent-color: #4a9bff;
+  cursor: pointer;
 }
 
 .join-row {

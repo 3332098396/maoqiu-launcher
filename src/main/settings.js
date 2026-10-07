@@ -34,10 +34,18 @@ const DEFAULTS = {
     /** 上次启动的版本，下次打开软件默认选它 */
     lastVersion: '',
     /**
-     * 有没有帮用户把游戏语言设成过中文。
-     * 只做一次——之后用户自己在游戏里改了就永远不再干预（见 launch.js）
+     * 帮哪个游戏目录设过中文（存的是目录路径）。
+     * 只设一次——之后用户自己在游戏里改了就永远不再干预（见 launch.js）。
+     * 【为什么记的是路径而不是"是/否"】开了版本隔离后，游戏目录会变成
+     * versions\<版本号>\，"设过了"这件事要按目录各算各的，
+     * 否则隔离后的新目录会被漏掉，游戏又变回英文
      */
-    languageApplied: false
+    languageAppliedDir: '',
+    /** 游戏窗口多大（像素）。默认就是游戏自己的标准尺寸 */
+    windowWidth: 854,
+    windowHeight: 480,
+    /** 版本隔离：每个版本的存档/Mod 各放各的（默认开，见 docs/01 默认值表） */
+    isolation: true
   }
 }
 
@@ -122,11 +130,42 @@ function validateMemoryMB(mb) {
   return { ok: true }
 }
 
+/** 窗口大小的合理范围。不是技术限制，是防手滑（比如输成 99999） */
+const WINDOW_LIMITS = { minWidth: 320, maxWidth: 3840, minHeight: 240, maxHeight: 2160 }
+
+/**
+ * 检查窗口大小合不合理。
+ * @returns {{ok: boolean, error?: string, warning?: string}}
+ */
+function validateWindow(width, height) {
+  const w = Number(width)
+  const h = Number(height)
+
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+    return { ok: false, error: '窗口大小要填数字' }
+  }
+  if (w < WINDOW_LIMITS.minWidth || h < WINDOW_LIMITS.minHeight) {
+    return {
+      ok: false,
+      error: `窗口太小了，最小 ${WINDOW_LIMITS.minWidth} × ${WINDOW_LIMITS.minHeight}`
+    }
+  }
+  if (w > WINDOW_LIMITS.maxWidth || h > WINDOW_LIMITS.maxHeight) {
+    return {
+      ok: false,
+      error: `窗口太大了，最大 ${WINDOW_LIMITS.maxWidth} × ${WINDOW_LIMITS.maxHeight}`
+    }
+  }
+  return { ok: true }
+}
+
 module.exports = {
   readConfig,
   writeConfig,
   totalMemoryMB,
   defaultMemoryMB,
   currentMemoryMB,
-  validateMemoryMB
+  validateMemoryMB,
+  validateWindow,
+  WINDOW_LIMITS
 }

@@ -218,27 +218,62 @@
         <aside class="side">
           <nav class="menu">
             <span class="menu__item menu__item--on">启动选项</span>
-            <span class="menu__item">个性化</span>
-            <span class="menu__item">其他</span>
+            <span class="menu__item menu__item--off" title="下一步就做">备份</span>
+            <span class="menu__divider">以后再说</span>
+            <span class="menu__item menu__item--off">个性化</span>
+            <span class="menu__item menu__item--off">其他</span>
           </nav>
+          <div class="side__note">灰色的以后再做</div>
         </aside>
 
         <div class="content">
-          <div class="notice">
-            <b>这是布局预览。</b>设置项从 <b>M6</b> 开始做。
+          <div class="notice" id="settings-notice">
+            这里改完马上生效，下次启动游戏就按这里的来。
           </div>
 
-          <div class="preview">
-            <div class="preview__label">这一页以后会有</div>
-            <ul class="preview__list">
-              <li><b>游戏目录</b><span>游戏装在哪，默认是「我的文档」旁边那个标准位置</span></li>
-              <li><b>内存分配</b><span>给游戏多少内存，会显示本机有多少、给建议值</span></li>
-              <li><b>窗口大小</b><span>游戏窗口多大，或者全屏</span></li>
-              <li><b>版本隔离</b><span>每个版本的存档和 Mod 互不干扰</span></li>
-              <li><b>进程优先级</b><span>低 / 中 / 高</span></li>
-              <li><b>下载源</b><span>官方源太慢时自动换国内镜像</span></li>
-            </ul>
-          </div>
+          <section class="panel">
+            <h3 class="panel__title">内存分配</h3>
+            <p class="panel__desc">
+              给游戏多少内存。给少了游戏会卡，给太多会把整台电脑拖慢。
+            </p>
+            <div class="setrow">
+              <input class="range" id="set-memory" type="range" min="512" max="8192" step="512" />
+              <input class="input input--num" id="set-memory-num" type="number" min="512" step="512" />
+              <span class="setrow__unit">MB</span>
+              <button class="linkbtn" type="button" id="set-memory-auto">恢复自动</button>
+            </div>
+            <p class="panel__desc" id="set-memory-hint"></p>
+          </section>
+
+          <section class="panel">
+            <h3 class="panel__title">窗口大小</h3>
+            <p class="panel__desc">
+              游戏窗口的宽和高（像素）。游戏里也能临时拖大小，但这里定了之后，
+              每次启动都是这个尺寸。
+            </p>
+            <div class="setrow">
+              <input class="input input--num" id="set-width" type="number" min="320" max="3840" step="10" />
+              <span class="setrow__x">×</span>
+              <input class="input input--num" id="set-height" type="number" min="240" max="2160" step="10" />
+              <button class="btn btn--ghost btn--sm" type="button" id="set-window-reset">
+                恢复默认
+              </button>
+            </div>
+            <p class="panel__desc" id="set-window-hint"></p>
+          </section>
+
+          <section class="panel">
+            <h3 class="panel__title">版本隔离</h3>
+            <p class="panel__desc">
+              <b>开着（推荐）</b>：每个版本的存档、Mod 各放各的文件夹，互不干扰。<br />
+              <b>关着</b>：所有版本共用游戏目录里的那一套，换个版本玩会看到同一批存档。
+            </p>
+            <label class="check">
+              <input type="checkbox" id="set-isolation" />
+              <span>开启版本隔离</span>
+            </label>
+            <p class="panel__desc" id="set-isolation-hint"></p>
+          </section>
         </div>
       </section>
     </main>

@@ -77,14 +77,35 @@ function makeSubstituter(values, unknown) {
 }
 
 /**
+ * 这个版本这次启动时，"游戏目录"在哪。
+ *
+ * 开了版本隔离 → 每个版本用自己的目录（versions\<版本号>\），
+ * 存档、Mod、设置都放在里面，各版本互不干扰；
+ * 关着 → 大家都用游戏目录本身，共用一套。
+ *
+ * 注意：这个目录会作为 --gameDir 传给游戏，游戏在哪儿建 saves、logs、
+ * options.txt 全看它，所以下面所有跟"游戏目录"有关的地方都得用它，
+ * 不能直接用 paths.gameDir()
+ */
+function effectiveGameDir(versionId) {
+  const isolated = Boolean(settings.readConfig().launch.isolation)
+  return isolated ? paths.versionDir(versionId) : paths.gameDir()
+}
+
+/**
  * 算出完整的启动命令。
  *
  * @returns {{jvmArgs: string[], gameArgs: string[], classpath: string,
  *            nativesDir: string, assetsIndex: string,
  *            missing: string[], unknown: string[]}}
  */
-function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath }) {
+function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath, gameDir, window }) {
   const ctx = install.buildContext()
+  // 告诉规则判断："我们支持自定义分辨率"——版本 JSON 里那两条
+  // --width/--height 参数就是靠这个开关才生效的
+  ctx.features = { has_custom_resolution: true }
+
+  const runDir = gameDir || paths.gameDir()
   const nativesDir = paths.versionNativesDir(versionId)
   const missing = []
   const unknown = new Set()
@@ -123,7 +144,7 @@ function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath
     version_name: versionId,
     version_type: versionJson.type || 'release',
 
-    game_directory: paths.gameDir(),
+    game_directory: runDir,
     assets_root: paths.assetsDir(),
     assets_index_name: String(assetsIndex),
     // 远古版本（1.7 以前）的资源目录，现在用不到，留着以防万一
@@ -137,10 +158,12 @@ function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath
     launcher_name: LAUNCHER_NAME,
     launcher_version: LAUNCHER_VERSION,
 
-    // 下面这些只有开了对应的"特性开关"才会用到，我们不开，
-    // 但占位符先备着，免得被替换成空白
-    resolution_width: '854',
-    resolution_height: '480',
+    // 窗口大小：上面开了 has_custom_resolution，这两个值会真的传给游戏
+    resolution_width: String(window?.width || 854),
+    resolution_height: String(window?.height || 480),
+
+    // 下面这些对应的"特性开关"我们不开，但占位符先备着，
+    // 免得被替换成空白
     quickPlayPath: '',
     quickPlaySingleplayer: '',
     quickPlayMultiplayer: '',
@@ -264,19 +287,21 @@ async function ensureLogConfig(versionJson) {
  * 【改的是哪个文件】游戏目录下的 options.txt（游戏自己的设置文件），
  * 只动 lang: 那一行，其他设置原样保留；先写临时文件再改名，中途断电不会写坏。
  */
-function ensureGameLanguage(log) {
+function ensureGameLanguage(gameDir, log) {
   const config = settings.readConfig()
-  if (config.launch.languageApplied) return
 
-  const file = paths.gameOptionsFile()
+  // 这个游戏目录已经设过了？那就不碰（用户自己改了就再也不管）
+  if (config.launch.languageAppliedDir === gameDir) return
+
+  const file = paths.gameOptionsFile(gameDir)
 
   try {
     const exists = fs.existsSync(file)
     const text = exists ? fs.readFileSync(file, 'utf8') : ''
 
-    // 已经是中文了：不用改，只记一笔"这件事做过了"
+    // 已经是中文了：不用改，只记一笔"这个目录做过了"
     if (/^lang:zh_cn\s*$/m.test(text)) {
-      settings.writeConfig({ launch: { languageApplied: true } })
+      settings.writeConfig({ launch: { languageAppliedDir: gameDir } })
       return
     }
 
@@ -289,11 +314,11 @@ function ensureGameLanguage(log) {
     }
 
     const temp = `${file}.tmp`
-    paths.ensureDir(paths.gameDir())
+    paths.ensureDir(gameDir)
     fs.writeFileSync(temp, next, 'utf8')
     fs.renameSync(temp, file)
 
-    settings.writeConfig({ launch: { languageApplied: true } })
+    settings.writeConfig({ launch: { languageAppliedDir: gameDir } })
     if (log) log.line('[启动器] 第一次启动，已把游戏语言设成简体中文（你以后自己改了，就不会再动它）')
   } catch (error) {
     // 设不上不该拦着玩游戏，记一笔就算了
@@ -549,10 +574,16 @@ async function launch(versionId, options = {}) {
     return { ok: false, error: '这个版本装了 Mod 加载器，暂时还启动不了，先玩纯原版' }
   }
 
-  // ——— ③ 内存 ———
+  // ——— ③ 内存和窗口大小（都在设置页里改） ———
+  const launchSettings = settings.readConfig().launch
   const memoryMB = settings.currentMemoryMB()
   const memoryCheck = settings.validateMemoryMB(memoryMB)
   if (!memoryCheck.ok) return { ok: false, error: memoryCheck.error }
+
+  const windowSize = {
+    width: Number(launchSettings.windowWidth) || 854,
+    height: Number(launchSettings.windowHeight) || 480
+  }
 
   // ——— ④ Java ———
   const javaExe = javaUtil.findJava(versionJson)
@@ -575,11 +606,21 @@ async function launch(versionId, options = {}) {
       ? `注意：这个版本建议用 Java ${wantedMajor}，现在找到的是 Java ${probe.version}，可能会起不来。`
       : ''
 
-  // ——— ⑤ 日志配置（很小，没有就补下；下不到不致命） ———
+  // ——— ⑤ 这次启动用哪个"游戏目录"（版本隔离决定） ———
+  const runDir = effectiveGameDir(versionId)
+  paths.ensureDir(runDir)
+
+  // ——— ⑥ 日志配置（很小，没有就补下；下不到不致命） ———
   const logConfigPath = await ensureLogConfig(versionJson)
 
-  // ——— ⑥ 拼参数，并检查文件齐不齐 ———
-  const command = buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath })
+  // ——— ⑦ 拼参数，并检查文件齐不齐 ———
+  const command = buildCommand(versionId, versionJson, {
+    account,
+    memoryMB,
+    logConfigPath,
+    gameDir: runDir,
+    window: windowSize
+  })
 
   if (command.missing.length > 0) {
     const sample = command.missing.slice(0, 3).join('、')
@@ -599,10 +640,10 @@ async function launch(versionId, options = {}) {
     }
   }
 
-  // ——— ⑦ natives 目录 ———
+  // ——— ⑧ natives 目录 ———
   prepareNatives(versionId, versionJson)
 
-  // ——— ⑧ 起进程 ———
+  // ——— ⑨ 起进程 ———
   const args = [...command.jvmArgs, versionJson.mainClass, ...command.gameArgs]
 
   paths.ensureDir(paths.logsDir())
@@ -611,20 +652,24 @@ async function launch(versionId, options = {}) {
 
   const log = createLogCollector({ onLog, logFile })
   log.line(`[启动器] 版本 ${versionId} · Java ${probe.version}（${javaExe.source}）· 内存 ${memoryMB} MB`)
-  log.line(`[启动器] 游戏目录：${paths.gameDir()}`)
+  log.line(`[启动器] 游戏窗口：${windowSize.width} × ${windowSize.height}`)
+  log.line(
+    `[启动器] 游戏目录：${runDir}` +
+      (settings.readConfig().launch.isolation ? '（开着版本隔离）' : '')
+  )
   log.line(`[启动器] 完整日志会存到：${logFile}`)
   if (javaWarning) log.line(`[启动器] ${javaWarning}`)
   if (command.unknown.length > 0) {
     log.line(`[启动器] 这些启动参数不认识，已按空值处理：${command.unknown.join('、')}`)
   }
 
-  // 第一次启动的话，把游戏语言设成中文（只做一次，见函数说明）
-  ensureGameLanguage(log)
+  // 第一次用这个游戏目录的话，把游戏语言设成中文（只做一次，见函数说明）
+  ensureGameLanguage(runDir, log)
 
   let child
   try {
     child = spawn(javaExe.path, args, {
-      cwd: paths.gameDir(),
+      cwd: runDir,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe']
     })

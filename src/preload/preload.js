@@ -122,5 +122,19 @@ contextBridge.exposeInMainWorld('api', {
    * 删除一个版本（界面必须先二次确认；主进程还会再挡一道路径检查）。
    * @returns {Promise<{ok: boolean, sizeBytes?: number, error?: string}>}
    */
-  deleteVersion: (id) => ipcRenderer.invoke('versions:delete', id)
+  deleteVersion: (id) => ipcRenderer.invoke('versions:delete', id),
+
+  // ——— 启动设置（M6.2）———
+
+  /**
+   * 设置页要的东西：当前设置 + 本机内存/屏幕大小 + 共享存档目录里有几个世界。
+   * @returns {Promise<object>}
+   */
+  getSettings: () => ipcRenderer.invoke('settings:get'),
+
+  /**
+   * 改启动设置，只传要改的那几项（memoryMB / windowWidth / windowHeight / isolation）。
+   * @returns {Promise<{ok: boolean, error?: string}>}
+   */
+  setSettings: (patch) => ipcRenderer.invoke('settings:set', patch)
 })

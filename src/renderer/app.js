@@ -30,6 +30,9 @@ function showPage(name) {
 
   // 启动页每次进来都重新读一遍：用户可能刚在下载页装完新版本
   if (name === 'launch') loadLaunchPage()
+
+  // 设置页同理：设置可能被别处改过（比如改完内存回到启动页看信息卡）
+  if (name === 'settings') loadSettingsPage()
 }
 
 for (const button of navButtons) {
@@ -828,6 +831,215 @@ delModalEl.addEventListener('click', (event) => {
     delModalEl.hidden = true
     deletingVersion = ''
   }
+})
+
+// ═══════════════════════════════════════
+// 设置页：启动选项（M6.2）
+// ═══════════════════════════════════════
+
+const setMemoryEl = document.getElementById('set-memory')
+const setMemoryNumEl = document.getElementById('set-memory-num')
+const setMemoryHintEl = document.getElementById('set-memory-hint')
+const setWidthEl = document.getElementById('set-width')
+const setHeightEl = document.getElementById('set-height')
+const setWindowHintEl = document.getElementById('set-window-hint')
+const setIsolationEl = document.getElementById('set-isolation')
+const setIsolationHintEl = document.getElementById('set-isolation-hint')
+const settingsNoticeEl = document.getElementById('settings-notice')
+
+/** 设置页拿到的信息：本机内存、屏幕大小、当前设置 */
+let settingsInfo = null
+/** "已保存"这种提示过一会儿要自己消失 */
+let settingsNoticeTimer = null
+
+function saySettings(text, kind = 'info', autoClear = false) {
+  settingsNoticeEl.textContent = text
+  settingsNoticeEl.classList.toggle('notice--ok', kind === 'ok')
+  settingsNoticeEl.classList.toggle('notice--error', kind === 'error')
+
+  if (settingsNoticeTimer) {
+    clearTimeout(settingsNoticeTimer)
+    settingsNoticeTimer = null
+  }
+  if (autoClear) {
+    settingsNoticeTimer = setTimeout(() => {
+      settingsNoticeEl.classList.remove('notice--ok', 'notice--error')
+      settingsNoticeEl.textContent = '这里改完马上生效，下次启动游戏就按这里的来。'
+    }, 2500)
+  }
+}
+
+function formatMemory(mb) {
+  if (mb >= 1024) {
+    const gb = mb / 1024
+    return `${Number.isInteger(gb) ? gb : gb.toFixed(1)} GB`
+  }
+  return `${mb} MB`
+}
+
+function renderMemoryHint() {
+  if (!settingsInfo) return
+  const mb = Number(setMemoryNumEl.value)
+  const total = settingsInfo.totalMemoryMB
+
+  const lines = [
+    `本机一共 ${formatMemory(total)} 内存，建议分 ${formatMemory(settingsInfo.suggestedMemoryMB)} 给游戏`
+  ]
+  let bad = false
+
+  if (!Number.isFinite(mb) || mb < 512) {
+    lines.push('太少了——游戏至少要 512 MB 才跑得起来')
+    bad = true
+  } else if (mb > total) {
+    lines.push('比本机内存还大，启动会被拦住')
+    bad = true
+  } else if (mb > total * 0.8) {
+    lines.push('给这么多会把电脑拖得很卡，建议给系统留一些')
+    bad = true
+  }
+
+  if (settingsInfo.memoryAuto) lines.push('现在用的是自动值；动一下滑块就固定成你设的')
+
+  setMemoryHintEl.textContent = lines.join('\n')
+  setMemoryHintEl.classList.toggle('panel__desc--bad', bad)
+}
+
+function renderWindowHint() {
+  if (!settingsInfo) return
+  const width = Number(setWidthEl.value)
+  const height = Number(setHeightEl.value)
+
+  const lines = [`屏幕是 ${settingsInfo.screenWidth} × ${settingsInfo.screenHeight}`]
+  let bad = false
+
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 320 || height < 240) {
+    lines.push('太小了，最小 320 × 240')
+    bad = true
+  } else if (width > 3840 || height > 2160) {
+    lines.push('太大了，最大 3840 × 2160')
+    bad = true
+  } else if (width > settingsInfo.screenWidth) {
+    lines.push('比屏幕还宽，游戏窗口会伸到屏幕外面去')
+    bad = true
+  }
+
+  setWindowHintEl.textContent = lines.join('\n')
+  setWindowHintEl.classList.toggle('panel__desc--bad', bad)
+}
+
+function renderIsolationHint() {
+  if (!settingsInfo) return
+  const on = setIsolationEl.checked
+
+  if (on) {
+    let text = '开着：每个版本的存档、Mod 都在自己的文件夹里（versions\\版本号\\），互不干扰。'
+    if (settingsInfo.sharedWorlds > 0) {
+      text +=
+        `\n注意：共享存档目录里还有 ${settingsInfo.sharedWorlds} 个世界，` +
+        '隔离开着在游戏里看不到它们——文件没丢，需要的话可以搬过来。'
+    }
+    setIsolationHintEl.textContent = text
+    setIsolationHintEl.classList.toggle('panel__desc--bad', settingsInfo.sharedWorlds > 0)
+  } else {
+    setIsolationHintEl.textContent = '关着：所有版本共用游戏目录里的存档和 Mod。'
+    setIsolationHintEl.classList.remove('panel__desc--bad')
+  }
+}
+
+async function loadSettingsPage() {
+  try {
+    settingsInfo = await window.api.getSettings()
+  } catch (error) {
+    saySettings(`设置读不出来：${error.message}`, 'error')
+    return
+  }
+
+  const maxSlider = Math.min(Math.floor(settingsInfo.totalMemoryMB / 512) * 512, 16384)
+  setMemoryEl.max = String(maxSlider)
+  setMemoryEl.value = String(settingsInfo.memoryMB)
+  setMemoryNumEl.value = String(settingsInfo.memoryMB)
+  renderMemoryHint()
+
+  setWidthEl.value = String(settingsInfo.windowWidth)
+  setHeightEl.value = String(settingsInfo.windowHeight)
+  renderWindowHint()
+
+  setIsolationEl.checked = settingsInfo.isolation
+  renderIsolationHint()
+}
+
+/** 把一项设置存下去，顺手刷新提示 */
+async function saveSetting(patch, after) {
+  const result = await window.api.setSettings(patch)
+  if (!result.ok) {
+    saySettings(result.error, 'error')
+    return false
+  }
+  if (after) after()
+  saySettings('已保存', 'ok', true)
+  return true
+}
+
+// ——— 内存：滑块和输入框互相同步，松手（change）才存 ———
+setMemoryEl.addEventListener('input', () => {
+  setMemoryNumEl.value = setMemoryEl.value
+  renderMemoryHint()
+})
+setMemoryEl.addEventListener('change', () => {
+  saveSetting({ memoryMB: Number(setMemoryEl.value) }, () => {
+    settingsInfo.memoryAuto = false
+    settingsInfo.memoryMB = Number(setMemoryEl.value)
+    renderMemoryHint()
+  })
+})
+
+setMemoryNumEl.addEventListener('input', () => {
+  setMemoryEl.value = setMemoryNumEl.value
+  renderMemoryHint()
+})
+setMemoryNumEl.addEventListener('change', () => {
+  saveSetting({ memoryMB: Number(setMemoryNumEl.value) }, () => {
+    settingsInfo.memoryAuto = false
+    settingsInfo.memoryMB = Number(setMemoryNumEl.value)
+    renderMemoryHint()
+  })
+})
+
+document.getElementById('set-memory-auto').addEventListener('click', () => {
+  saveSetting({ memoryMB: 0 }, async () => {
+    settingsInfo = await window.api.getSettings()
+    setMemoryEl.value = String(settingsInfo.memoryMB)
+    setMemoryNumEl.value = String(settingsInfo.memoryMB)
+    renderMemoryHint()
+  })
+})
+
+// ——— 窗口大小 ———
+async function saveWindow() {
+  const width = Number(setWidthEl.value)
+  const height = Number(setHeightEl.value)
+  return saveSetting({ windowWidth: width, windowHeight: height }, () => {
+    settingsInfo.windowWidth = width
+    settingsInfo.windowHeight = height
+    renderWindowHint()
+  })
+}
+
+setWidthEl.addEventListener('change', saveWindow)
+setHeightEl.addEventListener('change', saveWindow)
+
+document.getElementById('set-window-reset').addEventListener('click', () => {
+  setWidthEl.value = '854'
+  setHeightEl.value = '480'
+  saveWindow()
+})
+
+// ——— 版本隔离 ———
+setIsolationEl.addEventListener('change', () => {
+  saveSetting({ isolation: setIsolationEl.checked }, () => {
+    settingsInfo.isolation = setIsolationEl.checked
+    renderIsolationHint()
+  })
 })
 
 // ═══════════════════════════════════════

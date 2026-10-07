@@ -13,7 +13,7 @@
 //   M5 启动游戏    → src/main/launch.js + accounts.js + java.js + settings.js
 //   M6 版本管理    → settings.js 的界面部分
 
-const { app, BrowserWindow, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, screen } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
 const mojang = require('./mojang')
@@ -277,6 +277,78 @@ function registerIpcHandlers() {
     }
     return versions.deleteVersion(id)
   })
+
+  // ——— 启动设置（M6.2）———
+
+  /** 设置页要的东西：当前的启动设置 + 本机的情况（内存、屏幕） */
+  ipcMain.handle('settings:get', () => {
+    const config = settings.readConfig()
+    const display = screen.getPrimaryDisplay().workAreaSize
+
+    return {
+      memoryMB: settings.currentMemoryMB(),
+      memoryAuto: !(Number(config.launch.memoryMB) > 0),
+      totalMemoryMB: settings.totalMemoryMB(),
+      suggestedMemoryMB: settings.defaultMemoryMB(),
+      windowWidth: Number(config.launch.windowWidth) || 854,
+      windowHeight: Number(config.launch.windowHeight) || 480,
+      isolation: Boolean(config.launch.isolation),
+      screenWidth: display.width,
+      screenHeight: display.height,
+      gameDir: paths.gameDir(),
+      sharedWorlds: countSharedWorlds()
+    }
+  })
+
+  /**
+   * 改启动设置。只传要改的那几项。
+   * 数值合不合理在这里挡一道——界面上的提示可以绕过，这里不能。
+   */
+  ipcMain.handle('settings:set', (_event, patch) => {
+    const current = settings.readConfig().launch
+    const launchPatch = {}
+
+    if (patch.memoryMB !== undefined) {
+      const value = Number(patch.memoryMB)
+      if (value !== 0) {
+        const check = settings.validateMemoryMB(value)
+        if (!check.ok) return { ok: false, error: check.error }
+      }
+      launchPatch.memoryMB = value > 0 ? Math.round(value) : 0
+    }
+
+    if (patch.windowWidth !== undefined || patch.windowHeight !== undefined) {
+      const width = patch.windowWidth !== undefined ? Number(patch.windowWidth) : current.windowWidth
+      const height =
+        patch.windowHeight !== undefined ? Number(patch.windowHeight) : current.windowHeight
+      const check = settings.validateWindow(width, height)
+      if (!check.ok) return { ok: false, error: check.error }
+      launchPatch.windowWidth = Math.round(width)
+      launchPatch.windowHeight = Math.round(height)
+    }
+
+    if (patch.isolation !== undefined) {
+      launchPatch.isolation = Boolean(patch.isolation)
+    }
+
+    try {
+      settings.writeConfig({ launch: launchPatch })
+    } catch (error) {
+      return { ok: false, error: `存不下来：${error.message}` }
+    }
+    return { ok: true }
+  })
+}
+
+/** 共享存档目录里有几个世界（开版本隔离时提示用） */
+function countSharedWorlds() {
+  try {
+    return fs
+      .readdirSync(paths.savesDir(), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory()).length
+  } catch {
+    return 0
+  }
 }
 
 app.whenReady().then(() => {
