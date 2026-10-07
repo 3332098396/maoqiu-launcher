@@ -49,6 +49,7 @@ function listAllVersions(dirs) {
       icon: custom[key]?.icon || '',
       category: custom[key]?.category || '',
       favorite: Boolean(custom[key]?.favorite),
+      lastPlayed: Number(custom[key]?.lastPlayed) || 0,
       loader: loaderName(id, dir),
       type: versionType(id, dir),
       base: baseGameVersion(id, dir)
@@ -190,6 +191,21 @@ function updateVersion(id, { name, note, icon, category, favorite } = {}, dir) {
       favorite: star
     }
   }
+}
+
+/**
+ * 记一下这个版本什么时候玩的（M14.3：版本页要显示最近游玩）。
+ *
+ * 【为什么单独有这么个函数】改名/备注那条路（updateVersion）要求传名字和备注，
+ * 这里只想戳一个时间戳，走那条路会把名字冲掉。
+ */
+function markPlayed(id, dir) {
+  const key = settings.versionKey(dir, id)
+  const config = settings.readConfig()
+  const versions = { ...(config.versions || {}) }
+
+  versions[key] = { ...(versions[key] || {}), lastPlayed: Date.now() }
+  settings.writeConfig({ versions })
 }
 
 /** 这个版本自己的文件夹有多大（只看这一个文件夹，很快） */
@@ -397,6 +413,7 @@ module.exports = {
   versionInfoMap,
   loaderName,
   versionType,
+  markPlayed,
   baseGameVersion,
   updateVersion,
   versionSize,

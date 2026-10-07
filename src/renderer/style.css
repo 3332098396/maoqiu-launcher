@@ -2085,3 +2085,72 @@ body.has-bg {
 .setsearch {
   margin-bottom: 4px;
 }
+
+/* ——— 已安装版本列表（M14.3）——— */
+.veritem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  margin-bottom: 6px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.veritem:hover {
+  border-color: var(--card-border-hover);
+  box-shadow: var(--card-shadow);
+}
+
+.veritem__main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.veritem__name {
+  font-size: 13.5px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.veritem__meta {
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.veritem__actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+}
+
+/* 收藏那颗星 */
+.star {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  font-size: 15px;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.star:hover {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.star--on {
+  color: var(--warn);
+}

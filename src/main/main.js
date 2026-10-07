@@ -312,10 +312,15 @@ function registerIpcHandlers() {
       onState: (payload) => send('launch:state', payload)
     })
 
-    // 启动成功就记住这个版本，下次打开软件默认选它
+    // 启动成功就记住这个版本，下次打开软件默认选它；顺便记一下"什么时候玩的"
     if (result.ok) {
       try {
         settings.writeConfig({ launch: { lastVersion: settings.versionKey(where, versionId) } })
+      } catch {
+        // 记不住不影响玩
+      }
+      try {
+        versions.markPlayed(versionId, where)
       } catch {
         // 记不住不影响玩
       }

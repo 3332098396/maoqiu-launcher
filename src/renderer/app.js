@@ -1005,6 +1005,9 @@ dlMenuEl.addEventListener('click', (event) => {
     runMrSearch()
   } else if (item.dataset.dlTab === 'vanilla') {
     showDownloadTab('vanilla')
+  } else if (item.dataset.dlTab === 'installed') {
+    showDownloadTab('installed')
+    renderInstalled()
   }
 })
 
@@ -3244,3 +3247,155 @@ function doSettingsSearch() {
 }
 
 setSearchEl.addEventListener('input', doSettingsSearch)
+
+// ═══════════════════════════════════════
+// 已安装的版本（M14.3：从启动页那个小列表里搬出来的完整页面）
+// ═══════════════════════════════════════
+
+const insSearchEl = document.getElementById('ins-search')
+const insFilterEl = document.getElementById('ins-filter')
+const insStatusEl = document.getElementById('ins-status')
+const insListEl = document.getElementById('ins-list')
+
+/** 当前筛选用的是哪个：all / fav / loader */
+let insFilter = 'all'
+
+/** "最近游玩"显示成人话 */
+function lastPlayedText(stamp) {
+  if (!stamp) return '还没玩过'
+  const days = Math.floor((Date.now() - stamp) / 86400000)
+  if (days <= 0) return '今天玩过'
+  if (days === 1) return '昨天玩过'
+  if (days < 30) return `${days} 天前玩过`
+  const date = new Date(stamp)
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} 玩过`
+}
+
+/** 把版本列表画出来（带搜索和筛选） */
+function renderInstalled() {
+  const keyword = insSearchEl.value.trim().toLowerCase()
+
+  let list = versionList()
+
+  if (insFilter === 'fav') list = list.filter((one) => one.favorite)
+  if (insFilter === 'loader') list = list.filter((one) => one.loader)
+
+  if (keyword) {
+    list = list.filter((one) =>
+      [one.id, one.name, one.category, one.loader, one.dir]
+        .filter(Boolean)
+        .some((text) => String(text).toLowerCase().includes(keyword))
+    )
+  }
+
+  // 收藏排前面；都是收藏（或都不是）就按"最近玩过"排
+  list = [...list].sort(
+    (a, b) => Number(b.favorite) - Number(a.favorite) || (b.lastPlayed || 0) - (a.lastPlayed || 0)
+  )
+
+  insListEl.textContent = ''
+
+  const total = versionList().length
+  insStatusEl.textContent = total === 0
+    ? '还没装过任何版本。上面「原版游戏」那一栏可以装。'
+    : `一共 ${total} 个版本${list.length !== total ? `，筛出来 ${list.length} 个` : ''}`
+
+  for (const one of list) {
+    const li = document.createElement('li')
+    li.className = 'veritem'
+
+    // 收藏星星（点一下切换）
+    const star = document.createElement('button')
+    star.type = 'button'
+    star.className = one.favorite ? 'star star--on' : 'star'
+    star.title = one.favorite ? '取消收藏' : '收藏这个版本'
+    star.textContent = one.favorite ? '★' : '☆'
+    star.addEventListener('click', async () => {
+      await window.api.updateVersion(
+        one.id,
+        { name: one.name, note: one.note, icon: one.icon, category: one.category, favorite: !one.favorite },
+        one.dir
+      )
+      await refreshLaunchFacts()
+      renderInstalled()
+    })
+    li.appendChild(star)
+
+    const box = document.createElement('div')
+    box.className = 'veritem__main'
+
+    const title = document.createElement('div')
+    title.className = 'veritem__name'
+    title.textContent = (one.icon ? `${one.icon} ` : '') + (one.name ? `${one.name}（${one.id}）` : one.id)
+    box.appendChild(title)
+
+    const meta = document.createElement('div')
+    meta.className = 'veritem__meta'
+    const bits = []
+    if (one.type) bits.push(VERSION_TYPE_LABELS[one.type] || one.type)
+    if (one.loader) bits.push(one.loader)
+    if (one.category) bits.push(one.category)
+    bits.push(one.isDefault ? '默认目录' : one.dir)
+    bits.push(lastPlayedText(one.lastPlayed))
+    meta.textContent = bits.join(' · ')
+    box.appendChild(meta)
+
+    li.appendChild(box)
+
+    const actions = document.createElement('div')
+    actions.className = 'veritem__actions'
+
+    const manage = document.createElement('button')
+    manage.type = 'button'
+    manage.className = 'btn btn--ghost btn--sm'
+    manage.textContent = '管理'
+    manage.addEventListener('click', () => {
+      // 先把启动页选成这个版本，再打开版本设置（那套逻辑是按"当前选中"来的）
+      selectedVersion = one.id
+      selectedDir = one.dir
+      refreshLaunchUi()
+      openVersionSettings()
+    })
+    actions.appendChild(manage)
+
+    const play = document.createElement('button')
+    play.type = 'button'
+    play.className = 'btn btn--ghost btn--sm'
+    play.textContent = '▶ 启动'
+    play.addEventListener('click', async () => {
+      selectedVersion = one.id
+      selectedDir = one.dir
+      refreshLaunchUi()
+      showPage('launch')
+      // 名字没填的话先别启动——启动页那边会提示缺什么
+      if (!nameProblem(accInputEl.value)) startGame()
+      else setNotice('先在左边填一个游戏名字，再点开始游戏。')
+    })
+    actions.appendChild(play)
+
+    const folder = document.createElement('button')
+    folder.type = 'button'
+    folder.className = 'btn btn--ghost btn--sm'
+    folder.textContent = '文件夹'
+    folder.addEventListener('click', async () => {
+      const result = await window.api.openVersionFolder(one.id, 'version', one.dir)
+      if (!result.ok) insStatusEl.textContent = `打不开文件夹：${result.error}`
+    })
+    actions.appendChild(folder)
+
+    li.appendChild(actions)
+    insListEl.appendChild(li)
+  }
+}
+
+insSearchEl.addEventListener('input', renderInstalled)
+
+insFilterEl.addEventListener('click', (event) => {
+  const chip = event.target.closest('.chip')
+  if (!chip) return
+  insFilter = chip.dataset.insFilter
+  for (const one of insFilterEl.querySelectorAll('.chip')) {
+    one.classList.toggle('chip--on', one === chip)
+  }
+  renderInstalled()
+})

@@ -242,6 +242,7 @@
         <aside class="side">
           <nav class="menu" id="dl-menu">
             <span class="menu__item menu__item--on" data-dl-tab="vanilla">原版游戏</span>
+            <span class="menu__item" data-dl-tab="installed">已安装</span>
             <span class="menu__divider">社区资源（来自 Modrinth）</span>
             <span class="menu__item" data-dl-cat="mod">Mod</span>
             <span class="menu__item menu__item--off" title="下一步就做">整合包</span>
@@ -275,6 +276,28 @@
             <div class="verstatus" id="ver-status">正在读取版本清单…</div>
 
             <ul class="verlist" id="ver-list"></ul>
+          </div>
+
+          <!-- ——— 已安装（M14.3：版本管理的独立页面）——— -->
+          <div class="dl-tab" data-dl-tab="installed" hidden>
+            <div class="verbar">
+              <input
+                class="input"
+                id="ins-search"
+                type="text"
+                placeholder="搜索版本名、版本号、分类…"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <div class="chips" id="ins-filter">
+                <button class="chip chip--on" type="button" data-ins-filter="all">全部</button>
+                <button class="chip" type="button" data-ins-filter="fav">收藏</button>
+                <button class="chip" type="button" data-ins-filter="loader">装了 Mod 加载器</button>
+              </div>
+            </div>
+
+            <div class="verstatus" id="ins-status">正在读…</div>
+            <ul class="verlist" id="ins-list"></ul>
           </div>
 
           <!-- ——— 社区资源（M9）——— -->
