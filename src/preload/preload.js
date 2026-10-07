@@ -39,6 +39,14 @@ contextBridge.exposeInMainWorld('api', {
    */
   startInstall: (versionId) => ipcRenderer.invoke('install:start', versionId),
 
+  /**
+   * 取消正在跑的安装。
+   * @param {'keep'|'drop'} mode 'keep' = 已经下好的留着（下次接着下）；
+   *                              'drop' = 这次下的全部删掉（公共文件里别的版本在用的会保留）
+   * @returns {Promise<{ok: boolean, error?: string}>}
+   */
+  cancelInstall: (mode) => ipcRenderer.invoke('install:cancel', mode),
+
   /** 安装到哪一步了（"正在读取版本信息…"这类文字） */
   onInstallStage: (callback) => {
     ipcRenderer.on('install:stage', (_event, text) => callback(text))

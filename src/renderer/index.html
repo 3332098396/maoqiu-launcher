@@ -31,7 +31,6 @@
       </nav>
 
       <button class="topbar__btn" type="button" id="log-btn">📄 日志</button>
-      <span class="topbar__tag" id="stage-tag">M5 · 启动游戏</span>
     </header>
 
     <main class="main">
@@ -45,13 +44,17 @@
             </div>
             <div class="acc__avatar" id="acc-avatar">⛏</div>
             <div class="acc__name" id="acc-name">还没有账号</div>
+            <!-- autocomplete 写 new-password 而不是 off：普通文本框浏览器常常
+                 不认 off，照样弹它自己的自动填充框。
+                 （注意：实测打字时弹的那个"词建议"框是 Windows 系统的文本建议，
+                 不是浏览器的，压不掉也不用压——见 CLAUDE.md 排查小抄） -->
             <input
               class="input"
               id="acc-input"
               type="text"
               maxlength="16"
               placeholder="输入游戏名字"
-              autocomplete="off"
+              autocomplete="new-password"
               spellcheck="false"
             />
             <div class="acc__hint" id="acc-hint">
@@ -103,12 +106,10 @@
             </div>
           </div>
 
-          <section class="panel panel--full log-panel">
-            <div class="log-panel__head">
-              <h3 class="panel__title">游戏日志</h3>
-              <button class="linkbtn" type="button" id="log-clear">清空</button>
-            </div>
-            <pre class="log" id="launch-log">还没有启动过游戏。启动后这里会显示游戏的运行输出，出错时先看这里。</pre>
+          <section class="panel panel--full" id="current-version-panel" hidden>
+            <h3 class="panel__title" id="cur-name">—</h3>
+            <p class="panel__desc" id="cur-note"></p>
+            <p class="panel__desc panel__desc--small" id="cur-hint"></p>
           </section>
         </div>
       </section>
@@ -207,7 +208,12 @@
             </div>
             <div class="install__row install__row--small">
               <span id="install-detail">—</span>
-              <button class="linkbtn" type="button" id="install-hide">收起</button>
+              <span class="install__buttons">
+                <button class="linkbtn linkbtn--danger" type="button" id="install-cancel">
+                  取消安装
+                </button>
+                <button class="linkbtn" type="button" id="install-hide">收起</button>
+              </span>
             </div>
           </div>
         </div>
@@ -398,7 +404,7 @@
             type="text"
             maxlength="40"
             placeholder="不填就显示版本号，比如 26.3"
-            autocomplete="off"
+            autocomplete="new-password"
             spellcheck="false"
           />
         </label>
@@ -411,7 +417,7 @@
             type="text"
             maxlength="200"
             placeholder="随便写点什么都行，比如装了什么 Mod"
-            autocomplete="off"
+            autocomplete="new-password"
             spellcheck="false"
           />
         </label>
@@ -492,6 +498,25 @@
         <div class="modal__actions modal__actions--end">
           <button class="btn btn--ghost" type="button" id="del-cancel">取消</button>
           <button class="btn btn--danger" type="button" id="del-ok">确认删除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 取消安装：问一句"已经下好的要不要留" -->
+    <div class="modal modal--top" id="cancel-modal" hidden>
+      <div class="modal__box modal__box--form">
+        <div class="modal__head">
+          <span class="modal__title" id="cancel-title">要取消安装吗？</span>
+        </div>
+        <p class="delbox" id="cancel-what"></p>
+        <p class="delbox delbox--safe">
+          保留的话，下次装的时候已经下好的不会重下，能省不少时间。
+        </p>
+        <p class="delbox delbox--warn" id="cancel-warn"></p>
+        <div class="modal__actions modal__actions--end">
+          <button class="btn btn--ghost" type="button" id="cancel-back">继续安装</button>
+          <button class="btn btn--danger" type="button" id="cancel-drop">不保留，全删掉</button>
+          <button class="btn btn--primary" type="button" id="cancel-keep">保留已下好的</button>
         </div>
       </div>
     </div>

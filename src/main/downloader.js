@@ -269,6 +269,12 @@ function createTask(files, options = {}) {
 
   const failures = []
   const speed = createSpeedMeter()
+  /**
+   * 这次任务真下下来（不是跳过）的文件。
+   * "取消安装 + 全部删掉"要用它——但删之前必须核对别的版本还在不在用它，
+   * 所以这里只记录"下过"，删不删由调用方判断。
+   */
+  const downloaded = []
 
   /** 当前偏向哪个源。会在两个源之间来回切换，不会卡死在某一边 */
   let preferMirror = false
@@ -373,6 +379,7 @@ function createTask(files, options = {}) {
         currentBytes = Math.max(0, currentBytes - result.bytes)
         doneBytes += file.size || result.bytes
         doneCount++
+        downloaded.push({ path: file.saveTo, size: file.size || result.bytes })
 
         updateSourcePreference({
           usedFallback: result.usedMirror !== wanted,
@@ -425,7 +432,10 @@ function createTask(files, options = {}) {
       controller.abort()
     },
 
-    getStats: stats
+    getStats: stats,
+
+    /** 这次真下下来的文件（跳过的不算）。取消安装时要按它来清理 */
+    getDownloaded: () => downloaded.slice()
   }
 }
 

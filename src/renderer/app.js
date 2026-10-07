@@ -263,6 +263,7 @@ const installTitleEl = document.getElementById('install-title')
 const installStageEl = document.getElementById('install-stage')
 const installFillEl = document.getElementById('install-fill')
 const installDetailEl = document.getElementById('install-detail')
+const installCancelEl = document.getElementById('install-cancel')
 
 /** 本机已经装了哪些版本。用来决定版本行右边显示「安装」还是「已安装」 */
 const installedVersions = new Set()
@@ -321,13 +322,22 @@ async function startInstall(versionId) {
   setStage('准备中…')
   setFill(0)
   setDetail('—')
+  installCancelEl.disabled = false
 
   const result = await window.api.startInstall(versionId)
   installingVersion = ''
+  installCancelEl.disabled = true
+  cancelModalEl.hidden = true // 装完了/取消了，取消确认框(如果开着)收掉
 
   if (!result.ok) {
-    setStage('安装失败')
     setFill(0)
+    if (result.cancelled) {
+      installTitleEl.textContent = `${versionId} 安装已取消`
+      setStage('')
+      setDetail(result.dropped ? result.error : '已经下好的文件留着，下次装会接着用')
+      return
+    }
+    setStage('安装失败')
     setDetail(result.error ?? '未知原因')
     return
   }
@@ -364,6 +374,38 @@ document.getElementById('install-hide').addEventListener('click', () => {
   installEl.hidden = true
 })
 
+// 取消安装：先问一句"已经下好的要不要留"，别自作主张
+const cancelModalEl = document.getElementById('cancel-modal')
+const cancelWhatEl = document.getElementById('cancel-what')
+const cancelWarnEl = document.getElementById('cancel-warn')
+
+function openCancelDialog() {
+  if (!installingVersion) return
+  cancelWhatEl.textContent = `正在安装 ${installingVersion}，已经下好了一部分文件。`
+  cancelWarnEl.textContent =
+    '全部删掉只清这次下的：公共的库文件、音效贴图如果别的版本还在用，会留着。'
+  cancelModalEl.hidden = false
+}
+
+async function finishCancel(mode) {
+  cancelModalEl.hidden = true
+  installCancelEl.disabled = true
+  setStage(mode === 'drop' ? '正在取消并清理…' : '正在取消…')
+
+  const result = await window.api.cancelInstall(mode)
+  if (!result.ok) setStage(result.error)
+}
+
+installCancelEl.addEventListener('click', openCancelDialog)
+document.getElementById('cancel-back').addEventListener('click', () => {
+  cancelModalEl.hidden = true // 继续安装，什么都不用做——下载一直没停
+})
+document.getElementById('cancel-keep').addEventListener('click', () => finishCancel('keep'))
+document.getElementById('cancel-drop').addEventListener('click', () => finishCancel('drop'))
+cancelModalEl.addEventListener('click', (event) => {
+  if (event.target === cancelModalEl) cancelModalEl.hidden = true
+})
+
 // ═══════════════════════════════════════
 // 启动页：账号 + 选版本 + 启动游戏（M5）
 // ═══════════════════════════════════════
@@ -377,8 +419,10 @@ const pickEmptyEl = document.getElementById('pick-empty')
 const launchBtnEl = document.getElementById('launch-btn')
 const launchTipEl = document.getElementById('launch-tip')
 const launchNoticeEl = document.getElementById('launch-notice')
-const launchLogEl = document.getElementById('launch-log')
-const logClearEl = document.getElementById('log-clear')
+const currentVersionPanelEl = document.getElementById('current-version-panel')
+const curNameEl = document.getElementById('cur-name')
+const curNoteEl = document.getElementById('cur-note')
+const curHintEl = document.getElementById('cur-hint')
 const factVersionEl = document.getElementById('fact-version')
 const factJavaEl = document.getElementById('fact-java')
 const factMemoryEl = document.getElementById('fact-memory')
@@ -495,12 +539,33 @@ function refreshLaunchUi() {
 
     const java = launchInfo.java
     factJavaEl.textContent = java.found
-      ? `${java.version}（${java.source}）`
+      ? `${java.version}（${shortJavaSource(java.source)}）`
       : java.error || '还没找到——装好版本后会自动带上'
+
+    // 「当前版本」那张卡：名字、备注，以及"要改去哪改"的提示
+    if (selectedVersion) {
+      const info = launchInfo.versionInfo?.[selectedVersion] || {}
+      currentVersionPanelEl.hidden = false
+      curNameEl.textContent = info.name ? `${info.name}（${selectedVersion}）` : selectedVersion
+      curNoteEl.textContent = info.note || ''
+      curNoteEl.hidden = !info.note
+      curHintEl.textContent =
+        '想改名字、写备注、打开存档文件夹或者删掉它：点左下角的「版本设置」'
+    } else {
+      currentVersionPanelEl.hidden = true
+    }
   }
 
   renderAccountCard()
   renderPickList()
+}
+
+/** Java 从哪来的，一句话说清楚（后端给的原文太长，套在一起读着别扭） */
+function shortJavaSource(source) {
+  const text = String(source || '')
+  if (text.includes('手动')) return '手动指定'
+  if (text.includes('本机已有')) return '本机已有的'
+  return '版本自带'
 }
 
 /** 只把启动页的信息重新读一遍并刷新（比如刚在版本设置里改了内存） */
@@ -598,13 +663,7 @@ function appendLog(lines) {
   for (const raw of lines) logLines.push(...prettifyLogLine(raw))
   if (logLines.length > MAX_UI_LOG_LINES) logLines = logLines.slice(-MAX_UI_LOG_LINES)
 
-  // 用户没在往回翻的时候，跟着滚到底；正在往上翻就别打扰他
-  const atBottom =
-    launchLogEl.scrollTop + launchLogEl.clientHeight >= launchLogEl.scrollHeight - 30
-  launchLogEl.textContent = logLines.join('\n')
-  if (atBottom) launchLogEl.scrollTop = launchLogEl.scrollHeight
-
-  // 日志弹窗开着的话，让它跟着实时刷新
+  // 日志只存在内存里，由顶栏的「日志」按钮打开看（M7：启动页不再常驻日志面板）
   if (!logModalEl.hidden) {
     if (logModalMode !== 'live') {
       logModalMode = 'live'
@@ -634,11 +693,6 @@ pickListEl.addEventListener('click', (event) => {
   if (!item) return
   selectedVersion = item.dataset.version
   refreshLaunchUi()
-})
-
-logClearEl.addEventListener('click', () => {
-  logLines = []
-  launchLogEl.textContent = '（已清空）'
 })
 
 async function startGame() {
@@ -1392,6 +1446,10 @@ logModalEl.addEventListener('click', (event) => {
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return
 
+  if (!cancelModalEl.hidden) {
+    cancelModalEl.hidden = true
+    return
+  }
   if (!delModalEl.hidden) {
     delModalEl.hidden = true
     deletingVersion = ''

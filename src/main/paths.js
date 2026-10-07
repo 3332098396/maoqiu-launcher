@@ -125,6 +125,18 @@ function versionNativesDir(id) {
 }
 
 /**
+ * "装到一半"的标记文件。
+ *
+ * 【为什么要它】安装中途被取消（或者断电、失败）时，版本目录里可能已经有
+ * 版本 JSON 和客户端 jar 了——光看这两个文件会以为"装好了"，其实资源文件
+ * 还差一大截，启动起来会缺音效缺贴图。有标记文件的版本一律**不算装好**，
+ * 界面上显示成"安装"而不是"已安装"，重新装一次会把剩下的补齐。
+ */
+function versionIncompleteMarker(id) {
+  return path.join(versionDir(id), '.incomplete')
+}
+
+/**
  * log4j 的日志配置文件。
  * 位置是游戏规定的（assets\log_configs\），版本 JSON 里的
  * logging.client 指向它，游戏启动时要求这个文件在。
@@ -142,8 +154,9 @@ function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true })
 }
 
-/** 某个版本装好了吗（有版本 JSON 和客户端 jar 就算装好了） */
+/** 某个版本装好了吗（有版本 JSON、客户端 jar，而且没有"装到一半"标记） */
 function isVersionInstalled(id) {
+  if (fs.existsSync(versionIncompleteMarker(id))) return false
   return fs.existsSync(versionJsonFile(id)) && fs.existsSync(versionJarFile(id))
 }
 
@@ -176,6 +189,7 @@ module.exports = {
   versionJsonFile,
   versionJarFile,
   versionNativesDir,
+  versionIncompleteMarker,
   logConfigFile,
   gameOptionsFile,
   savesDir,

@@ -515,16 +515,6 @@ body {
   color: var(--text-dim);
 }
 
-.log-panel {
-  gap: 10px;
-}
-
-.log-panel__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .log {
   flex: 1 1 auto;
   min-height: 160px;
@@ -691,7 +681,7 @@ body {
   opacity: 0.92;
 }
 
-/* 文字按钮：看着像链接，点着是按钮（「收起」「重装」「清空」都用它） */
+/* 文字按钮：看着像链接，点着是按钮（「收起」「重装」「取消安装」都用它） */
 .linkbtn {
   padding: 2px 6px;
   font-family: var(--font);
@@ -701,11 +691,30 @@ body {
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.linkbtn:hover {
+.linkbtn:hover:not(:disabled) {
   background: #eaf4ff;
+}
+
+.linkbtn:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+/* 取消类操作的字是红的，让人点之前多看一眼 */
+.linkbtn--danger {
+  color: #d9736f;
+}
+
+.linkbtn--danger:hover:not(:disabled) {
+  background: #ffeeee;
+}
+
+.install__buttons {
+  display: flex;
+  gap: 4px;
 }
 
 .preview {
@@ -890,6 +899,38 @@ body {
 /* 设置页左侧的菜单项可以点了 */
 .menu__item[data-settings-tab] {
   cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.menu__item[data-settings-tab]:hover:not(.menu__item--on) {
+  color: var(--text);
+  background: #eef6ff;
+}
+
+/* 提示文字的小号版本（说明"去哪改"这类话） */
+.panel__desc--small {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* 面板和弹窗出来时轻轻滑一下，不要"啪"地出现 */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.install {
+  animation: rise-in 0.18s ease-out;
+}
+
+.modal__box {
+  animation: rise-in 0.16s ease-out;
 }
 
 /* 设置页里的一个页签 */

@@ -326,10 +326,14 @@ function extractNatives(versionId, natives) {
  * @returns {Promise<{ok: boolean, stats?: object, error?: string}>}
  */
 async function installVersion(versionId, options = {}) {
-  const { onStage, onProgress } = options
+  const { onStage, onProgress, onTask } = options
   const stage = (text) => {
     if (onStage) onStage(text)
   }
+
+  // 记一下"这次装之前它是不是已经装好了"——取消后要不要删版本文件夹靠它判断：
+  // 本来就装好的版本（比如点"重装"中途取消），绝不能把人家的版本给删了
+  const wasInstalled = paths.isVersionInstalled(versionId)
 
   try {
     // ——— 1. 找到并下载这个版本的 JSON ———
@@ -358,6 +362,14 @@ async function installVersion(versionId, options = {}) {
       'utf8'
     )
 
+    // 从这里开始算"装到一半"：先插个标记，全部装完再拔掉。
+    // 这样中途取消/失败留下的半成品，界面上不会显示成"已安装"
+    fs.writeFileSync(
+      paths.versionIncompleteMarker(versionId),
+      '装到一半（被取消或失败了）。重新安装会接着下，已经下好的不会重下。',
+      'utf8'
+    )
+
     // ——— 4. 下载 ———
     stage(`开始下载，共 ${files.length} 个文件…`)
     const task = downloader.createTask(files, {
@@ -365,7 +377,17 @@ async function installVersion(versionId, options = {}) {
         if (onProgress) onProgress(stats)
       }
     })
+
+    // 把控制器交给调用方（界面要拿它做"取消安装"）
+    if (onTask) onTask(task)
+
     const stats = await task.start()
+
+    // 没下完又没报失败 = 被取消了。不这么判断的话，取消会被当成"安装成功"——
+    // 那就成了"看着装完了、其实少了一半文件"
+    if (stats.done + stats.failed < stats.total) {
+      return { ok: false, cancelled: true, wasInstalled, error: '安装已取消' }
+    }
 
     if (stats.failed > 0) {
       const first = stats.failures[0]
@@ -380,11 +402,129 @@ async function installVersion(versionId, options = {}) {
       extractNatives(versionId, natives)
     }
 
+    // 装全了，把"装到一半"的标记拔掉
+    try {
+      fs.unlinkSync(paths.versionIncompleteMarker(versionId))
+    } catch {
+      // 标记本来就不在就算了
+    }
+
     stage('安装完成')
     return { ok: true, stats }
   } catch (error) {
     return { ok: false, error: String(error?.message ?? error) }
   }
+}
+
+/**
+ * 把"所有装好的版本"还需要用到的文件列成一张表（库文件 + 资源文件）。
+ * 用来回答："这个文件还有别人要吗？"
+ */
+function collectReferencedFiles() {
+  const needed = new Set()
+
+  for (const id of paths.listInstalledVersions()) {
+    let json
+    try {
+      json = JSON.parse(fs.readFileSync(paths.versionJsonFile(id), 'utf8'))
+    } catch {
+      continue
+    }
+
+    const ctx = buildContext()
+
+    for (const lib of json.libraries || []) {
+      if (!rulesAllow(lib.rules, ctx)) continue
+
+      const artifact = lib.downloads && lib.downloads.artifact
+      if (artifact && artifact.path) {
+        needed.add(path.resolve(path.join(paths.librariesDir(), artifact.path)))
+      }
+
+      const classifiers = lib.downloads && lib.downloads.classifiers
+      if (classifiers) {
+        for (const entry of Object.values(classifiers)) {
+          if (entry && entry.path) {
+            needed.add(path.resolve(path.join(paths.librariesDir(), entry.path)))
+          }
+        }
+      }
+    }
+
+    const indexId = (json.assetIndex && json.assetIndex.id) || json.assets
+    if (indexId) {
+      try {
+        const index = JSON.parse(
+          fs.readFileSync(path.join(paths.assetsDir(), 'indexes', `${indexId}.json`), 'utf8')
+        )
+        for (const obj of Object.values(index.objects || {})) {
+          needed.add(
+            path.resolve(path.join(paths.assetsDir(), 'objects', obj.hash.slice(0, 2), obj.hash))
+          )
+        }
+      } catch {
+        // 索引读不到就跳过；缺的东西那个版本自己会重下
+      }
+    }
+  }
+
+  return needed
+}
+
+/**
+ * 取消安装后选了"全部删掉"：把这次下的东西清理干净。
+ *
+ * 【为什么不能闭着眼睛删】下载的文件里有一大堆是**公共的**（库文件、音效贴图），
+ * 别的版本可能正在用——删了就把人家弄坏了。所以每个公共文件都要先问一句
+ * "还有哪个装好的版本要它？"，没人要才删。宁可多绕一步，不能碰坏别的版本。
+ *
+ * @param {string} versionId
+ * @param {{removeVersionDir: boolean, downloaded: Array<{path: string, size: number}>}} options
+ * @returns {{removedVersionDir: boolean, removedFiles: number, removedBytes: number, keptShared: number, error?: string}}
+ */
+function dropPartialInstall(versionId, { removeVersionDir, downloaded = [] }) {
+  const result = { removedVersionDir: false, removedFiles: 0, removedBytes: 0, keptShared: 0 }
+
+  // ① 这个版本自己的文件夹（本来就没装好过才删——"重装到一半取消"不能删人家装好的版本）
+  if (removeVersionDir) {
+    try {
+      const dir = paths.versionDir(versionId)
+      if (fs.existsSync(dir)) {
+        fs.rmSync(dir, { recursive: true, force: true })
+        result.removedVersionDir = true
+      }
+    } catch (error) {
+      result.error = `版本自己的文件夹没删掉：${error.message}`
+    }
+  }
+
+  // ② 这次新下的公共文件：别的版本还要的留着
+  const needed = collectReferencedFiles()
+  const librariesRoot = `${path.resolve(paths.librariesDir())}${path.sep}`
+  const objectsRoot = `${path.resolve(path.join(paths.assetsDir(), 'objects'))}${path.sep}`
+
+  for (const item of downloaded) {
+    const full = path.resolve(item.path)
+    const isShared = full.startsWith(librariesRoot) || full.startsWith(objectsRoot)
+    if (!isShared) continue // 版本自己文件夹里的，第 ① 步已经处理了
+
+    if (needed.has(full)) {
+      result.keptShared++
+      continue
+    }
+
+    try {
+      if (fs.existsSync(full)) {
+        fs.unlinkSync(full)
+        result.removedFiles++
+        result.removedBytes += item.size || 0
+      }
+    } catch {
+      // 删不掉某一个不影响整体
+    }
+  }
+
+  return result
 }
 
 module.exports = {
@@ -393,5 +533,6 @@ module.exports = {
   rulesAllow,
   buildContext,
   collectClassifierNatives,
-  extractNatives
+  extractNatives,
+  dropPartialInstall
 }

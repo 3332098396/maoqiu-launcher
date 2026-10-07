@@ -65,6 +65,10 @@ function createWindow() {
 
 /** 当前正在跑的安装任务（同时只允许一个） */
 let currentInstall = null
+/** 正在跑的下载任务控制器（界面点"取消安装"时用它） */
+let currentInstallTask = null
+/** 取消安装时用户选了什么：'keep' 保留已下的 / 'drop' 这次下的全删掉 */
+let installCancelMode = 'keep'
 
 /** 有没有备份正在跑（同时只允许一个） */
 let backupRunning = false
@@ -84,15 +88,54 @@ function registerIpcHandlers() {
     }
 
     currentInstall = true
+    installCancelMode = 'keep'
+    let task = null
+
     try {
       const result = await install.installVersion(versionId, {
         onStage: (text) => send('install:stage', text),
-        onProgress: (stats) => send('install:progress', stats)
+        onProgress: (stats) => send('install:progress', stats),
+        onTask: (t) => {
+          task = t
+          currentInstallTask = t
+        }
       })
+
+      // 取消时选了"全部删掉"：把这次下的清干净（公共文件不伤别的版本，见实现说明）
+      if (result.cancelled && installCancelMode === 'drop' && task) {
+        const cleanup = install.dropPartialInstall(versionId, {
+          removeVersionDir: !result.wasInstalled,
+          downloaded: task.getDownloaded()
+        })
+        return {
+          ok: false,
+          cancelled: true,
+          dropped: true,
+          cleanup,
+          error:
+            `安装已取消，这次下的已经删掉了` +
+            `（清掉 ${cleanup.removedFiles} 个文件` +
+            (cleanup.removedBytes ? `、约 ${Math.round(cleanup.removedBytes / 1024 / 1024)} MB` : '') +
+            `）`
+        }
+      }
+
       return result
     } finally {
       currentInstall = null
+      currentInstallTask = null
+      installCancelMode = 'keep'
     }
+  })
+
+  /**
+   * 取消正在跑的安装。mode: 'keep'（保留已下好的）/ 'drop'（这次下的全删掉）
+   */
+  ipcMain.handle('install:cancel', (_event, mode) => {
+    if (!currentInstallTask) return { ok: false, error: '安装已经结束了' }
+    installCancelMode = mode === 'drop' ? 'drop' : 'keep'
+    currentInstallTask.cancel()
+    return { ok: true }
   })
 
   /** 装完了、或者界面重新打开时，取一下已装列表和游戏目录 */
