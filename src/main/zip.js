@@ -15,6 +15,27 @@ const zlib = require('node:zlib')
 const fs = require('node:fs')
 const path = require('node:path')
 
+/**
+ * 压缩包里的文件名怎么解。
+ *
+ * 【为什么要分两种】ZIP 规范里，文件名只有在"标了 UTF-8 标志位"时才是 UTF-8；
+ * 没标的时候按老规矩是 CP437（一个很老的字符集）。
+ * 但 Windows 自带的"压缩成 zip"**用的是系统本地编码**——中文系统上就是 GBK，
+ * 而且**不标那个标志位**。照着规范按 CP437 解，中文名就全成了乱码（实测踩过）。
+ * 所以：没标 UTF-8 的一律按 GBK 试，解不出来再退回按原样。
+ */
+function decodeEntryName(buffer) {
+  const utf8 = new TextDecoder('utf-8')
+  const text = utf8.decode(buffer)
+  if (!text.includes('�')) return text // 是合法的 UTF-8，直接用
+
+  try {
+    return new TextDecoder('gbk').decode(buffer)
+  } catch {
+    return text
+  }
+}
+
 /** 几个固定标记，ZIP 文件靠它们分隔各个区块 */
 const SIG_LOCAL = 0x04034b50 // 每个文件的开头
 const SIG_CENTRAL = 0x02014b50 // 目录里的一条记录
@@ -53,7 +74,13 @@ function listEntries(buffer) {
     const extraLength = buffer.readUInt16LE(at + 30)
     const commentLength = buffer.readUInt16LE(at + 32)
     const localAt = buffer.readUInt32LE(at + 42)
-    const name = buffer.toString('utf8', at + 46, at + 46 + nameLength)
+    // 文件名按上面那个函数解（GBK 的包不能按 UTF-8 硬解，会乱码）
+    // 另外：Windows 自带压缩写的路径是反斜杠（`我的世界\level.dat`），
+    // 不符合 ZIP 规范但确实存在——统一换成正斜杠，后面处理省心
+    const name = decodeEntryName(buffer.subarray(at + 46, at + 46 + nameLength)).replace(
+      /\\/g,
+      '/'
+    )
 
     entries.push({ name, method, compressedSize, size, localAt })
     at += 46 + nameLength + extraLength + commentLength

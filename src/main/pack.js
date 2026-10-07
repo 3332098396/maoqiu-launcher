@@ -132,25 +132,58 @@ function inspect(filePath) {
     }
   }
 
-  // ——— ② PCL / HMCL 导出的（文件直接在里面）———
+  // ——— 不是 Modrinth / CurseForge 的，看看是不是"文件直接在里面"的整合包 ———
+  const names = archive.entries.map((e) => e.name.replace(/^\//, ''))
   const tops = topLevelNames(archive.entries)
-  const gamedirLike = tops.some((name) =>
-    ['versions', '.minecraft', 'minecraft'].includes(name.toLowerCase())
-  )
+  const lowerTops = tops.map((name) => name.toLowerCase())
+
+  // 整合包（PCL / HMCL 导出的）：看有没有这些标志性文件夹
+  const modpackMarkers = ['mods', 'versions', '.minecraft']
+  if (lowerTops.some((name) => modpackMarkers.includes(name))) {
+    const gamedirLike = lowerTops.some((name) =>
+      ['versions', '.minecraft', 'minecraft'].includes(name)
+    )
+
+    return {
+      ok: true,
+      kind: 'files',
+      name: path.basename(filePath, path.extname(filePath)),
+      layout: gamedirLike ? 'gamedir' : 'instance',
+      topFolders: tops.slice(0, 8),
+      fileCount: names.filter((n) => !n.endsWith('/')).length,
+      summary:
+        `整合包（文件直接在里面）：${path.basename(filePath)}\n` +
+        `顶层有：${tops.slice(0, 6).join('、')}${tops.length > 6 ? '…' : ''}\n` +
+        (gamedirLike
+          ? '里面带着版本文件，会解到游戏目录里'
+          : '会解到选中的那个版本自己的文件夹里')
+    }
+  }
+
+  // ——— 到这里就不是整合包了 ———
+  //
+  // 【只认整合包】用户明确定过：**拖进来的必须是整合包**，
+  // 其他东西（存档、资源包、随便一个压缩包）一律"识别失败"，
+  // 并明确告诉用户"这不是有效的整合包"。不要自作主张去装别的东西。
+  // 唯一"多做的"是看一眼它像什么，好让提示更懂人话。
+  const looksLikeWorld = names.some((n) => n === 'level.dat' || n.endsWith('/level.dat'))
+  const looksLikePack = names.includes('pack.mcmeta') || lowerTops.includes('shaders')
+
+  const whatItIs = looksLikeWorld
+    ? '看起来像是一个存档（世界）'
+    : looksLikePack
+      ? '看起来像是一个资源包或光影包'
+      : `里面装的是：${tops.slice(0, 5).join('、')}${tops.length > 5 ? '…' : ''}`
 
   return {
     ok: true,
-    kind: 'files',
+    kind: 'invalid',
     name: path.basename(filePath, path.extname(filePath)),
-    layout: gamedirLike ? 'gamedir' : 'instance',
     topFolders: tops.slice(0, 8),
-    fileCount: archive.entries.filter((e) => !e.name.endsWith('/')).length,
     summary:
-      `普通整合包（文件直接在里面）：${path.basename(filePath)}\n` +
-      `顶层有：${tops.slice(0, 6).join('、')}${tops.length > 6 ? '…' : ''}\n` +
-      (gamedirLike
-        ? '里面带着版本文件，会解到游戏目录里'
-        : '会解到选中的那个版本自己的文件夹里')
+      `这不是一个有效的整合包。\n${whatItIs}\n\n` +
+      '本启动器只支持拖入整合包：Modrinth 的 .mrpack，' +
+      '或者 PCL / HMCL 导出的整合包 .zip'
   }
 }
 
@@ -410,6 +443,11 @@ async function installPack(filePath, options = {}) {
     return installModrinthPack(filePath, data, options)
   }
 
+  if (info.kind === 'invalid') {
+    return { ok: false, error: '这不是一个有效的整合包，装不了。只支持整合包（.mrpack 或 PCL/HMCL 导出的 .zip）。' }
+  }
+
+  // 剩下的就是"整合包（文件直接在里面）"
   return installPlainPack(filePath, info.layout, options.targetVersionId, options)
 }
 

@@ -1146,8 +1146,17 @@ async function openPackDialog(filePath) {
 
   packInstallEl.disabled = false
 
+  // 不是整合包的（存档、资源包、随便一个压缩包）：不给装，只说清楚
+  if (info.kind === 'invalid') {
+    packTitleEl.textContent = '这不是整合包'
+    packWarnEl.textContent =
+      '只支持拖入整合包：Modrinth 的 .mrpack，或者 PCL / HMCL 导出的整合包 .zip。\n' +
+      '（存档、资源包、光影包这些不是整合包，装不了）'
+    return
+  }
+
+  // "文件直接在里面"的整合包，要问清楚装到哪个版本
   if (info.kind === 'files' && info.layout === 'instance') {
-    // 这种是"文件直接在里面"的包，要问清楚装到哪个版本
     packTargetRowEl.hidden = false
     packTargetEl.textContent = ''
 
@@ -1170,7 +1179,8 @@ async function openPackDialog(filePath) {
 packInstallEl.addEventListener('click', async () => {
   if (!packInfo || packInstalling) return
 
-  const targetVersionId = packInfo.kind === 'files' ? packTargetEl.value : ''
+  const targetVersionId =
+    packInfo.kind === 'files' && packInfo.layout === 'instance' ? packTargetEl.value : ''
 
   packInstalling = true
   packInstallEl.disabled = true
@@ -1196,7 +1206,7 @@ packInstallEl.addEventListener('click', async () => {
   packProgressEl.textContent = result.versionId
     ? `装好了：多了个新版本「${result.versionId}」——回启动页选它就能玩` +
       `（${result.files || 0} 个文件${result.overrides ? `，另有 ${result.overrides} 个作者的配置文件` : ''}）`
-    : `装好了：${result.written} 个文件`
+    : `装好了：${result.written} 个文件已经解到 ${result.dest}`
 
   // 版本列表刷新，并把新版本选上
   await refreshLaunchFacts()
