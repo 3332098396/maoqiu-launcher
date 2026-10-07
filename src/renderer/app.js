@@ -524,6 +524,17 @@ function selectedItem() {
   return findVersion(selectedVersion, selectedDir)
 }
 
+/**
+ * 版本在按钮上显示成什么。
+ *
+ * 太长的话按钮会被撑变形（整合包的名字动不动就二十几个字），
+ * 所以超过 12 个字就截断加省略号——完整名字在左边列表和「当前版本」卡片上还能看到。
+ */
+function shortVersionLabel(one) {
+  const text = one.name || one.id || ''
+  return text.length > 12 ? `${text.slice(0, 12)}…` : text
+}
+
 /** 目录路径的最后一段，给用户看的（D:\我的世界\.minecraft → .minecraft） */
 function dirTail(dir) {
   const parts = String(dir || '').split(/[\\/]/).filter(Boolean)
@@ -591,8 +602,17 @@ function renderPickList() {
 /** 按当前状态刷新整个启动页（按钮能不能点、版本列表、信息卡） */
 function refreshLaunchUi() {
   const problem = nameProblem(accInputEl.value)
+  const picked = selectedItem()
+
   launchBtnEl.disabled = launching || !selectedVersion || Boolean(problem)
-  launchBtnEl.textContent = launching ? '游戏运行中…' : '开始游戏'
+
+  // 按钮上直接写清楚"要启动的是哪个版本"——不用回头看左边列表
+  // （对照 PCL 整理的 ⭐⭐⭐ 项：PCL 那个大按钮里就写着版本名）
+  launchBtnEl.textContent = launching
+    ? '游戏运行中…'
+    : picked
+      ? `开始游戏 · ${shortVersionLabel(picked)}`
+      : '开始游戏'
 
   // 没选版本就没得设置
   verSettingsBtnEl.disabled = !selectedVersion
@@ -636,7 +656,11 @@ function refreshLaunchUi() {
     if (selectedVersion) {
       const info = selectedItem() || {}
       currentVersionPanelEl.hidden = false
-      curNameEl.textContent = info.name ? `${info.name}（${selectedVersion}）` : selectedVersion
+      // 名字后面缀上"正式版/快照"——光看版本号分不出来（对照 PCL 整理的 ⭐⭐⭐ 项）
+      const typeLabel = VERSION_TYPE_LABELS[info.type] || ''
+      curNameEl.textContent =
+        (info.name ? `${info.name}（${selectedVersion}）` : selectedVersion) +
+        (typeLabel ? ` · ${typeLabel}` : '')
       curNoteEl.textContent = info.note || ''
       curNoteEl.hidden = !info.note
       curHintEl.textContent = info.isDefault
@@ -1611,6 +1635,8 @@ window.api.onPackProgress((stats) => {
 const verSettingsBtnEl = document.getElementById('ver-settings-btn')
 const verModalEl = document.getElementById('ver-modal')
 const verTitleEl = document.getElementById('ver-title')
+const verTypeEl = document.getElementById('ver-type')
+const verJavaEl = document.getElementById('ver-java')
 const verNameEl = document.getElementById('ver-name')
 const verNoteEl = document.getElementById('ver-note')
 const verHintEl = document.getElementById('ver-hint')
@@ -1673,6 +1699,12 @@ async function openVersionSettings() {
   verFolderHintEl.textContent = ''
   verSettingsHintEl.textContent = '正在读设置…'
   verModalEl.hidden = false
+
+  // 「这个版本是什么」：类型先填上（数据已经在手边），Java 那张要现算，异步填
+  const picked = findVersion(id, editingDir)
+  verTypeEl.textContent = VERSION_TYPE_LABELS[picked?.type] || '不知道（可能不是官方版本）'
+  verTypeEl.className = 'vermeta__v'
+  renderVersionJava(id)
   verNameEl.focus()
 
   // 「这个版本自己的设置」要现算（还要拿全局值作对比），异步读一下
@@ -2429,6 +2461,50 @@ const onlineLeaveEl = document.getElementById('online-leave')
 
 /** 房主的虚拟地址是固定的（联机模块里定死的），好友永远连这个 */
 const HOST_VIRTUAL_IP = '10.126.126.1'
+
+/** 版本 JSON 里的 type → 跟用户说的话 */
+const VERSION_TYPE_LABELS = {
+  release: '正式版',
+  snapshot: '快照（测试版，可能不稳定）',
+  old_beta: '远古版 Beta',
+  old_alpha: '远古版 Alpha'
+}
+
+/**
+ * 把"将会使用哪个 Java"填进版本设置。
+ *
+ * 单独一个函数是因为它要跑一下 java.exe 才知道版本号，比较慢——
+ * 不能卡着弹窗不让开（`versions:java` 那条 IPC 会现算）。
+ */
+async function renderVersionJava(id) {
+  verJavaEl.textContent = '正在看…'
+  verJavaEl.className = 'vermeta__v'
+
+  try {
+    const result = await window.api.getVersionJava(id, editingDir)
+    if (editingVersion !== id) return // 看的过程中弹窗关了/换版本了
+
+    if (!result.ok) {
+      verJavaEl.textContent = result.error
+      verJavaEl.className = 'vermeta__v'
+      return
+    }
+
+    const short = String(result.path).replace(/^.*[\\/]runtime[\\/]/, '').replace(/[\\/]bin[\\/]java\.exe$/i, '')
+    verJavaEl.textContent =
+      `Java ${result.version || '?'}` +
+      (short && short !== String(result.path) ? `（${short}）` : result.source ? `（${result.source}）` : '')
+    verJavaEl.title = result.path
+
+    if (result.mismatch) {
+      verJavaEl.textContent += `　⚠ 这个版本建议 Java ${result.wanted}`
+      verJavaEl.className = 'vermeta__v vermeta__v--warn'
+    }
+  } catch (error) {
+    verJavaEl.textContent = `读不出来：${error.message}`
+    verJavaEl.className = 'vermeta__v'
+  }
+}
 
 /** 联机现在的状态（主进程给的原文） */
 let onlineInfo = { running: false, peers: [], code: '', myIp: '', role: '' }

@@ -24,6 +24,7 @@ const accounts = require('./accounts')
 const javaUtil = require('./java')
 const launch = require('./launch')
 const versions = require('./versions')
+const inherit = require('./inherit')
 const backup = require('./backup')
 const modrinth = require('./modrinth')
 const content = require('./content')
@@ -403,6 +404,42 @@ function registerIpcHandlers() {
       return { ok: false, error: '游戏正在运行，先关掉游戏再删' }
     }
     return versions.deleteVersion(id, known(dir))
+  })
+
+  /**
+   * 这个版本"将会使用哪个 Java"。
+   *
+   * 【为什么要专门给界面看一眼】用户报问题时，第一句通常得说清楚"用的哪个 Java"；
+   * 而且换电脑、装新版本之后 Java 可能悄悄换了一个——写出来才看得见。
+   * PCL 的版本设置页里也有这么一行（对照清单里的 ⭐⭐⭐ 项）。
+   */
+  ipcMain.handle('versions:java', (_event, id, dir) => {
+    const where = known(dir)
+    try {
+      const json = JSON.parse(fs.readFileSync(paths.versionJsonFile(id, where), 'utf8'))
+      const resolved = inherit.resolveVersion(id, json, where)
+      if (resolved.missingParent) {
+        return { ok: false, error: `它装在 ${resolved.missingParent} 上面，那个还没装` }
+      }
+
+      const candidate = javaUtil.findJava(resolved.json)
+      if (!candidate) return { ok: false, error: '还没找到能用的 Java（启动时会自动补下）' }
+
+      const probe = javaUtil.probeJava(candidate.path)
+      const wanted = resolved.json.javaVersion && resolved.json.javaVersion.majorVersion
+
+      return {
+        ok: true,
+        path: candidate.path,
+        source: candidate.source,
+        version: probe.ok ? probe.version : '',
+        major: probe.ok ? probe.major : 0,
+        wanted: wanted || 0,
+        mismatch: Boolean(wanted && probe.ok && probe.major !== wanted)
+      }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
   })
 
   /** 某个版本的单独设置：它自己设过什么、以及算下来真正生效的值 */

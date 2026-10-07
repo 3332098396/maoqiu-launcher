@@ -47,9 +47,30 @@ function listAllVersions(dirs) {
       name: custom[key]?.name || '',
       note: custom[key]?.note || '',
       loader: loaderName(id, dir),
+      type: versionType(id, dir),
       base: baseGameVersion(id, dir)
     }
   })
+}
+
+/**
+ * 这个版本是哪种版本：正式版 / 快照 / 远古版。
+ *
+ * 版本 JSON 里那个 `type` 字段就是它（官方给的），原样读出来。
+ * 界面上翻成中文显示——用户看到 "26.4-snapshot-3" 这种名字，
+ * 光看数字分不出是正式版还是快照。
+ */
+function versionType(id, dir) {
+  try {
+    const json = JSON.parse(fs.readFileSync(paths.versionJsonFile(id, dir), 'utf8'))
+    const type = String(json.type || '').trim()
+    if (type === 'release' || type === 'snapshot' || type === 'old_beta' || type === 'old_alpha') {
+      return type
+    }
+  } catch {
+    // 读不出来就当不知道
+  }
+  return ''
 }
 
 /** 这个版本装了什么 Mod 加载器（翻它的版本 JSON 里的库文件） */
@@ -102,6 +123,7 @@ function versionInfoMap(dirs) {
       name: one.name,
       note: one.note,
       loader: one.loader,
+      type: one.type,
       base: one.base
     }
   }
@@ -344,6 +366,7 @@ module.exports = {
   listAllVersions,
   versionInfoMap,
   loaderName,
+  versionType,
   baseGameVersion,
   updateVersion,
   versionSize,

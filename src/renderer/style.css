@@ -284,21 +284,28 @@ body {
  * 点这个箭头才展开全部。
  */
 .pick__toggle {
-  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 24px;
+  padding: 0;
   font-family: var(--font);
-  font-size: 11px;
-  line-height: 18px;
-  color: var(--text-muted);
-  background: transparent;
-  border: 1px solid var(--card-border);
-  border-radius: 6px;
+  /* 箭头要看得清：原来 11px 太小了，用户实测说"箭头太小" */
+  font-size: 15px;
+  line-height: 1;
+  color: #4a9bff;
+  background: #f2f8ff;
+  border: 1px solid #bcdcff;
+  border-radius: 7px;
   cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .pick__toggle:hover {
-  color: var(--text);
-  border-color: var(--card-border-hover);
+  color: #2f7fe0;
+  background: #e6f2ff;
+  border-color: #7cc0ff;
 }
 
 .pick__list {
@@ -556,6 +563,42 @@ body {
 .fact__v--path {
   font-size: 11.5px;
   color: var(--text-dim);
+}
+
+/* 版本设置里那两行"这个版本是什么"（版本类型 / 将会用的 Java） */
+.vermeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  background: #f7fbff;
+  border: 1px solid #e2eefc;
+  border-radius: 10px;
+}
+
+.vermeta__row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.vermeta__k {
+  flex: 0 0 auto;
+  min-width: 96px;
+  color: var(--text-muted);
+}
+
+.vermeta__v {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.vermeta__v--warn {
+  color: var(--danger);
 }
 
 /* 联机页：房间里的人 */

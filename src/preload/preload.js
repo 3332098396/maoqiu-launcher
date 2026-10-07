@@ -153,6 +153,9 @@ contextBridge.exposeInMainWorld('api', {
    * @returns {Promise<{override: object, effective: object, global: object,
    *                    totalMemoryMB: number, suggestedMemoryMB: number}>}
    */
+  /** 这个版本将会使用哪个 Java（版本设置里显示那一行用） */
+  getVersionJava: (id, dir) => ipcRenderer.invoke('versions:java', id, dir),
+
   getVersionSettings: (id, dir) => ipcRenderer.invoke('versions:getSettings', id, dir),
 
   /**
