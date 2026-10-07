@@ -241,9 +241,18 @@ contextBridge.exposeInMainWorld('api', {
 
   /**
    * 用户给版本起的那个名字行不行（名字会变成 versions\<名字>\ 这个文件夹）。
+   * @param {string} name 名字
+   * @param {string} [dir] 要装到哪个游戏目录（重名检查要按这个目录来）
    * @returns {Promise<{ok: boolean, name?: string, error?: string, warning?: string}>}
    */
-  checkPackName: (name) => ipcRenderer.invoke('pack:check-name', name),
+  checkPackName: (name, dir) => ipcRenderer.invoke('pack:check-name', name, dir),
+
+  /**
+   * 让用户挑一个"装到哪儿"的游戏目录（弹系统文件夹选择框）。
+   * 挑完主进程会校验、归一化（普通文件夹会自动往下建一层 .minecraft）并记住它。
+   * @returns {Promise<{ok: boolean, dir?: string, empty?: boolean, error?: string, canceled?: boolean}>}
+   */
+  pickPackDir: () => ipcRenderer.invoke('pack:pick-dir'),
 
   /**
    * 装这个整合包。

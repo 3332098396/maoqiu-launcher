@@ -273,6 +273,8 @@ function registerIpcHandlers() {
       versionInfo: versions.versionInfoMap(dirs),
       versionSettings: config.versionSettings || {},
       gameDirs: dirs,
+      // 上次拖包装到哪儿了——整合包对话框打开时默认选它
+      lastPackDir: config.gameDirs.lastPackDir || '',
       account: accounts.getAccount(),
       lastVersion: config.launch.lastVersion || '',
       memoryMB: settings.currentMemoryMB(),
@@ -552,7 +554,45 @@ function registerIpcHandlers() {
   })
 
   /** 用户给版本起的名字行不行（界面上一边打字一边问，规矩只留在主进程这一份） */
-  ipcMain.handle('pack:check-name', (_event, name) => pack.checkVersionName(name))
+  ipcMain.handle('pack:check-name', (_event, name, dir) =>
+    pack.checkVersionName(name, known(dir))
+  )
+
+  /**
+   * 让用户挑一个"装到哪儿"的游戏目录。
+   *
+   * 挑完要过三道：① 校验（英文路径、不是盘根、没跟别的目录套娃）
+   * ② 归一化成真正的游戏目录（选的是普通文件夹就往下建一层 .minecraft）
+   * ③ 记进"认得的目录"里，以后它里面的版本也会出现在启动页列表里。
+   */
+  ipcMain.handle('pack:pick-dir', async () => {
+    const result = await dialog.showOpenDialog({
+      title: '挑一个装整合包的地方',
+      properties: ['openDirectory', 'createDirectory'],
+      buttonLabel: '就装这儿'
+    })
+
+    if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true }
+
+    const chosen = result.filePaths[0]
+    const check = settings.validateGameDir(chosen)
+    if (!check.ok) return { ok: false, error: check.error }
+
+    const finalDir = settings.resolveChosenDir(chosen)
+    // 建一层 .minecraft 之后可能又和已知目录撞上了（比如选的就是别的目录本身），再验一次
+    const again = settings.validateGameDir(finalDir)
+    if (!again.ok && !settings.knownGameDirs().some((one) => paths.sameDir(one, finalDir))) {
+      return { ok: false, error: again.error }
+    }
+
+    settings.rememberGameDir(finalDir)
+    return {
+      ok: true,
+      dir: finalDir,
+      // 这个目录里还没装过游戏 → 界面要提前说清楚"要重新下一份库文件/资源"
+      empty: paths.listInstalledVersions(finalDir).length === 0
+    }
+  })
 
   /** 装这个整合包 */
   ipcMain.handle('pack:install', async (event, options) => {
@@ -567,6 +607,7 @@ function registerIpcHandlers() {
       return await pack.installPack(options.filePath, {
         targetVersionId: options.targetVersionId,
         versionName: options.versionName,
+        dir: known(options.dir),
         onStage: (text) => send('pack:stage', text),
         onProgress: (stats) => send('pack:progress', stats),
         onTask: (task) => {

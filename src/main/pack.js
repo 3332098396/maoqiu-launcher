@@ -218,7 +218,7 @@ function inspect(filePath) {
  *
  * @returns {{ok: boolean, name?: string, error?: string, warning?: string}}
  */
-function checkVersionName(rawName) {
+function checkVersionName(rawName, dir) {
   const name = String(rawName || '').trim()
 
   if (!name) return { ok: false, error: '给它起个名字' }
@@ -235,7 +235,7 @@ function checkVersionName(rawName) {
   }
 
   // 已经有同名的了：不是错，但要说清楚
-  if (fs.existsSync(paths.versionDir(name))) {
+  if (fs.existsSync(paths.versionDir(name, dir))) {
     return {
       ok: true,
       name,
@@ -252,10 +252,10 @@ function checkVersionName(rawName) {
  * 定这个整合包的版本叫什么：用户起了名就用用户的，没起就用包里自带的。
  * 名字不合法就抛错（界面也会拦，但这里必须再拦一道——不能只信界面）。
  */
-function resolvePackVersionName(suggested, userWanted) {
+function resolvePackVersionName(suggested, userWanted, dir) {
   if (!userWanted) return suggested
 
-  const checked = checkVersionName(userWanted)
+  const checked = checkVersionName(userWanted, dir)
   if (!checked.ok) throw new Error(checked.error)
   return checked.name
 }
@@ -285,7 +285,7 @@ function packVersionOf(entries, wrapper) {
  *      ③ 按清单把文件下进这个版本的文件夹
  *      ④ 把 overrides/ 解开盖上去
  */
-async function installModrinthPack(filePath, data, { onStage, onProgress, onTask, versionName } = {}) {
+async function installModrinthPack(filePath, data, { onStage, onProgress, onTask, versionName, dir } = {}) {
   const stage = (text) => {
     if (onStage) onStage(text)
   }
@@ -294,7 +294,7 @@ async function installModrinthPack(filePath, data, { onStage, onProgress, onTask
   const gameVersion = String(deps.minecraft || '')
 
   if (!gameVersion) throw new Error('整合包没写需要哪个游戏版本，装不了')
-  if (!paths.isVersionInstalled(gameVersion)) {
+  if (!paths.isVersionInstalled(gameVersion, dir)) {
     throw new Error(
       `这个整合包需要 Minecraft ${gameVersion}，本机还没装——先到「下载」页把它装好`
     )
@@ -313,6 +313,7 @@ async function installModrinthPack(filePath, data, { onStage, onProgress, onTask
       if (!paths.isVersionInstalled(built.versionId)) {
         const r = await install.installVersion(built.versionId, {
           providedJson: built.json,
+          dir,
           onStage,
           onProgress,
           onTask
@@ -321,12 +322,13 @@ async function installModrinthPack(filePath, data, { onStage, onProgress, onTask
       }
       baseId = built.versionId
     } else {
-      const built = await forge.prepare(loaderKind, gameVersion, { onStage, onProgress, onTask })
+      const built = await forge.prepare(loaderKind, gameVersion, { onStage, onProgress, onTask, dir })
       // 这一步只装"加载器版本"；如果整包指定的版本和最新版不一致，
       // 先用最新版跑通（版本号不合时会有提示）
       if (!paths.isVersionInstalled(built.versionId)) {
         const r = await install.installVersion(built.versionId, {
           providedJson: built.json,
+          dir,
           onStage,
           onProgress,
           onTask
@@ -339,7 +341,7 @@ async function installModrinthPack(filePath, data, { onStage, onProgress, onTask
   }
 
   // ——— ② 整合包自己的版本（继承上面那个） ———
-  const packId = resolvePackVersionName(safePackName(data.name, data.versionId), versionName)
+  const packId = resolvePackVersionName(safePackName(data.name, data.versionId), versionName, dir)
   stage(`正在建「${packId}」这个版本…`)
 
   const packJson = {
@@ -352,8 +354,8 @@ async function installModrinthPack(filePath, data, { onStage, onProgress, onTask
     _packSource: 'Modrinth 整合包'
   }
 
-  paths.ensureDir(paths.versionDir(packId))
-  fs.writeFileSync(paths.versionJsonFile(packId), JSON.stringify(packJson, null, 2), 'utf8')
+  paths.ensureDir(paths.versionDir(packId, dir))
+  fs.writeFileSync(paths.versionJsonFile(packId, dir), JSON.stringify(packJson, null, 2), 'utf8')
 
   // ——— ③ 按清单下文件 ———
   const files = []
@@ -366,8 +368,8 @@ async function installModrinthPack(filePath, data, { onStage, onProgress, onTask
     if (!url || !item.path) continue
 
     // 目标路径要挡一下：包里可能写 ../../ 想跑到外面去
-    const target = path.resolve(paths.versionDir(packId), item.path)
-    if (!target.startsWith(path.resolve(paths.versionDir(packId)))) continue
+    const target = path.resolve(paths.versionDir(packId, dir), item.path)
+    if (!target.startsWith(path.resolve(paths.versionDir(packId, dir)))) continue
 
     files.push({
       name: item.path,
@@ -395,7 +397,7 @@ async function installModrinthPack(filePath, data, { onStage, onProgress, onTask
   // ——— ④ overrides：作者的配置、按键、资源包这些 ———
   const buffer = fs.readFileSync(filePath)
   const entries = zip.listEntries(buffer)
-  const packRoot = path.resolve(paths.versionDir(packId))
+  const packRoot = path.resolve(paths.versionDir(packId, dir))
 
   let overrides = 0
   for (const entry of entries) {
@@ -425,7 +427,7 @@ async function installModrinthPack(filePath, data, { onStage, onProgress, onTask
  * layout='instance' → 解到选中的那个版本的文件夹
  * layout='gamedir'  → 解到游戏目录（里面带着版本文件的情况）
  */
-async function installPlainPack(filePath, layout, targetVersionId, { onStage, onProgress, versionName } = {}) {
+async function installPlainPack(filePath, layout, targetVersionId, { onStage, onProgress, versionName, dir } = {}) {
   const buffer = fs.readFileSync(filePath)
   const entries = zip.listEntries(buffer)
 
@@ -440,11 +442,11 @@ async function installPlainPack(filePath, layout, targetVersionId, { onStage, on
   // 所以照搬就行：versions / assets / libraries 原样放，
   // 其余的游戏文件归到版本文件夹里，PCL 自己的东西丢掉。
   if (layout === 'gamedir') {
-    return installGameDirPack(buffer, entries, { onStage, onProgress, versionName })
+    return installGameDirPack(buffer, entries, { onStage, onProgress, versionName, dir })
   }
 
   let dest = null
-  if (targetVersionId) dest = paths.versionDir(targetVersionId)
+  if (targetVersionId) dest = paths.versionDir(targetVersionId, dir)
   if (!dest) throw new Error('没选装到哪个版本')
 
   // 有些包外面套了一层 .minecraft/，那层要剥掉
@@ -555,7 +557,7 @@ async function installPack(filePath, options = {}) {
  * 装一个"整个游戏目录快照"的整合包（里面是 .minecraft/ 那种）。
  * 见 installPlainPack 里那段说明：我们的布局和 PCL 的一样，照搬即可。
  */
-async function installGameDirPack(buffer, entries, { onStage, onProgress, versionName } = {}) {
+async function installGameDirPack(buffer, entries, { onStage, onProgress, versionName, dir } = {}) {
   const stage = (text) => {
     if (onStage) onStage(text)
   }
@@ -567,7 +569,7 @@ async function installGameDirPack(buffer, entries, { onStage, onProgress, versio
   const packVersion = packVersionOf(entries, wrapper)
 
   // 用户给这个包起了名字，就用他的（起名字 = 这个版本的文件夹叫什么）
-  const targetVersion = resolvePackVersionName(packVersion, versionName)
+  const targetVersion = resolvePackVersionName(packVersion, versionName, dir)
   const renaming = Boolean(packVersion && targetVersion && targetVersion !== packVersion)
 
   const SHARED = ['versions/', 'assets/', 'libraries/', 'runtime/']
@@ -576,8 +578,8 @@ async function installGameDirPack(buffer, entries, { onStage, onProgress, versio
     (entry) => !entry.name.endsWith('/') && entry.name.startsWith(wrapper) && entry.name !== wrapper
   )
 
-  const gameRoot = path.resolve(paths.gameDir())
-  const versionRoot = targetVersion ? path.resolve(paths.versionDir(targetVersion)) : gameRoot
+  const gameRoot = path.resolve(paths.gameDir(dir))
+  const versionRoot = targetVersion ? path.resolve(paths.versionDir(targetVersion, dir)) : gameRoot
 
   let written = 0
   let skipped = 0
@@ -651,7 +653,7 @@ async function installGameDirPack(buffer, entries, { onStage, onProgress, versio
   }
 
   stage('整合包安装完成')
-  return { ok: true, written, skipped, versionId: targetVersion, dest: paths.gameDir() }
+  return { ok: true, written, skipped, versionId: targetVersion, dest: paths.gameDir(dir), dir: paths.gameDir(dir) }
 }
 
 /** 找出"外面套的那层"目录（.minecraft/ 或者单个文件夹）；没有就返回空 */

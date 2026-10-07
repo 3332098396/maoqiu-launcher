@@ -1176,6 +1176,10 @@ const packCancelEl = document.getElementById('pack-cancel')
 const packNameRowEl = document.getElementById('pack-name-row')
 const packNameEl = document.getElementById('pack-name')
 const packNameHintEl = document.getElementById('pack-name-hint')
+const packDirRowEl = document.getElementById('pack-dir-row')
+const packDirEl = document.getElementById('pack-dir')
+const packDirHintEl = document.getElementById('pack-dir-hint')
+const packDirPickEl = document.getElementById('pack-dir-pick')
 
 /** 这次拖进来的是哪个文件 */
 let packFilePath = ''
@@ -1191,6 +1195,13 @@ let packInstalling = false
  * 装完就把按钮换成「完成」——点它关掉对话框，这就是"这一趟结束了"的明确信号。
  */
 let packDone = false
+/**
+ * 这次要装到哪个游戏目录。空字符串 = 默认目录（%APPDATA%\.minecraft）。
+ * 打开对话框时默认用"上次装过的那个"（主进程记着）。
+ */
+let packDir = ''
+/** 选的这个目录里是不是还没装过游戏（用来提前说清"要重新下一份库和资源"） */
+let packDirIsEmpty = false
 
 // 文件拖到窗口上时：盖一层提示（不 preventDefault 的话，浏览器会直接打开这个文件）
 document.addEventListener('dragover', (event) => {
@@ -1238,6 +1249,9 @@ async function openPackDialog(filePath) {
   packInfo = null
   packInstalling = false
   packDone = false
+  // 默认装到"上次装过的那个目录"（没装过就是默认目录）
+  packDir = launchInfo?.lastPackDir || ''
+  packDirIsEmpty = false
 
   packInstallEl.textContent = '开始安装'
   packCancelEl.hidden = false
@@ -1248,6 +1262,10 @@ async function openPackDialog(filePath) {
   packNameRowEl.hidden = true
   packNameEl.value = ''
   packNameHintEl.textContent = ''
+  packDirRowEl.hidden = true
+  packDirEl.value = ''
+  packDirHintEl.textContent = ''
+  renderPackDir()
   packTargetRowEl.hidden = true
   packInstallEl.disabled = true
   packModalEl.hidden = false
@@ -1311,13 +1329,42 @@ async function openPackDialog(filePath) {
     return
   }
 
-  // ——— 起名字：这个包装完会变成"一个新的版本"，那就让用户给它起个名 ———
+  // ——— 起名字 + 装到哪儿：这个包装完会变成"一个新的版本"，名字和目录都由用户定 ———
   // （包里自带的那个名字写在括号里当默认值，不想改就直接装）
   if (info.suggestedName) {
     packNameRowEl.hidden = false
     packNameEl.value = info.suggestedName
+    packDirRowEl.hidden = false
+    renderPackDir()
     await checkPackName()
   }
+}
+
+/**
+ * 把"装到哪儿"那一行画出来。
+ *
+ * 【为什么要写这么一句提示】装到一个空目录，意味着库文件、资源文件都要**重新下一份**
+ * （几百 MB 到 1 GB）。这事必须**在选完目录、点安装之前**就说清楚——
+ * 等用户点了安装才发现要下 1 GB，那叫坑人。
+ */
+function renderPackDir() {
+  const isDefault = !packDir
+  packDirEl.value = isDefault
+    ? `${launchInfo?.gameDir || '（默认游戏目录）'}（默认，一直用的那个）`
+    : packDir
+  packDirEl.title = packDir || launchInfo?.gameDir || ''
+
+  if (isDefault) {
+    packDirHintEl.textContent = ''
+    packDirHintEl.className = 'delbox'
+    return
+  }
+
+  packDirHintEl.textContent = packDirIsEmpty
+    ? '这个目录里还没装过游戏——装的时候要把库文件、资源文件重新下一份（几百 MB 起步）。' +
+      '装完它里面的版本会和默认目录里的一起出现在启动页列表里。'
+    : '装完它里面的版本会和默认目录里的一起出现在启动页列表里（各自标着自己在哪个目录）。'
+  packDirHintEl.className = 'delbox'
 }
 
 /**
@@ -1330,7 +1377,7 @@ async function openPackDialog(filePath) {
 async function checkPackName() {
   if (packNameRowEl.hidden) return true
 
-  const result = await window.api.checkPackName(packNameEl.value)
+  const result = await window.api.checkPackName(packNameEl.value, packDir)
 
   packNameHintEl.textContent = result.ok ? result.warning || '' : result.error
   packNameHintEl.className = result.ok ? 'delbox' : 'delbox delbox--warn'
@@ -1342,6 +1389,25 @@ async function checkPackName() {
 // 一边打字一边看名字行不行
 packNameEl.addEventListener('input', () => {
   checkPackName()
+})
+
+// 换个目录装（弹系统的文件夹选择框）
+packDirPickEl.addEventListener('click', async () => {
+  const picked = await window.api.pickPackDir()
+  if (picked.canceled) return
+
+  if (!picked.ok) {
+    packDirHintEl.textContent = picked.error
+    packDirHintEl.className = 'delbox delbox--warn'
+    return
+  }
+
+  packDir = picked.dir
+  packDirIsEmpty = Boolean(picked.empty)
+  renderPackDir()
+
+  // 换了目录，名字重不重名要重新算（同名检查是按目录来的）
+  await checkPackName()
 })
 
 packInstallEl.addEventListener('click', async () => {
@@ -1367,7 +1433,12 @@ packInstallEl.addEventListener('click', async () => {
 
   let result
   try {
-    result = await window.api.installPack({ filePath: packFilePath, targetVersionId, versionName })
+    result = await window.api.installPack({
+      filePath: packFilePath,
+      targetVersionId,
+      versionName,
+      dir: packDir
+    })
   } catch (error) {
     result = { ok: false, error: String(error?.message ?? error) }
   }
@@ -1394,10 +1465,9 @@ packInstallEl.addEventListener('click', async () => {
       (result.overrides ? `，另有 ${result.overrides} 个作者的配置文件` : '')
     : `装好啦！${result.written} 个文件已经解到 ${result.dest}`
 
-  // 版本列表刷新，并把新版本选上
-  // （现在还是装在默认目录里；第 4 步做完"选目录"之后，这里要跟着包装去的那个目录走）
+  // 版本列表刷新，并把新版本选上（装在哪个目录就选哪个目录里的那个）
   await refreshLaunchFacts()
-  const fresh = findVersion(result.versionId, '')
+  const fresh = findVersion(result.versionId, packDir)
   if (fresh) {
     selectedVersion = fresh.id
     selectedDir = fresh.dir
