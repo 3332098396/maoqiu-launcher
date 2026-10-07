@@ -87,10 +87,14 @@ function makeSubstituter(values, unknown) {
  * 注意：这个目录会作为 --gameDir 传给游戏，游戏在哪儿建 saves、logs、
  * options.txt 全看它，所以下面所有跟"游戏目录"有关的地方都得用它，
  * 不能直接用 paths.gameDir()
+ *
+ * 【M11.4：一定要带上 dir】这个版本的库文件、资源文件、Java 都在**它自己那个**
+ * 游戏目录里（D 盘的包装在 D 盘）。拿默认目录去启动一个 D 盘的版本，
+ * 结果就是"有 1 个游戏文件不在了"。
  */
-function effectiveGameDir(versionId) {
-  const isolated = settings.effectiveLaunchSettings(versionId).isolation
-  return isolated ? paths.versionDir(versionId) : paths.gameDir()
+function effectiveGameDir(versionId, dir) {
+  const isolated = settings.effectiveLaunchSettings(settings.versionKey(dir, versionId)).isolation
+  return isolated ? paths.versionDir(versionId, dir) : paths.gameDir(dir)
 }
 
 /**
@@ -100,14 +104,14 @@ function effectiveGameDir(versionId) {
  *            nativesDir: string, assetsIndex: string,
  *            missing: string[], unknown: string[]}}
  */
-function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath, gameDir, window, rootId }) {
+function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath, gameDir, window, rootId, dir }) {
   const ctx = install.buildContext()
   // 告诉规则判断："我们支持自定义分辨率"——版本 JSON 里那两条
   // --width/--height 参数就是靠这个开关才生效的
   ctx.features = { has_custom_resolution: true }
 
-  const runDir = gameDir || paths.gameDir()
-  const nativesDir = paths.versionNativesDir(versionId)
+  const runDir = gameDir || paths.gameDir(dir)
+  const nativesDir = paths.versionNativesDir(versionId, dir)
   const missing = []
   const unknown = new Set()
 
@@ -118,14 +122,14 @@ function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath
     const artifact = lib.downloads && lib.downloads.artifact
     if (!artifact || !artifact.path) continue
 
-    const file = path.join(paths.librariesDir(), artifact.path)
+    const file = path.join(paths.librariesDir(dir), artifact.path)
     cpFiles.push(file)
     if (!fs.existsSync(file)) missing.push(artifact.path)
   }
 
   // 客户端 jar：装了 Mod 加载器的版本自己没有，用最底下那个父版本的
   const jarOwner = rootId || versionId
-  const clientJar = paths.versionJarFile(jarOwner)
+  const clientJar = paths.versionJarFile(jarOwner, dir)
   cpFiles.push(clientJar)
   if (!fs.existsSync(clientJar)) missing.push(`${jarOwner}.jar`)
 
@@ -148,13 +152,13 @@ function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath
     version_type: versionJson.type || 'release',
 
     game_directory: runDir,
-    assets_root: paths.assetsDir(),
+    assets_root: paths.assetsDir(dir),
     assets_index_name: String(assetsIndex),
     // 远古版本（1.7 以前）的资源目录，现在用不到，留着以防万一
-    game_assets: path.join(paths.assetsDir(), 'virtual', String(assetsIndex)),
+    game_assets: path.join(paths.assetsDir(dir), 'virtual', String(assetsIndex)),
 
     natives_directory: nativesDir,
-    library_directory: paths.librariesDir(),
+    library_directory: paths.librariesDir(dir),
     classpath,
     classpath_separator: path.delimiter,
 
@@ -223,15 +227,15 @@ function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath
  *     （参数里写死的）。我们只要把这几个目录先建好就行。
  *   · 老版本：动态库是单独的压缩包（classifiers），得提前解压到 natives 根目录。
  */
-function prepareNatives(versionId, versionJson) {
-  const dir = paths.versionNativesDir(versionId)
+function prepareNatives(versionId, versionJson, gameDir) {
+  const dir = paths.versionNativesDir(versionId, gameDir)
   paths.ensureDir(dir)
 
   for (const sub of ['java', 'jna', 'lwjgl', 'netty']) {
     paths.ensureDir(path.join(dir, sub))
   }
 
-  const natives = install.collectClassifierNatives(versionJson, install.buildContext())
+  const natives = install.collectClassifierNatives(versionJson, install.buildContext(), gameDir)
   if (natives.length === 0) return
 
   // 已经解过就不用再解（判断标准：目录里已经有动态库文件）
@@ -241,18 +245,18 @@ function prepareNatives(versionId, versionJson) {
   } catch {
     extracted = false
   }
-  if (!extracted) install.extractNatives(versionId, natives)
+  if (!extracted) install.extractNatives(versionId, natives, gameDir)
 }
 
 /**
  * 把 log4j 的日志配置文件补下来（M4 安装清单里漏了它）。
  * 很小，一千多字节。下不到不算致命，返回 null 让调用方跳过这条参数。
  */
-async function ensureLogConfig(versionJson) {
+async function ensureLogConfig(versionJson, gameDir) {
   const entry = versionJson.logging && versionJson.logging.client
   if (!entry || !entry.file || !entry.file.url) return null
 
-  const dest = paths.logConfigFile(entry.file.id)
+  const dest = paths.logConfigFile(entry.file.id, gameDir)
   if (fs.existsSync(dest)) return dest
 
   try {
@@ -545,7 +549,7 @@ function explainExit(code, recentLines) {
  *                    pid?: number, java?: object, memoryMB?: number, logFile?: string}>}
  */
 async function launch(versionId, options = {}) {
-  const { onLog, onState } = options
+  const { onLog, onState, dir } = options
   const state = (payload) => {
     try {
       if (onState) onState(payload)
@@ -571,7 +575,7 @@ async function launch(versionId, options = {}) {
   if (!account) return { ok: false, error: '先在左边填一个游戏名字，再点「开始游戏」' }
 
   // ——— ② 版本文件 ———
-  const jsonFile = paths.versionJsonFile(versionId)
+  const jsonFile = paths.versionJsonFile(versionId, dir)
   if (!fs.existsSync(jsonFile)) {
     return { ok: false, error: `找不到 ${versionId} 的版本文件。到「下载」页重新安装一次这个版本。` }
   }
@@ -585,7 +589,7 @@ async function launch(versionId, options = {}) {
 
   // 装了 Mod 加载器的版本写着一句 inheritsFrom（继承自某个原版）：
   // 库文件、启动参数、主类都要连父版本一起算，客户端 jar 用父版本那份
-  const resolved = inherit.resolveVersion(versionId, versionJson)
+  const resolved = inherit.resolveVersion(versionId, versionJson, dir)
   if (resolved.missingParent) {
     return {
       ok: false,
@@ -597,7 +601,7 @@ async function launch(versionId, options = {}) {
 
   // ——— ③ 内存和窗口大小 ———
   // 这个版本自己单独设过就用自己的，没设过跟随全局（见 settings.effectiveLaunchSettings）
-  const effective = settings.effectiveLaunchSettings(versionId)
+  const effective = settings.effectiveLaunchSettings(settings.versionKey(dir, versionId))
   const memoryMB = effective.memoryMB
   const memoryCheck = settings.validateMemoryMB(memoryMB)
   if (!memoryCheck.ok) return { ok: false, error: memoryCheck.error }
@@ -648,12 +652,12 @@ async function launch(versionId, options = {}) {
       ? `注意：这个版本建议用 Java ${wantedMajor}，现在找到的是 Java ${probe.version}，可能会起不来。`
       : ''
 
-  // ——— ⑤ 这次启动用哪个"游戏目录"（版本隔离决定） ———
-  const runDir = effectiveGameDir(versionId)
+  // ——— ⑤ 这次启动用哪个"游戏目录"（版本隔离决定，在这个版本自己的游戏目录里算） ———
+  const runDir = effectiveGameDir(versionId, dir)
   paths.ensureDir(runDir)
 
   // ——— ⑥ 日志配置（很小，没有就补下；下不到不致命） ———
-  const logConfigPath = await ensureLogConfig(fullJson)
+  const logConfigPath = await ensureLogConfig(fullJson, dir)
 
   // ——— ⑦ 拼参数，并检查文件齐不齐 ———
   const command = buildCommand(versionId, fullJson, {
@@ -662,7 +666,8 @@ async function launch(versionId, options = {}) {
     logConfigPath,
     gameDir: runDir,
     window: windowSize,
-    rootId
+    rootId,
+    dir
   })
 
   if (command.missing.length > 0) {
@@ -674,7 +679,7 @@ async function launch(versionId, options = {}) {
   }
 
   if (command.assetsIndex) {
-    const indexFile = path.join(paths.assetsDir(), 'indexes', `${command.assetsIndex}.json`)
+    const indexFile = path.join(paths.assetsDir(dir), 'indexes', `${command.assetsIndex}.json`)
     if (!fs.existsSync(indexFile)) {
       return {
         ok: false,
@@ -684,7 +689,7 @@ async function launch(versionId, options = {}) {
   }
 
   // ——— ⑧ natives 目录 ———
-  prepareNatives(versionId, fullJson)
+  prepareNatives(versionId, fullJson, dir)
 
   // ——— ⑨ 起进程 ———
   const args = [...command.jvmArgs, fullJson.mainClass, ...command.gameArgs]

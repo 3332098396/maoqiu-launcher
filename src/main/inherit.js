@@ -21,8 +21,8 @@ const fs = require('node:fs')
 const paths = require('./paths')
 
 /** 读一个已经装在硬盘上的版本 JSON */
-function readInstalledJson(id) {
-  return JSON.parse(fs.readFileSync(paths.versionJsonFile(id), 'utf8'))
+function readInstalledJson(id, dir) {
+  return JSON.parse(fs.readFileSync(paths.versionJsonFile(id, dir), 'utf8'))
 }
 
 /** 把子版本盖在父版本上面，合成一份 */
@@ -57,13 +57,18 @@ function mergeTwo(parent, child) {
 /**
  * 把"这个版本 + 它继承的所有父版本"合并成一份完整的版本 JSON。
  *
+ * 【父版本必须和子版本在**同一个游戏目录**里找】Fabric / Forge 的版本是
+ * "装在某个原版上面"的，父版本当然也在同一个 .minecraft 里。
+ * 拿默认目录去找 D 盘那个 Fabric 版的爹，只会得出"父版本没装"。
+ *
  * @param {string} versionId
  * @param {object} versionJson 这个版本自己的 JSON
+ * @param {string} [dir] 这个版本在哪个游戏目录（不传 = 默认目录）
  * @returns {{json: object, rootId: string, missingParent: string|null}}
  *   rootId 是最底下那个"真正带客户端 jar"的版本（也就是原版）；
  *   missingParent 不为空 = 父版本没装，装不了（要先装它）
  */
-function resolveVersion(versionId, versionJson) {
+function resolveVersion(versionId, versionJson, dir) {
   if (!versionJson.inheritsFrom) {
     return { json: versionJson, rootId: versionId, missingParent: null }
   }
@@ -80,7 +85,7 @@ function resolveVersion(versionId, versionJson) {
 
     let parent
     try {
-      parent = readInstalledJson(parentId)
+      parent = readInstalledJson(parentId, dir)
     } catch {
       // 父版本没装——这个必须拦下来，不然会算出一份缺东少西的清单
       return { json: versionJson, rootId: versionId, missingParent: parentId }

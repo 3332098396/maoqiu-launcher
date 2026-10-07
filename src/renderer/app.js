@@ -425,6 +425,8 @@ const accHintEl = document.getElementById('acc-hint')
 const accAvatarEl = document.getElementById('acc-avatar')
 const pickListEl = document.getElementById('pick-list')
 const pickEmptyEl = document.getElementById('pick-empty')
+const pickToggleEl = document.getElementById('pick-toggle')
+const pickToggleIconEl = document.getElementById('pick-toggle-icon')
 const launchBtnEl = document.getElementById('launch-btn')
 const launchTipEl = document.getElementById('launch-tip')
 const launchNoticeEl = document.getElementById('launch-notice')
@@ -443,8 +445,18 @@ const MAX_UI_LOG_LINES = 500
 
 /** 启动页拿到的信息（已装版本、账号、内存、Java…） */
 let launchInfo = null
-/** 当前选中的版本 */
+/** 当前选中的版本号 */
 let selectedVersion = ''
+/**
+ * 当前选中的版本在**哪个游戏目录**里。
+ *
+ * 【为什么版本号之外还要记这个】M11.4 起可以有好几个游戏目录，
+ * 两个目录里可能各有一个叫 "26.3" 的版本。只说版本号等于没说清是哪个。
+ * 空字符串 = 默认目录（%APPDATA%\.minecraft）。
+ */
+let selectedDir = ''
+/** 版本列表展开了没有（版本多了会顶到按钮，默认收起；见 renderPickList） */
+let pickerOpen = false
 /** 有没有一次启动正在进行（准备中或游戏运行中） */
 let launching = false
 /** 界面上的日志行 */
@@ -484,33 +496,93 @@ function renderAccountCard() {
   accHintEl.classList.toggle('acc__hint--error', showProblem)
 }
 
+/** 版本列表（跨所有游戏目录，来自主进程） */
+function versionList() {
+  return launchInfo?.versions || []
+}
+
+/** 两个目录路径是不是同一个（界面上只用来配对，粗一点没关系） */
+function samePath(a, b) {
+  return String(a || '').toLowerCase() === String(b || '').toLowerCase()
+}
+
+/** 按"版本号 + 目录"找一项 */
+function findVersion(id, dir) {
+  return versionList().find((one) => one.id === id && samePath(one.dir, dir)) || null
+}
+
+/** 当前选中项在配置里的键（主进程按它找"这个版本单独设过什么"） */
+function selectedKey() {
+  return findVersion(selectedVersion, selectedDir)?.key || selectedVersion
+}
+
+/** 当前选中项（没有就是 null） */
+function selectedItem() {
+  return findVersion(selectedVersion, selectedDir)
+}
+
+/** 目录路径的最后一段，给用户看的（D:\我的世界\.minecraft → .minecraft） */
+function dirTail(dir) {
+  const parts = String(dir || '').split(/[\\/]/).filter(Boolean)
+  return parts[parts.length - 1] || String(dir || '')
+}
+
+/**
+ * 渲染左侧那一列版本。
+ *
+ * 【为什么默认只显示一个】版本一多，这一列会一直往下排，把下面的「版本设置」
+ * 顶到屏幕外面（用户实测反馈）。所以收起来时只显示当前选中的那个，
+ * 点标题右边的箭头才展开全部——展开后列表自己也带滚动条，最多占 38% 屏高。
+ */
 function renderPickList() {
-  const installed = launchInfo?.installed ?? []
+  const all = versionList()
+  const current = selectedItem()
+
   pickListEl.textContent = ''
-  pickEmptyEl.hidden = installed.length > 0
+  pickEmptyEl.hidden = all.length > 0
+
+  // 收起时：只显示选中的那个。没选中（比如刚删掉）就显示前一个，免得列表空着
+  const shown = pickerOpen || !current ? all : [current]
 
   const frag = document.createDocumentFragment()
-  for (const id of installed) {
+  for (const one of shown) {
     const li = document.createElement('li')
-    li.className = id === selectedVersion ? 'pick__item pick__item--on' : 'pick__item'
-    li.dataset.version = id
+    li.className =
+      one.id === selectedVersion && samePath(one.dir, selectedDir)
+        ? 'pick__item pick__item--on'
+        : 'pick__item'
+    li.dataset.version = one.id
+    li.dataset.dir = one.dir
 
     // 用户起过名字就显示名字（后面带上版本号，免得对不上）；
-    // 没起过就显示版本号本身。
-    // 外面套一层 span：名字太长时好做省略号，不撑破侧栏
+    // 没起过就显示版本号本身
     const label = document.createElement('span')
-    const info = launchInfo?.versionInfo?.[id] || {}
     // 版本名太长（fabric-loader-…）时，后面缀个加载器名，一眼知道这是什么
-    label.textContent = info.name
-      ? `${info.name}（${id}）`
-      : info.loader
-        ? `${id}（${info.loader}）`
-        : id
+    label.textContent = one.name
+      ? `${one.name}（${one.id}）`
+      : one.loader
+        ? `${one.id}（${one.loader}）`
+        : one.id
     li.appendChild(label)
+
+    // 不是默认目录里的版本，名字后面挂个小标签说明它在哪个目录
+    if (!one.isDefault) {
+      const tag = document.createElement('em')
+      tag.className = 'pick__dir'
+      tag.textContent = dirTail(one.dir)
+      tag.title = one.dir
+      li.appendChild(tag)
+    }
 
     frag.appendChild(li)
   }
+
   pickListEl.appendChild(frag)
+
+  // 箭头：展开着就是"往上"，收着就是"往下"
+  pickToggleIconEl.textContent = pickerOpen ? '▴' : '▾'
+  pickToggleEl.setAttribute('aria-expanded', pickerOpen ? 'true' : 'false')
+  pickToggleEl.title = pickerOpen ? '收起版本列表' : `展开版本列表（一共 ${all.length} 个）`
 }
 
 /** 按当前状态刷新整个启动页（按钮能不能点、版本列表、信息卡） */
@@ -537,8 +609,9 @@ function refreshLaunchUi() {
 
   if (launchInfo) {
     // 内存和游戏目录都要按"这个版本实际用的"显示——
-    // 版本可能自己单独设过（见版本设置），不能只显示全局值
-    const override = launchInfo.versionSettings?.[selectedVersion] || {}
+    // 版本可能自己单独设过（见版本设置），不能只显示全局值。
+    // 键要用 selectedKey()（目录 + 版本号），光用版本号会在两个目录有同名版本时认错人
+    const override = launchInfo.versionSettings?.[selectedKey()] || {}
     const ownMemory = Number(override.memoryMB) > 0
     const memoryMB = ownMemory ? override.memoryMB : launchInfo.memoryMB
     factMemoryEl.textContent =
@@ -547,9 +620,9 @@ function refreshLaunchUi() {
 
     const isolated =
       typeof override.isolation === 'boolean' ? override.isolation : launchInfo.isolation
-    factDirEl.textContent = isolated
-      ? `${launchInfo.gameDir}\\versions\\${selectedVersion}`
-      : launchInfo.gameDir
+    // 游戏目录要用**这个版本自己那个**目录，不是默认目录
+    const base = selectedDir || launchInfo.gameDir
+    factDirEl.textContent = isolated ? `${base}\\versions\\${selectedVersion}` : base
 
     const java = launchInfo.java
     factJavaEl.textContent = java.found
@@ -558,13 +631,14 @@ function refreshLaunchUi() {
 
     // 「当前版本」那张卡：名字、备注，以及"要改去哪改"的提示
     if (selectedVersion) {
-      const info = launchInfo.versionInfo?.[selectedVersion] || {}
+      const info = selectedItem() || {}
       currentVersionPanelEl.hidden = false
       curNameEl.textContent = info.name ? `${info.name}（${selectedVersion}）` : selectedVersion
       curNoteEl.textContent = info.note || ''
       curNoteEl.hidden = !info.note
-      curHintEl.textContent =
-        '想改名字、写备注、打开存档文件夹或者删掉它：点左下角的「版本设置」'
+      curHintEl.textContent = info.isDefault
+        ? '想改名字、写备注、打开存档文件夹或者删掉它：点左下角的「版本设置」'
+        : `这个版本在 ${info.dir} 里。想改名字、写备注、打开存档文件夹或者删掉它：点左下角的「版本设置」`
     } else {
       currentVersionPanelEl.hidden = true
     }
@@ -601,11 +675,14 @@ async function loadLaunchPage() {
     return
   }
 
-  const installed = launchInfo.installed
-  if (!installed.includes(selectedVersion)) {
-    selectedVersion = installed.includes(launchInfo.lastVersion)
-      ? launchInfo.lastVersion
-      : installed[0] || ''
+  // 选中的那个版本还在不在？（要连目录一起对——两个目录可能有同名版本）
+  if (!selectedItem()) {
+    // 优先回到"上次启动过的那个"（主进程存的是带目录的键），否则用列表第一个
+    const last = launchInfo.lastVersion || ''
+    const match = versionList().find((one) => one.key === last)
+    const pickOne = match || versionList()[0] || null
+    selectedVersion = pickOne ? pickOne.id : ''
+    selectedDir = pickOne ? pickOne.dir : ''
   }
 
   // 只在第一次把存下来的账号填进输入框，别把用户正在敲的字冲掉
@@ -626,8 +703,7 @@ async function loadLaunchPage() {
 function refreshLaunchNotice() {
   if (launching) return
 
-  const installed = (launchInfo && launchInfo.installed) || []
-  if (installed.length === 0) {
+  if (versionList().length === 0) {
     setNotice('这里还空着——去「下载」页挑个版本装上，回来就能开玩了。')
   } else {
     setNotice('在左边填一个游戏名字、选一个版本，就可以点「开始游戏」了。')
@@ -720,7 +796,16 @@ pickListEl.addEventListener('click', (event) => {
   const item = event.target.closest('.pick__item')
   if (!item) return
   selectedVersion = item.dataset.version
+  selectedDir = item.dataset.dir || ''
+  // 选完就收起来——列表开着的时候它很占地方（版本一多就顶到按钮上）
+  pickerOpen = false
   refreshLaunchUi()
+})
+
+// 点标题右边那个小箭头：展开 / 收起版本列表
+pickToggleEl.addEventListener('click', () => {
+  pickerOpen = !pickerOpen
+  renderPickList()
 })
 
 async function startGame() {
@@ -747,7 +832,7 @@ async function startGame() {
   refreshLaunchUi()
   setNotice(`正在启动 ${selectedVersion}…第一次启动会慢一点，稍等。`)
 
-  const result = await window.api.startLaunch(selectedVersion)
+  const result = await window.api.startLaunch(selectedVersion, selectedDir)
 
   if (!result.ok) {
     launching = false
@@ -809,9 +894,14 @@ const MR_TYPE_NAMES = { mod: 'Mod', resourcepack: '资源包', shader: '光影�
 /** 内容类型 → 游戏里的文件夹（打开文件夹时用） */
 const MR_FOLDER_KEY = { mod: 'mods', resourcepack: 'resourcepacks', shader: 'shaderpacks' }
 
-/** 该把东西放到哪个版本里：启动页选中的那个 */
+/** 该把东西放到哪个版本里：启动页选中的那个（没选就退而用列表第一个） */
+function mrTarget() {
+  const one = selectedItem() || versionList()[0] || null
+  return { id: one ? one.id : '', dir: one ? one.dir : '' }
+}
+
 function mrTargetVersion() {
-  return selectedVersion || launchInfo?.installed?.[0] || ''
+  return mrTarget().id
 }
 
 /** 搜索时用哪个游戏版本筛 */
@@ -976,7 +1066,8 @@ async function installMrProject(button) {
   const projectId = button.dataset.mrInstall
   const nameZh = button.dataset.mrNameZh
   const title = nameZh ? `${nameZh}（${button.dataset.mrTitle}）` : button.dataset.mrTitle
-  const versionId = mrTargetVersion()
+  const target = mrTarget()
+  const versionId = target.id
 
   if (!versionId) {
     mrStatusEl.textContent = '还没有装过游戏版本——先到「原版游戏」里装一个，才知道该放到哪'
@@ -995,7 +1086,12 @@ async function installMrProject(button) {
 
   let result
   try {
-    result = await window.api.installModrinth({ projectId, type: mrType, versionId })
+    result = await window.api.installModrinth({
+      projectId,
+      type: mrType,
+      versionId,
+      dir: target.dir
+    })
   } catch (error) {
     result = { ok: false, error: String(error?.message ?? error) }
   }
@@ -1015,7 +1111,7 @@ async function installMrProject(button) {
   const folderName = result.dir.split(/[\\/]/).pop()
   setDetail(`已放到 ${folderName} 文件夹：${result.filename}`)
 
-  mrLastResult = { versionId, type: mrType }
+  mrLastResult = { versionId, type: mrType, dir: target.dir }
   mrDoneTextEl.textContent = `${title}（${result.versionName}）已经放到 ${folderName} 文件夹`
   mrDoneEl.hidden = false
 }
@@ -1057,7 +1153,8 @@ document.getElementById('mr-open-folder').addEventListener('click', async () => 
   if (!mrLastResult) return
   const result = await window.api.openVersionFolder(
     mrLastResult.versionId,
-    MR_FOLDER_KEY[mrLastResult.type]
+    MR_FOLDER_KEY[mrLastResult.type],
+    mrLastResult.dir
   )
   if (!result.ok) mrStatusEl.textContent = `打不开文件夹：${result.error}`
 })
@@ -1196,14 +1293,16 @@ async function openPackDialog(filePath) {
     packTargetRowEl.hidden = false
     packTargetEl.textContent = ''
 
-    const installed = launchInfo?.installed || []
-    for (const id of installed) {
+    // 只列**默认目录**里的版本：这种包是"解到某个已有版本里"的，
+    // 而选目录是 M11.4 第 4 步才做的事（那时这里要跟着所选目录重列）
+    const installed = versionList()
+    for (const one of installed) {
       const option = document.createElement('option')
-      option.value = id
-      option.textContent = id
+      option.value = one.id
+      option.textContent = one.isDefault ? one.id : `${one.id}（${dirTail(one.dir)}）`
       packTargetEl.appendChild(option)
     }
-    packTargetEl.value = selectedVersion || installed[0] || ''
+    packTargetEl.value = selectedVersion || (installed[0] ? installed[0].id : '')
 
     if (installed.length === 0) {
       packWarnEl.textContent = '本机还没装游戏版本——先到「下载」页装一个，再拖这个包'
@@ -1296,9 +1395,12 @@ packInstallEl.addEventListener('click', async () => {
     : `装好啦！${result.written} 个文件已经解到 ${result.dest}`
 
   // 版本列表刷新，并把新版本选上
+  // （现在还是装在默认目录里；第 4 步做完"选目录"之后，这里要跟着包装去的那个目录走）
   await refreshLaunchFacts()
-  if (result.versionId && launchInfo?.installed?.includes(result.versionId)) {
-    selectedVersion = result.versionId
+  const fresh = findVersion(result.versionId, '')
+  if (fresh) {
+    selectedVersion = fresh.id
+    selectedDir = fresh.dir
     refreshLaunchUi()
   }
 
@@ -1390,8 +1492,12 @@ let verSettingsInfo = null
 
 /** 版本设置弹窗正在设置哪个版本 */
 let editingVersion = ''
+/** 正在编辑的这个版本在哪个游戏目录里（M11.4） */
+let editingDir = ''
 /** 删除确认弹窗正在确认哪个版本 */
 let deletingVersion = ''
+/** 正在删的那个版本在哪个游戏目录里 */
+let deletingDir = ''
 
 function formatBytes(bytes) {
   if (!bytes) return '0 MB'
@@ -1404,6 +1510,7 @@ function formatBytes(bytes) {
 async function openVersionSettings() {
   if (!selectedVersion) return
   editingVersion = selectedVersion
+  editingDir = selectedDir
   const id = editingVersion
 
   const info = launchInfo?.versionInfo?.[id] ?? { name: '', note: '' }
@@ -1418,7 +1525,7 @@ async function openVersionSettings() {
   verNameEl.focus()
 
   // 「这个版本自己的设置」要现算（还要拿全局值作对比），异步读一下
-  const settings = await window.api.getVersionSettings(id)
+  const settings = await window.api.getVersionSettings(id, editingDir)
   if (editingVersion !== id) return // 读的过程中弹窗被关了/换了版本
   verSettingsInfo = settings
 
@@ -1465,14 +1572,14 @@ async function saveVersionSetting(patch) {
   if (!editingVersion) return
   const id = editingVersion
 
-  const result = await window.api.setVersionSettings(id, patch)
+  const result = await window.api.setVersionSettings(id, patch, editingDir)
   if (!result.ok) {
     verHintEl.textContent = result.error
     verHintEl.classList.add('verform__hint--bad')
     return
   }
 
-  verSettingsInfo = await window.api.getVersionSettings(id)
+  verSettingsInfo = await window.api.getVersionSettings(id, editingDir)
   if (editingVersion !== id) return
 
   verHintEl.classList.remove('verform__hint--bad')
@@ -1524,13 +1631,18 @@ async function saveVersionSettings() {
 async function askDeleteVersion() {
   if (!editingVersion) return
   deletingVersion = editingVersion
+  deletingDir = editingDir
 
-  delTitleEl.textContent = `要删除版本「${deletingVersion}」吗？`
+  // 不是默认目录里的版本，标题里就把目录写出来——删东西之前必须让人看清楚删的是哪个
+  const where = findVersion(deletingVersion, deletingDir)
+  delTitleEl.textContent = where && !where.isDefault
+    ? `要删除版本「${deletingVersion}」吗？（在 ${deletingDir}）`
+    : `要删除版本「${deletingVersion}」吗？`
   delWhatEl.textContent = '正在算这个版本占多大…'
   delSafeEl.textContent = ''
   delModalEl.hidden = false
 
-  const size = await window.api.getVersionSize(deletingVersion)
+  const size = await window.api.getVersionSize(deletingVersion, deletingDir)
 
   // 算大小的这点时间里，用户可能已经把弹窗关了
   if (delModalEl.hidden || !deletingVersion) return
@@ -1549,7 +1661,7 @@ async function confirmDeleteVersion() {
   if (!deletingVersion) return
   const id = deletingVersion
 
-  const result = await window.api.deleteVersion(id)
+  const result = await window.api.deleteVersion(id, deletingDir)
 
   delModalEl.hidden = true
   deletingVersion = ''
@@ -1640,7 +1752,11 @@ async function installLoader(type) {
 
   let result
   try {
-    result = await window.api.installLoader({ gameVersion: base, loader: type })
+    result = await window.api.installLoader({
+      gameVersion: base,
+      loader: type,
+      dir: editingDir
+    })
   } catch (error) {
     result = { ok: false, error: String(error?.message ?? error) }
   }
@@ -1661,8 +1777,10 @@ async function installLoader(type) {
 
   // 版本列表刷新，并把新装好的那个选上（省得用户自己找）
   await refreshLaunchFacts()
-  if (launchInfo?.installed?.includes(result.versionId)) {
-    selectedVersion = result.versionId
+  const installedNow = findVersion(result.versionId, editingDir)
+  if (installedNow) {
+    selectedVersion = installedNow.id
+    selectedDir = installedNow.dir
     refreshLaunchUi()
   }
 }
@@ -1685,7 +1803,7 @@ verModalEl.addEventListener('click', async (event) => {
   // 四个文件夹按钮
   const which = event.target.dataset?.folder
   if (which) {
-    const result = await window.api.openVersionFolder(editingVersion, which)
+    const result = await window.api.openVersionFolder(editingVersion, which, editingDir)
     verFolderHintEl.textContent = result.ok ? `已打开：${result.dir}` : `打不开：${result.error}`
     return
   }

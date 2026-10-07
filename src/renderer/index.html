@@ -66,7 +66,14 @@
           </div>
 
           <div class="pick">
-            <div class="pick__title">选择版本</div>
+            <div class="pick__title">
+              <span>选择版本</span>
+              <!-- 版本多了列表会很长，默认收起、点这个箭头展开（R5.6）。
+                   aria-expanded 是给读屏软件看的，跟着一起改 -->
+              <button class="pick__toggle" type="button" id="pick-toggle" aria-expanded="false">
+                <span id="pick-toggle-icon">▾</span>
+              </button>
+            </div>
             <ul class="pick__list" id="pick-list"></ul>
             <div class="pick__empty" id="pick-empty" hidden>
               这里空空的——还没装过版本。去「下载」页挑一个，装好就能玩了。
@@ -352,6 +359,10 @@
           <div class="settings-tab" data-settings-tab="backup" hidden>
             <div class="notice" id="backup-notice">
               勾上要备份的东西、选个存法，点「开始备份」就行。备份只读不写，不会动你的原文件。
+              <br />
+              <strong>注意</strong>：备份的是默认那个游戏目录（%APPDATA%\.minecraft）里的东西。
+              要是你把整合包装到了别的目录（比如 D 盘），那一份<strong>不会</strong>进备份包——
+              那儿的存档得自己手动拷。
             </div>
 
             <section class="panel">

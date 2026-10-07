@@ -126,7 +126,7 @@ function rulesAllow(rules, ctx) {
  *   不传就当这个版本自己就是（普通原版就是这样）
  * @returns {Promise<{files: Array, natives: Array, javaComponent: string|null, needsNatives: string[]}>}
  */
-async function buildFileList(versionId, versionJson, { onStage, rootId } = {}) {
+async function buildFileList(versionId, versionJson, { onStage, rootId, dir } = {}) {
   const ctx = buildContext()
 
   const files = []
@@ -136,7 +136,7 @@ async function buildFileList(versionId, versionJson, { onStage, rootId } = {}) {
   // 装了 Mod 加载器的版本自己没有客户端 jar（它继承原版的），
   // 这时候要确认原版那份在硬盘上
   if (rootId && rootId !== versionId) {
-    if (!fs.existsSync(paths.versionJarFile(rootId))) {
+    if (!fs.existsSync(paths.versionJarFile(rootId, dir))) {
       throw new Error(`缺了 ${rootId} 的客户端文件——先到「下载」页把它装好`)
     }
   } else {
@@ -145,7 +145,7 @@ async function buildFileList(versionId, versionJson, { onStage, rootId } = {}) {
       files.push({
         name: `${versionId}.jar`,
         url: client.url,
-        saveTo: paths.versionJarFile(versionId),
+        saveTo: paths.versionJarFile(versionId, dir),
         sha1: client.sha1,
         size: client.size
       })
@@ -162,14 +162,14 @@ async function buildFileList(versionId, versionJson, { onStage, rootId } = {}) {
       files.push({
         name: artifact.path || path.basename(artifact.url),
         url: artifact.url,
-        saveTo: path.join(paths.librariesDir(), artifact.path),
+        saveTo: path.join(paths.librariesDir(dir), artifact.path),
         sha1: artifact.sha1,
         size: artifact.size
       })
     }
 
     // 老版本才有：natives 是压缩包，要单独解压
-    natives.push(...nativesFromLibrary(lib, ctx))
+    natives.push(...nativesFromLibrary(lib, ctx, dir))
   }
 
   // ——— ③ assets ———
@@ -179,7 +179,7 @@ async function buildFileList(versionId, versionJson, { onStage, rootId } = {}) {
     files.push({
       name: `${assetIndex.id}.json`,
       url: assetIndex.url,
-      saveTo: path.join(paths.assetsDir(), 'indexes', `${assetIndex.id}.json`),
+      saveTo: path.join(paths.assetsDir(dir), 'indexes', `${assetIndex.id}.json`),
       sha1: assetIndex.sha1,
       size: assetIndex.size
     })
@@ -193,7 +193,7 @@ async function buildFileList(versionId, versionJson, { onStage, rootId } = {}) {
         name,
         // 资源文件的地址是固定拼出来的，版本 JSON 里没写
         url: `https://resources.download.minecraft.net/${prefix}/${obj.hash}`,
-        saveTo: path.join(paths.assetsDir(), 'objects', prefix, obj.hash),
+        saveTo: path.join(paths.assetsDir(dir), 'objects', prefix, obj.hash),
         sha1: obj.hash,
         size: obj.size
       })
@@ -233,7 +233,7 @@ async function buildFileList(versionId, versionJson, { onStage, rootId } = {}) {
  * 新版本不用这套——动态库直接作为普通库文件进了 classpath，
  * 游戏自己在运行时把它们解压到 natives 目录（见 launch.js）。
  */
-function nativesFromLibrary(lib, ctx) {
+function nativesFromLibrary(lib, ctx, dir) {
   const classifiers = lib.downloads && lib.downloads.classifiers
   if (!classifiers) return []
 
@@ -245,7 +245,7 @@ function nativesFromLibrary(lib, ctx) {
       {
         name: `${lib.name}-${key}.jar`,
         url: entry.url,
-        saveTo: path.join(paths.librariesDir(), entry.path),
+        saveTo: path.join(paths.librariesDir(dir), entry.path),
         sha1: entry.sha1,
         size: entry.size
       }
@@ -254,12 +254,19 @@ function nativesFromLibrary(lib, ctx) {
   return []
 }
 
-/** 把版本 JSON 里所有老式 natives 压缩包挑出来（启动时补解压要用） */
-function collectClassifierNatives(versionJson, ctx) {
+/**
+ * 把版本 JSON 里所有老式 natives 压缩包挑出来（启动时补解压要用）。
+ *
+ * 【dir 必须传对】这个清单里的 saveTo 是"库文件在哪个游戏目录"的完整路径，
+ * 启动时 prepareNatives 拿它去判断"这个包下过没有、要不要解压"。
+ * 传错目录不会报错，只会**静默地不解压 natives**——老版本启动时缺 DLL 崩掉，
+ * 而且日志里看不出所以然。所以别漏。
+ */
+function collectClassifierNatives(versionJson, ctx, dir) {
   const list = []
   for (const lib of versionJson.libraries || []) {
     if (!rulesAllow(lib.rules, ctx)) continue
-    list.push(...nativesFromLibrary(lib, ctx))
+    list.push(...nativesFromLibrary(lib, ctx, dir))
   }
   return list
 }
@@ -343,10 +350,10 @@ async function ensureJavaComponent(component, { onStage, onProgress } = {}) {
 // ——————————————————————————————————————————————
 
 /** 把老版本的 natives 压缩包解开铺到版本目录 */
-function extractNatives(versionId, natives) {
+function extractNatives(versionId, natives, dir) {
   if (natives.length === 0) return 0
 
-  const dest = paths.versionNativesDir(versionId)
+  const dest = paths.versionNativesDir(versionId, dir)
   paths.ensureDir(dest)
   let count = 0
 
@@ -380,14 +387,14 @@ function extractNatives(versionId, natives) {
  * @returns {Promise<{ok: boolean, stats?: object, error?: string}>}
  */
 async function installVersion(versionId, options = {}) {
-  const { onStage, onProgress, onTask } = options
+  const { onStage, onProgress, onTask, dir } = options
   const stage = (text) => {
     if (onStage) onStage(text)
   }
 
   // 记一下"这次装之前它是不是已经装好了"——取消后要不要删版本文件夹靠它判断：
   // 本来就装好的版本（比如点"重装"中途取消），绝不能把人家的版本给删了
-  const wasInstalled = paths.isVersionInstalled(versionId)
+  const wasInstalled = paths.isVersionInstalled(versionId, dir)
 
   try {
     // ——— 1. 拿到这个版本的 JSON ———
@@ -406,7 +413,7 @@ async function installVersion(versionId, options = {}) {
     // ——— 1.5 有继承关系就先合并 ———
     // 装了 Mod 加载器的版本写着一句 inheritsFrom（继承自某个原版），
     // 库文件、资源、Java 要求这些都要连父版本一起算
-    const resolved = inherit.resolveVersion(versionId, versionJson)
+    const resolved = inherit.resolveVersion(versionId, versionJson, dir)
     if (resolved.missingParent) {
       throw new Error(`这个版本是装在 ${resolved.missingParent} 上面的，得先把它装好`)
     }
@@ -415,14 +422,14 @@ async function installVersion(versionId, options = {}) {
 
     // ——— 2. 算出要下哪些文件 ———
     stage('正在准备下载清单…')
-    const { files, natives } = await buildFileList(versionId, fullJson, { onStage: stage, rootId })
+    const { files, natives } = await buildFileList(versionId, fullJson, { onStage: stage, rootId, dir })
 
     // ——— 3. 版本 JSON 本身也存一份 ———
     // 存"它自己那份"（带 inheritsFrom 的原样），不是合并后的——
     // 合并是每次用的时候现算的，存合并版会把继承关系弄丢
-    paths.ensureDir(paths.versionDir(versionId))
+    paths.ensureDir(paths.versionDir(versionId, dir))
     fs.writeFileSync(
-      paths.versionJsonFile(versionId),
+      paths.versionJsonFile(versionId, dir),
       JSON.stringify(versionJson, null, 2),
       'utf8'
     )
@@ -430,7 +437,7 @@ async function installVersion(versionId, options = {}) {
     // 从这里开始算"装到一半"：先插个标记，全部装完再拔掉。
     // 这样中途取消/失败留下的半成品，界面上不会显示成"已安装"
     fs.writeFileSync(
-      paths.versionIncompleteMarker(versionId),
+      paths.versionIncompleteMarker(versionId, dir),
       '装到一半（被取消或失败了）。重新安装会接着下，已经下好的不会重下。',
       'utf8'
     )
@@ -464,12 +471,12 @@ async function installVersion(versionId, options = {}) {
     // ——— 5. 解压 natives（老版本才有） ———
     if (natives.length > 0) {
       stage('正在解压运行库…')
-      extractNatives(versionId, natives)
+      extractNatives(versionId, natives, dir)
     }
 
     // 装全了，把"装到一半"的标记拔掉
     try {
-      fs.unlinkSync(paths.versionIncompleteMarker(versionId))
+      fs.unlinkSync(paths.versionIncompleteMarker(versionId, dir))
     } catch {
       // 标记本来就不在就算了
     }
@@ -482,16 +489,20 @@ async function installVersion(versionId, options = {}) {
 }
 
 /**
- * 把"所有装好的版本"还需要用到的文件列成一张表（库文件 + 资源文件）。
+ * 把"**某个游戏目录里**装好的版本"还需要用到的文件列成一张表（库文件 + 资源文件）。
  * 用来回答："这个文件还有别人要吗？"
+ *
+ * 【为什么只算一个目录】库文件和资源文件是**每个游戏目录各一份**的：
+ * 默认目录里的版本不会去用 D 盘那份库。清理时按目录各算各的，
+ * 才不会把另一个目录里还要用的文件删掉。
  */
-function collectReferencedFiles() {
+function collectReferencedFiles(dir) {
   const needed = new Set()
 
-  for (const id of paths.listInstalledVersions()) {
+  for (const id of paths.listInstalledVersions(dir)) {
     let json
     try {
-      json = JSON.parse(fs.readFileSync(paths.versionJsonFile(id), 'utf8'))
+      json = JSON.parse(fs.readFileSync(paths.versionJsonFile(id, dir), 'utf8'))
     } catch {
       continue
     }
@@ -503,14 +514,14 @@ function collectReferencedFiles() {
 
       const artifact = lib.downloads && lib.downloads.artifact
       if (artifact && artifact.path) {
-        needed.add(path.resolve(path.join(paths.librariesDir(), artifact.path)))
+        needed.add(path.resolve(path.join(paths.librariesDir(dir), artifact.path)))
       }
 
       const classifiers = lib.downloads && lib.downloads.classifiers
       if (classifiers) {
         for (const entry of Object.values(classifiers)) {
           if (entry && entry.path) {
-            needed.add(path.resolve(path.join(paths.librariesDir(), entry.path)))
+            needed.add(path.resolve(path.join(paths.librariesDir(dir), entry.path)))
           }
         }
       }
@@ -520,11 +531,11 @@ function collectReferencedFiles() {
     if (indexId) {
       try {
         const index = JSON.parse(
-          fs.readFileSync(path.join(paths.assetsDir(), 'indexes', `${indexId}.json`), 'utf8')
+          fs.readFileSync(path.join(paths.assetsDir(dir), 'indexes', `${indexId}.json`), 'utf8')
         )
         for (const obj of Object.values(index.objects || {})) {
           needed.add(
-            path.resolve(path.join(paths.assetsDir(), 'objects', obj.hash.slice(0, 2), obj.hash))
+            path.resolve(path.join(paths.assetsDir(dir), 'objects', obj.hash.slice(0, 2), obj.hash))
           )
         }
       } catch {
@@ -547,15 +558,15 @@ function collectReferencedFiles() {
  * @param {{removeVersionDir: boolean, downloaded: Array<{path: string, size: number}>}} options
  * @returns {{removedVersionDir: boolean, removedFiles: number, removedBytes: number, keptShared: number, error?: string}}
  */
-function dropPartialInstall(versionId, { removeVersionDir, downloaded = [] }) {
+function dropPartialInstall(versionId, { removeVersionDir, downloaded = [], dir } = {}) {
   const result = { removedVersionDir: false, removedFiles: 0, removedBytes: 0, keptShared: 0 }
 
   // ① 这个版本自己的文件夹（本来就没装好过才删——"重装到一半取消"不能删人家装好的版本）
   if (removeVersionDir) {
     try {
-      const dir = paths.versionDir(versionId)
-      if (fs.existsSync(dir)) {
-        fs.rmSync(dir, { recursive: true, force: true })
+      const target = paths.versionDir(versionId, dir)
+      if (fs.existsSync(target)) {
+        fs.rmSync(target, { recursive: true, force: true })
         result.removedVersionDir = true
       }
     } catch (error) {
@@ -563,10 +574,10 @@ function dropPartialInstall(versionId, { removeVersionDir, downloaded = [] }) {
     }
   }
 
-  // ② 这次新下的公共文件：别的版本还要的留着
-  const needed = collectReferencedFiles()
-  const librariesRoot = `${path.resolve(paths.librariesDir())}${path.sep}`
-  const objectsRoot = `${path.resolve(path.join(paths.assetsDir(), 'objects'))}${path.sep}`
+  // ② 这次新下的公共文件：别的版本还要的留着（只在这个游戏目录里问"还有谁要"）
+  const needed = collectReferencedFiles(dir)
+  const librariesRoot = `${path.resolve(paths.librariesDir(dir))}${path.sep}`
+  const objectsRoot = `${path.resolve(path.join(paths.assetsDir(dir), 'objects'))}${path.sep}`
 
   for (const item of downloaded) {
     const full = path.resolve(item.path)

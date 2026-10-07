@@ -33,12 +33,15 @@ function canInstall(type) {
 
 /**
  * 某个版本的这类内容应该放在哪个文件夹。
- * 没开隔离 → 游戏目录下的公共文件夹；开了 → 这个版本自己的文件夹。
+ * 没开隔离 → **它那个游戏目录**下的公共文件夹；开了 → 这个版本自己的文件夹。
+ *
+ * 【dir 别漏】漏了就会"在 A 目录的版本上点了下载，文件落进 B 目录"，
+ * 而界面上一路都是成功的——最难查的那种错。
  */
-function targetDir(versionId, type) {
+function targetDir(versionId, type, dir) {
   const folder = CONTENT_FOLDER[type]
   if (!folder) return null
-  return versions.folderFor(versionId, folder)
+  return versions.folderFor(versionId, folder, dir)
 }
 
 /**
@@ -50,9 +53,9 @@ function targetDir(versionId, type) {
  * @returns {Promise<{ok: boolean, path?: string, dir?: string, skipped?: boolean, error?: string}>}
  */
 async function installFile(options) {
-  const { versionId, type, file, onProgress } = options
+  const { versionId, type, file, onProgress, dir: gameDir } = options
 
-  const dir = targetDir(versionId, type)
+  const dir = targetDir(versionId, type, gameDir)
   if (!dir) {
     return { ok: false, error: `「${type}」这种内容还不能自动放好` }
   }

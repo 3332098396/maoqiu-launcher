@@ -1,4 +1,4 @@
-// 毛球 — 版本管理（M6.1）
+// 毛球 — 版本管理（M6.1，M11.4 起支持多个游戏目录）
 //
 // 干四件事：列出已装版本（带自定义名字）、改名/写备注、打开四个文件夹、删版本。
 //
@@ -6,6 +6,12 @@
 // 版本文件夹的名字就是版本号（比如 26.3），游戏自己的版本 JSON 里也写着它。
 // 改了文件夹名，游戏就找不到自己了。所以"改名"只是启动器这边显示的名字——
 // 就像给联系人存个备注名，电话号码本身不动。
+//
+// 【M11.4 加了"目录"这一维之后，处处要问两件事】
+//   "哪个版本" （id）  +  "它在哪个游戏目录" （dir）
+// 函数一律把 dir 放在参数表最后，不传 = 默认目录（%APPDATA%\.minecraft）。
+// 跟版本走的数据（名字、备注、单独设置）都存在 settings.versionKey(dir, id) 那个键上，
+// 两个目录里的同名版本才不会串台。
 //
 // 【删除是这个软件里唯一会"删东西"的操作】
 // 所以这里挡了三道，见 deleteVersion 的注释。宁可多做几道检查。
@@ -20,20 +26,36 @@ const settings = require('./settings')
 const MAX_NAME = 40
 const MAX_NOTE = 200
 
-/** 已装版本 + 用户起的显示名/备注 */
-function listVersions() {
+/**
+ * 已装版本 + 用户起的显示名/备注。
+ *
+ * 跨**所有认得的游戏目录**列，每项带着"它在哪个目录"——启动页那个列表就是它渲染的。
+ *
+ * @param {string[]} [dirs] 要列哪些目录；不传 = 默认目录
+ * @returns {Array<{id, dir, key, isDefault, name, note, loader, base}>}
+ */
+function listAllVersions(dirs) {
   const custom = settings.readConfig().versions || {}
-  return paths.listInstalledVersions().map((id) => ({
-    id,
-    name: custom[id]?.name || '',
-    note: custom[id]?.note || ''
-  }))
+
+  return paths.listAllInstalledVersions(dirs).map(({ id, dir, isDefault }) => {
+    const key = settings.versionKey(dir, id)
+    return {
+      id,
+      dir,
+      key,
+      isDefault,
+      name: custom[key]?.name || '',
+      note: custom[key]?.note || '',
+      loader: loaderName(id, dir),
+      base: baseGameVersion(id, dir)
+    }
+  })
 }
 
 /** 这个版本装了什么 Mod 加载器（翻它的版本 JSON 里的库文件） */
-function loaderName(id) {
+function loaderName(id, dir) {
   try {
-    const json = JSON.parse(fs.readFileSync(paths.versionJsonFile(id), 'utf8'))
+    const json = JSON.parse(fs.readFileSync(paths.versionJsonFile(id, dir), 'utf8'))
     const names = (json.libraries || []).map((lib) => String(lib.name || '').toLowerCase())
 
     if (names.some((n) => n.includes('fabric-loader'))) return 'Fabric'
@@ -46,12 +68,12 @@ function loaderName(id) {
 }
 
 /** 顺着继承往上找，这个版本底下的"游戏版本"是哪个（社区网站只认它） */
-function baseGameVersion(id) {
+function baseGameVersion(id, dir) {
   let current = String(id)
 
   for (let depth = 0; depth < 5; depth++) {
     try {
-      const json = JSON.parse(fs.readFileSync(paths.versionJsonFile(current), 'utf8'))
+      const json = JSON.parse(fs.readFileSync(paths.versionJsonFile(current, dir), 'utf8'))
       if (!json.inheritsFrom) return current
       current = String(json.inheritsFrom)
     } catch {
@@ -61,18 +83,29 @@ function baseGameVersion(id) {
   return current
 }
 
-/** id → { name, note, loader, base } 的表，界面用起来方便 */
-function versionInfoMap() {
+/**
+ * id → 信息的表，界面用起来方便。
+ *
+ * 【键是 versionKey 而不是版本号】两个目录里都有 "26.3" 时，光用版本号当键会打架。
+ * 默认目录里的版本键就是版本号本身，所以老的界面代码看着"差不多还是那样"。
+ */
+function versionInfoMap(dirs) {
   const custom = settings.readConfig().versions || {}
   const map = {}
-  for (const id of paths.listInstalledVersions()) {
-    map[id] = {
-      name: custom[id]?.name || '',
-      note: custom[id]?.note || '',
-      loader: loaderName(id),
-      base: baseGameVersion(id)
+
+  for (const one of listAllVersions(dirs)) {
+    map[one.key] = {
+      id: one.id,
+      dir: one.dir,
+      key: one.key,
+      isDefault: one.isDefault,
+      name: one.name,
+      note: one.note,
+      loader: one.loader,
+      base: one.base
     }
   }
+
   return map
 }
 
@@ -80,21 +113,22 @@ function versionInfoMap() {
  * 改显示名 / 备注。两个都留空就等于恢复成默认（显示版本号）。
  * @returns {{ok: boolean, version?: object, error?: string}}
  */
-function updateVersion(id, { name, note } = {}) {
-  if (!paths.isVersionInstalled(id)) {
+function updateVersion(id, { name, note } = {}, dir) {
+  if (!paths.isVersionInstalled(id, dir)) {
     return { ok: false, error: '这个版本已经不在了' }
   }
 
   const trimmedName = String(name ?? '').trim().slice(0, MAX_NAME)
   const trimmedNote = String(note ?? '').trim().slice(0, MAX_NOTE)
+  const key = settings.versionKey(dir, id)
 
   const config = settings.readConfig()
   const versions = { ...(config.versions || {}) }
 
   if (!trimmedName && !trimmedNote) {
-    delete versions[id]
+    delete versions[key]
   } else {
-    versions[id] = { name: trimmedName, note: trimmedNote }
+    versions[key] = { name: trimmedName, note: trimmedNote }
   }
 
   try {
@@ -103,16 +137,16 @@ function updateVersion(id, { name, note } = {}) {
     return { ok: false, error: `存不下来：${error.message}` }
   }
 
-  return { ok: true, version: { id, name: trimmedName, note: trimmedNote } }
+  return { ok: true, version: { id, dir, key, name: trimmedName, note: trimmedNote } }
 }
 
 /** 这个版本自己的文件夹有多大（只看这一个文件夹，很快） */
-function versionSize(id) {
+function versionSize(id, dir) {
   let total = 0
 
-  const walk = (dir) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name)
+  const walk = (target) => {
+    for (const entry of fs.readdirSync(target, { withFileTypes: true })) {
+      const full = path.join(target, entry.name)
       if (entry.isDirectory()) {
         walk(full)
       } else if (entry.isFile()) {
@@ -126,7 +160,7 @@ function versionSize(id) {
   }
 
   try {
-    walk(paths.versionDir(id))
+    walk(paths.versionDir(id, dir))
   } catch {
     // 目录不在就是 0
   }
@@ -134,14 +168,14 @@ function versionSize(id) {
 }
 
 /** 这个版本有没有开隔离（它自己设过就用它自己的，没设过跟随全局） */
-function isIsolated(id) {
-  return settings.effectiveLaunchSettings(id).isolation
+function isIsolated(id, dir) {
+  return settings.effectiveLaunchSettings(settings.versionKey(dir, id)).isolation
 }
 
 /** 某个版本单独设过的启动设置（空对象 = 全都跟随全局） */
-function getVersionSettings(id) {
+function getVersionSettings(id, dir) {
   const all = settings.readConfig().versionSettings || {}
-  return all[id] || {}
+  return all[settings.versionKey(dir, id)] || {}
 }
 
 /**
@@ -151,12 +185,13 @@ function getVersionSettings(id) {
  *          isolation?: boolean|null}} patch
  * @returns {{ok: boolean, settings?: object, error?: string}}
  */
-function setVersionSettings(id, patch = {}) {
-  if (!paths.isVersionInstalled(id)) return { ok: false, error: '这个版本已经不在了' }
+function setVersionSettings(id, patch = {}, dir) {
+  if (!paths.isVersionInstalled(id, dir)) return { ok: false, error: '这个版本已经不在了' }
 
+  const key = settings.versionKey(dir, id)
   const config = settings.readConfig()
   const all = { ...(config.versionSettings || {}) }
-  const current = { ...(all[id] || {}) }
+  const current = { ...(all[key] || {}) }
 
   if (patch.memoryMB !== undefined) {
     if (patch.memoryMB === null) {
@@ -186,8 +221,8 @@ function setVersionSettings(id, patch = {}) {
   }
 
   // 一项都不剩就整条删掉，别在配置里留空壳
-  if (Object.keys(current).length === 0) delete all[id]
-  else all[id] = current
+  if (Object.keys(current).length === 0) delete all[key]
+  else all[key] = current
 
   try {
     settings.writeConfig({ versionSettings: all })
@@ -202,27 +237,27 @@ function setVersionSettings(id, patch = {}) {
  * 某个版本的四个文件夹在哪。
  *
  * 【存档/Mod/截图的区别】开启版本隔离后，它们在版本目录里面（各版本互不干扰）；
- * 关着的时候在游戏目录里（所有版本共用）。
+ * 关着的时候在**那个游戏目录**里（同一个目录里的版本共用）。
  * 隔离开没开，**按这个版本自己的设置算**（它没单独设过才看全局）。
  */
-function folderFor(id, which) {
-  const isolated = isIsolated(id)
-  const versionDir = paths.versionDir(id)
+function folderFor(id, which, dir) {
+  const isolated = isIsolated(id, dir)
+  const versionDir = paths.versionDir(id, dir)
 
   switch (which) {
     case 'version':
       return versionDir
     case 'saves':
-      return isolated ? path.join(versionDir, 'saves') : paths.savesDir()
+      return isolated ? path.join(versionDir, 'saves') : paths.savesDir(dir)
     case 'mods':
-      return isolated ? path.join(versionDir, 'mods') : paths.modsDir()
+      return isolated ? path.join(versionDir, 'mods') : paths.modsDir(dir)
     case 'screenshots':
-      return isolated ? path.join(versionDir, 'screenshots') : paths.screenshotsDir()
+      return isolated ? path.join(versionDir, 'screenshots') : paths.screenshotsDir(dir)
     // 下面两类是 M9 加的：社区资源下好之后就放这儿
     case 'resourcepacks':
-      return isolated ? path.join(versionDir, 'resourcepacks') : paths.resourcepacksDir()
+      return isolated ? path.join(versionDir, 'resourcepacks') : paths.resourcepacksDir(dir)
     case 'shaderpacks':
-      return isolated ? path.join(versionDir, 'shaderpacks') : paths.shaderpacksDir()
+      return isolated ? path.join(versionDir, 'shaderpacks') : paths.shaderpacksDir(dir)
     default:
       return null
   }
@@ -232,16 +267,16 @@ function folderFor(id, which) {
  * 在文件资源管理器里打开某个文件夹。
  * 文件夹不存在就先建出来——点了没反应会被当成软件坏了。
  */
-async function openFolder(id, which) {
-  if (!paths.isVersionInstalled(id)) return { ok: false, error: '这个版本已经不在了' }
+async function openFolder(id, which, dir) {
+  if (!paths.isVersionInstalled(id, dir)) return { ok: false, error: '这个版本已经不在了' }
 
-  const dir = folderFor(id, which)
-  if (!dir) return { ok: false, error: '不认识的文件夹' }
+  const target = folderFor(id, which, dir)
+  if (!target) return { ok: false, error: '不认识的文件夹' }
 
   try {
-    paths.ensureDir(dir)
-    const message = await shell.openPath(dir)
-    return message ? { ok: false, error: message } : { ok: true, dir }
+    paths.ensureDir(target)
+    const message = await shell.openPath(target)
+    return message ? { ok: false, error: message } : { ok: true, dir: target }
   } catch (error) {
     return { ok: false, error: String(error?.message ?? error) }
   }
@@ -251,20 +286,23 @@ async function openFolder(id, which) {
  * 删除一个版本。
  *
  * 【这是唯一会删东西的操作，挡三道】
- *   ① 路径必须真的在 游戏目录\versions\ 里面
+ *   ① 路径必须真的在那个游戏目录的 versions\ 里面
  *      （防住 ../ 之类的花招——压缩包那一课的教训）
  *   ② 目标必须"看起来像个版本目录"（里面有版本 JSON 或客户端 jar），
  *      免得手滑指到一个别的文件夹
  *   ③ 界面上必须已经二次确认过（界面负责，这里再核一遍目标还在不在）
+ *
+ * **多目录之后第 ① 道特别要紧**：防线必须按"这个版本自己那个目录"来算，
+ * 不能拿默认目录去卡——否则要么删不掉 D 盘的版本，要么路径校验形同虚设。
  *
  * 删掉的只是这个版本自己的文件夹：版本 JSON、客户端 jar、natives。
  * 共享的库文件、资源文件，以及其他版本，都不在这个文件夹里，不会被动到。
  *
  * @returns {{ok: boolean, sizeBytes?: number, error?: string}}
  */
-function deleteVersion(id) {
-  const root = path.resolve(paths.versionsDir())
-  const target = path.resolve(paths.versionDir(id))
+function deleteVersion(id, dir) {
+  const root = path.resolve(paths.versionsDir(dir))
+  const target = path.resolve(paths.versionDir(id, dir))
 
   if (target === root) return { ok: false, error: '路径不对，拒绝删除' }
   if (!target.startsWith(root + path.sep)) {
@@ -273,12 +311,12 @@ function deleteVersion(id) {
   if (!fs.existsSync(target)) return { ok: false, error: '这个版本已经不在了' }
 
   const looksLikeVersion =
-    fs.existsSync(paths.versionJsonFile(id)) || fs.existsSync(paths.versionJarFile(id))
+    fs.existsSync(paths.versionJsonFile(id, dir)) || fs.existsSync(paths.versionJarFile(id, dir))
   if (!looksLikeVersion) {
     return { ok: false, error: '这个文件夹看起来不是版本目录，拒绝删除' }
   }
 
-  const sizeBytes = versionSize(id)
+  const sizeBytes = versionSize(id, dir)
 
   try {
     fs.rmSync(target, { recursive: true, force: true })
@@ -288,10 +326,11 @@ function deleteVersion(id) {
 
   // 顺手把它的显示名/备注也清掉，别在配置里留垃圾
   try {
+    const key = settings.versionKey(dir, id)
     const config = settings.readConfig()
     const versions = { ...(config.versions || {}) }
-    if (versions[id]) {
-      delete versions[id]
+    if (versions[key]) {
+      delete versions[key]
       settings.writeConfig({ versions })
     }
   } catch {
@@ -302,7 +341,7 @@ function deleteVersion(id) {
 }
 
 module.exports = {
-  listVersions,
+  listAllVersions,
   versionInfoMap,
   loaderName,
   baseGameVersion,

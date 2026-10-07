@@ -109,6 +109,27 @@ let installCancelMode = 'keep'
 /** 有没有备份正在跑（同时只允许一个） */
 let backupRunning = false
 
+/**
+ * 把界面报上来的"在哪个游戏目录"归一化成**清单里的那个规范写法**。
+ *
+ * 【为什么每道口子都要过一遍】界面送来的东西不能全信：大小写可能不一样、
+ * 可能多一条尾斜杠、可能带 `..`，也可能是个根本没登记过的路径。
+ * 认不出来的一律落回**默认目录**——这是个 fail-closed 的选择：
+ * 结果最多是"那个目录里找不到这个版本"（看得见的错），
+ * 而不是在某个没登记的地方建文件、写数据。
+ *
+ * @returns {string} 规范路径；空字符串 = 默认目录（paths 那边就是这么认的）
+ */
+function known(dir) {
+  if (!dir) return ''
+
+  for (const one of settings.knownGameDirs()) {
+    if (paths.sameDir(one, dir)) return one
+  }
+
+  return ''
+}
+
 /** 有没有整合包在装（同时只允许一个） */
 let packRunning = false
 
@@ -116,8 +137,8 @@ let packRunning = false
 let contentRunning = false
 
 function registerIpcHandlers() {
-  /** 本机已装了哪些版本 */
-  ipcMain.handle('versions:installed', () => paths.listInstalledVersions())
+  /** 本机已装了哪些版本（跨所有认得的游戏目录，每项带着它在哪儿） */
+  ipcMain.handle('versions:installed', () => paths.listAllInstalledVersions(settings.knownGameDirs()))
 
   /** 装一个版本。进度通过 install:progress 主动推给界面 */
   ipcMain.handle('install:start', async (event, versionId) => {
@@ -183,7 +204,8 @@ function registerIpcHandlers() {
   /** 装完了、或者界面重新打开时，取一下已装列表和游戏目录 */
   ipcMain.handle('game:info', () => ({
     gameDir: paths.gameDir(),
-    installed: paths.listInstalledVersions()
+    gameDirs: settings.knownGameDirs(),
+    installed: paths.listAllInstalledVersions(settings.knownGameDirs())
   }))
 
   // ——— 版本清单（M2）———
@@ -217,18 +239,18 @@ function registerIpcHandlers() {
    * Java 要实际跑一下才知道版本号，所以这里稍微花点时间（约 0.2 秒）。
    */
   ipcMain.handle('launch:info', async () => {
-    const installed = paths.listInstalledVersions()
+    const dirs = settings.knownGameDirs()
+    const list = paths.listAllInstalledVersions(dirs)
     const config = settings.readConfig()
 
     let javaInfo = { found: false, path: '', version: '', source: '', error: '' }
-    if (installed.length > 0) {
+    if (list.length > 0) {
       try {
         // 用上次启动的版本（或第一个已装版本）去看 Java 在不在
+        const last = settings.parseVersionKey(config.launch.lastVersion || '')
         const pick =
-          config.launch.lastVersion && installed.includes(config.launch.lastVersion)
-            ? config.launch.lastVersion
-            : installed[0]
-        const versionJson = JSON.parse(fs.readFileSync(paths.versionJsonFile(pick), 'utf8'))
+          list.find((one) => one.id === last.id && paths.sameDir(one.dir, last.dir)) || list[0]
+        const versionJson = JSON.parse(fs.readFileSync(paths.versionJsonFile(pick.id, pick.dir), 'utf8'))
         const candidate = javaUtil.findJava(versionJson)
         if (candidate) {
           const probe = javaUtil.probeJava(candidate.path)
@@ -246,9 +268,11 @@ function registerIpcHandlers() {
     }
 
     return {
-      installed,
-      versionInfo: versions.versionInfoMap(),
+      // 版本列表：跨所有目录，每项带着 id + dir + key
+      versions: versions.listAllVersions(dirs),
+      versionInfo: versions.versionInfoMap(dirs),
       versionSettings: config.versionSettings || {},
+      gameDirs: dirs,
       account: accounts.getAccount(),
       lastVersion: config.launch.lastVersion || '',
       memoryMB: settings.currentMemoryMB(),
@@ -268,14 +292,16 @@ function registerIpcHandlers() {
    * 检查不通过会马上返回 { ok:false, error }（中文）；
    * 起来了就返回 { ok:true }，之后日志和退出消息通过 launch:log / launch:state 推给界面。
    */
-  ipcMain.handle('launch:start', async (event, versionId) => {
+  ipcMain.handle('launch:start', async (event, versionId, dir) => {
     if (launch.isRunning()) return { ok: false, error: '游戏已经在运行了' }
 
+    const where = known(dir)
     const send = (channel, payload) => {
       if (!event.sender.isDestroyed()) event.sender.send(channel, payload)
     }
 
     const result = await launch.launch(versionId, {
+      dir: where,
       onLog: (lines) => send('launch:log', lines),
       onState: (payload) => send('launch:state', payload)
     })
@@ -283,7 +309,7 @@ function registerIpcHandlers() {
     // 启动成功就记住这个版本，下次打开软件默认选它
     if (result.ok) {
       try {
-        settings.writeConfig({ launch: { lastVersion: versionId } })
+        settings.writeConfig({ launch: { lastVersion: settings.versionKey(where, versionId) } })
       } catch {
         // 记不住不影响玩
       }
@@ -347,40 +373,50 @@ function registerIpcHandlers() {
     }
   })
 
-  // ——— 版本管理（M6.1）———
+  // ——— 版本管理（M6.1，M11.4 起带"哪个游戏目录"）———
 
   /** 改某个版本的显示名/备注 */
-  ipcMain.handle('versions:update', (_event, id, info) => versions.updateVersion(id, info))
+  ipcMain.handle('versions:update', (_event, id, info, dir) =>
+    versions.updateVersion(id, info, known(dir))
+  )
 
   /** 在资源管理器里打开某个版本的某一类文件夹（version / saves / mods / screenshots） */
-  ipcMain.handle('versions:openFolder', (_event, id, which) => versions.openFolder(id, which))
+  ipcMain.handle('versions:openFolder', (_event, id, which, dir) =>
+    versions.openFolder(id, which, known(dir))
+  )
 
   /** 某个版本文件夹有多大、有没有开隔离（删除确认时给用户看的） */
-  ipcMain.handle('versions:size', (_event, id) => ({
-    bytes: versions.versionSize(id),
-    isolated: versions.isIsolated()
-  }))
+  ipcMain.handle('versions:size', (_event, id, dir) => {
+    const where = known(dir)
+    return {
+      bytes: versions.versionSize(id, where),
+      isolated: versions.isIsolated(id, where)
+    }
+  })
 
   /** 删一个版本。游戏在跑的时候不许删——文件正被用着呢 */
-  ipcMain.handle('versions:delete', (_event, id) => {
+  ipcMain.handle('versions:delete', (_event, id, dir) => {
     if (launch.isRunning()) {
       return { ok: false, error: '游戏正在运行，先关掉游戏再删' }
     }
-    return versions.deleteVersion(id)
+    return versions.deleteVersion(id, known(dir))
   })
 
   /** 某个版本的单独设置：它自己设过什么、以及算下来真正生效的值 */
-  ipcMain.handle('versions:getSettings', (_event, id) => ({
-    override: versions.getVersionSettings(id),
-    effective: settings.effectiveLaunchSettings(id),
-    global: settings.globalLaunchSettings(),
-    totalMemoryMB: settings.totalMemoryMB(),
-    suggestedMemoryMB: settings.defaultMemoryMB()
-  }))
+  ipcMain.handle('versions:getSettings', (_event, id, dir) => {
+    const where = known(dir)
+    return {
+      override: versions.getVersionSettings(id, where),
+      effective: settings.effectiveLaunchSettings(settings.versionKey(where, id)),
+      global: settings.globalLaunchSettings(),
+      totalMemoryMB: settings.totalMemoryMB(),
+      suggestedMemoryMB: settings.defaultMemoryMB()
+    }
+  })
 
   /** 改某个版本的单独设置（传 null = 这一项改回跟随全局） */
-  ipcMain.handle('versions:setSettings', (_event, id, patch) =>
-    versions.setVersionSettings(id, patch)
+  ipcMain.handle('versions:setSettings', (_event, id, patch, dir) =>
+    versions.setVersionSettings(id, patch, known(dir))
   )
 
   // ——— 一键备份（M6.3）———
@@ -432,7 +468,10 @@ function registerIpcHandlers() {
       downloadSource: settings.downloadSource(),
       screenWidth: display.width,
       screenHeight: display.height,
+      // 设置页这张卡说的都是"默认那个游戏目录"的情况：备份、存档数、
+      // 新装版本往哪儿装，都以它为准（别的目录是拖包时按需加的，见 docs/01 R6.8）
       gameDir: paths.gameDir(),
+      gameDirs: settings.knownGameDirs(),
       sharedWorlds: countSharedWorlds()
     }
   })
@@ -578,7 +617,8 @@ function registerIpcHandlers() {
       if (!['fabric', 'forge', 'neoforge'].includes(wanted)) {
         return { ok: false, error: `不认识的加载器：${wanted}` }
       }
-      if (!paths.isVersionInstalled(gameVersion)) {
+      const where = known(options.dir)
+      if (!paths.isVersionInstalled(gameVersion, where)) {
         return { ok: false, error: `先把 ${gameVersion} 装好，才能在它上面装加载器` }
       }
 
@@ -587,6 +627,7 @@ function registerIpcHandlers() {
         wanted === 'fabric'
           ? await loaders.buildFabricProfile(gameVersion)
           : await forge.prepare(wanted, gameVersion, {
+              dir: where,
               onStage: (text) => send('install:stage', text),
               onProgress: (stats) => send('install:progress', stats),
               onTask: (task) => {
@@ -594,7 +635,7 @@ function registerIpcHandlers() {
               }
             })
 
-      if (paths.isVersionInstalled(built.versionId)) {
+      if (paths.isVersionInstalled(built.versionId, where)) {
         return { ok: true, already: true, versionId: built.versionId }
       }
 
@@ -602,6 +643,7 @@ function registerIpcHandlers() {
       send('install:stage', `正在装 ${loaderLabel} ${built.loaderVersion}…`)
       const result = await install.installVersion(built.versionId, {
         providedJson: built.json,
+        dir: where,
         onStage: (text) => send('install:stage', text),
         onProgress: (stats) => send('install:progress', stats),
         onTask: (task) => {
@@ -646,12 +688,14 @@ function registerIpcHandlers() {
     contentRunning = true
     try {
       const { projectId, type, versionId } = options
+      const where = known(options.dir)
 
       // 筛选用"游戏版本"（装了 Fabric 的版本要顺着继承找到 26.3），
-      // 但**放文件还是放进选中的那个版本**（Mod 就要放进 Fabric 版本的 mods 里）
+      // 但**放文件还是放进选中的那个版本**（Mod 就要放进 Fabric 版本的 mods 里），
+      // 而且是**它那个游戏目录**里的那个版本
       const list = await modrinth.getVersions(projectId, {
-        gameVersion: resolveGameVersion(versionId || ''),
-        loader: loaderSlugFor(versionId || '')
+        gameVersion: resolveGameVersion(versionId || '', where),
+        loader: loaderSlugFor(versionId || '', where)
       })
       const best = modrinth.pickBest(list)
 
@@ -667,6 +711,7 @@ function registerIpcHandlers() {
       const result = await content.installFile({
         versionId,
         type,
+        dir: where,
         file: best.file,
         onProgress: (stats) => {
           if (!event.sender.isDestroyed()) event.sender.send('content:progress', stats)
@@ -695,9 +740,9 @@ function registerIpcHandlers() {
 const LOADER_SLUGS = { Fabric: 'fabric', Forge: 'forge', NeoForge: 'neoforge' }
 
 /** 这个版本用的是哪种加载器（Modrinth 的写法）；没有就返回空 */
-function loaderSlugFor(versionId) {
+function loaderSlugFor(versionId, dir) {
   if (!versionId) return ''
-  return LOADER_SLUGS[versions.loaderName(versionId)] || ''
+  return LOADER_SLUGS[versions.loaderName(versionId, dir)] || ''
 }
 
 /**
@@ -707,12 +752,12 @@ function loaderSlugFor(versionId) {
  * 是查不到的——网站只认"26.3"这个游戏版本。所以搜资源之前要先顺着
  * inheritsFrom 往上找，找到最底下那个原版版本号。
  */
-function resolveGameVersion(versionId) {
+function resolveGameVersion(versionId, dir) {
   let current = String(versionId || '')
 
   for (let depth = 0; depth < 5 && current; depth++) {
     try {
-      const json = JSON.parse(fs.readFileSync(paths.versionJsonFile(current), 'utf8'))
+      const json = JSON.parse(fs.readFileSync(paths.versionJsonFile(current, dir), 'utf8'))
       if (!json.inheritsFrom) return current
       current = String(json.inheritsFrom)
     } catch {
@@ -722,7 +767,10 @@ function resolveGameVersion(versionId) {
   return current
 }
 
-/** 共享存档目录里有几个世界（开版本隔离时提示用） */
+/**
+ * 共享存档目录里有几个世界（开版本隔离时提示用）。
+ * 看的是**默认目录**的 saves——设置页那张卡说的就是默认目录的情况。
+ */
 function countSharedWorlds() {
   try {
     return fs

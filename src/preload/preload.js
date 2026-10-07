@@ -78,7 +78,7 @@ contextBridge.exposeInMainWorld('api', {
    * 起来了返回 { ok:true, java, memoryMB }，之后靠下面两个事件推消息。
    * @returns {Promise<{ok: boolean, error?: string, java?: object, memoryMB?: number}>}
    */
-  startLaunch: (versionId) => ipcRenderer.invoke('launch:start', versionId),
+  startLaunch: (versionId, dir) => ipcRenderer.invoke('launch:start', versionId, dir),
 
   /** 游戏输出的日志（一批几行地推过来） */
   onLaunchLog: (callback) => {
@@ -112,25 +112,25 @@ contextBridge.exposeInMainWorld('api', {
    * 改某个版本的显示名/备注。两个都留空 = 恢复成默认（显示版本号）。
    * @returns {Promise<{ok: boolean, version?: object, error?: string}>}
    */
-  updateVersion: (id, info) => ipcRenderer.invoke('versions:update', id, info),
+  updateVersion: (id, info, dir) => ipcRenderer.invoke('versions:update', id, info, dir),
 
   /**
    * 打开某个版本的文件夹。which 取 'version' | 'saves' | 'mods' | 'screenshots'
    * @returns {Promise<{ok: boolean, dir?: string, error?: string}>}
    */
-  openVersionFolder: (id, which) => ipcRenderer.invoke('versions:openFolder', id, which),
+  openVersionFolder: (id, which, dir) => ipcRenderer.invoke('versions:openFolder', id, which, dir),
 
   /**
    * 这个版本文件夹占多大、有没有开版本隔离（删除确认时给用户看）。
    * @returns {Promise<{bytes: number, isolated: boolean}>}
    */
-  getVersionSize: (id) => ipcRenderer.invoke('versions:size', id),
+  getVersionSize: (id, dir) => ipcRenderer.invoke('versions:size', id, dir),
 
   /**
    * 删除一个版本（界面必须先二次确认；主进程还会再挡一道路径检查）。
    * @returns {Promise<{ok: boolean, sizeBytes?: number, error?: string}>}
    */
-  deleteVersion: (id) => ipcRenderer.invoke('versions:delete', id),
+  deleteVersion: (id, dir) => ipcRenderer.invoke('versions:delete', id, dir),
 
   // ——— 启动设置（M6.2）———
 
@@ -153,14 +153,14 @@ contextBridge.exposeInMainWorld('api', {
    * @returns {Promise<{override: object, effective: object, global: object,
    *                    totalMemoryMB: number, suggestedMemoryMB: number}>}
    */
-  getVersionSettings: (id) => ipcRenderer.invoke('versions:getSettings', id),
+  getVersionSettings: (id, dir) => ipcRenderer.invoke('versions:getSettings', id, dir),
 
   /**
    * 改某个版本的单独设置（传 null 的那一项 = 改回跟随全局）。
    * patch: { memoryMB?, window?: {width,height}|null, isolation? }
    * @returns {Promise<{ok: boolean, settings?: object, error?: string}>}
    */
-  setVersionSettings: (id, patch) => ipcRenderer.invoke('versions:setSettings', id, patch),
+  setVersionSettings: (id, patch, dir) => ipcRenderer.invoke('versions:setSettings', id, patch, dir),
 
   // ——— 一键备份（M6.3）———
 

@@ -136,8 +136,8 @@ function readInstaller(jarPath) {
  * 把安装器里自带的库解到游戏目录的 libraries 里。
  * （Forge 的 universal / shim 这类文件是直接塞在安装器里的，官方仓库下不到）
  */
-function extractBundledLibraries(jar) {
-  const dest = paths.librariesDir()
+function extractBundledLibraries(jar, dir) {
+  const dest = paths.librariesDir(dir)
   let count = 0
 
   for (const entry of jar.entries) {
@@ -191,7 +191,7 @@ function pointLibrariesToMirror(version) {
  *
  * @returns {Promise<{versionId: string, json: object, loaderVersion: string}>}
  */
-async function prepare(loader, gameVersion, { onStage, onProgress, onTask } = {}) {
+async function prepare(loader, gameVersion, { onStage, onProgress, onTask, dir } = {}) {
   const stage = (text) => {
     if (onStage) onStage(text)
   }
@@ -210,7 +210,7 @@ async function prepare(loader, gameVersion, { onStage, onProgress, onTask } = {}
   const jar = readInstaller(jarPath)
 
   stage('正在放它自带的库文件…')
-  const extracted = extractBundledLibraries(jar)
+  const extracted = extractBundledLibraries(jar, dir)
 
   const versionJson = pointLibrariesToMirror(jar.version)
 
@@ -220,7 +220,7 @@ async function prepare(loader, gameVersion, { onStage, onProgress, onTask } = {}
     loaderVersion: build.version,
     bundled: extracted,
     // 打补丁要用的东西（等库都下好了再跑，见 main.js 里的顺序说明）
-    patcher: { profile: jar.profile, jar, gameVersion }
+    patcher: { profile: jar.profile, jar, gameVersion, dir }
   }
 }
 
@@ -305,7 +305,7 @@ function clientProcessors(profile) {
  * @param {{profile: object, jar: object, gameVersion: string}} options
  * @param {{onStage?: Function, onProgress?: Function, onTask?: Function}} hooks
  */
-async function runPatchers({ profile, jar, gameVersion }, { onStage, onProgress, onTask } = {}) {
+async function runPatchers({ profile, jar, gameVersion, dir }, { onStage, onProgress, onTask } = {}) {
   const processors = clientProcessors(profile)
   if (processors.length === 0) return { ran: 0 }
 
@@ -325,7 +325,7 @@ async function runPatchers({ profile, jar, gameVersion }, { onStage, onProgress,
       return {
         name: relPath,
         url: mirrored,
-        saveTo: path.join(paths.librariesDir(), relPath),
+        saveTo: path.join(paths.librariesDir(dir), relPath),
         sha1: (lib.downloads && lib.downloads.artifact && lib.downloads.artifact.sha1) || '',
         size: 0,
         _neo: neoOfficial
@@ -344,7 +344,10 @@ async function runPatchers({ profile, jar, gameVersion }, { onStage, onProgress,
   }
 
   // ——— 2. 变量替换表 ———
-  const mcJar = paths.versionJarFile(gameVersion)
+  // 【dir 一路传下来】处理器是"拿原版 jar 在游戏目录里生成补丁后的 jar"，
+  // 输入输出都在**这个版本自己那个游戏目录**里，传错就会把 D 盘的版本
+  // 拿默认目录的原版去补，出来的东西谁也用不了。
+  const mcJar = paths.versionJarFile(gameVersion, dir)
   if (!fs.existsSync(mcJar)) throw new Error(`找不到原版 ${gameVersion} 的客户端文件，先把它装好`)
 
   const javaExe = findJava(gameVersion)
@@ -353,13 +356,13 @@ async function runPatchers({ profile, jar, gameVersion }, { onStage, onProgress,
   let ran = 0
 
   for (const processor of processors) {
-    const jarPath = path.join(paths.librariesDir(), coordToPath(processor.jar) || '')
+    const jarPath = path.join(paths.librariesDir(dir), coordToPath(processor.jar) || '')
     if (!fs.existsSync(jarPath)) {
       throw new Error(`处理器 ${processor.jar} 没下到，装不了`)
     }
 
     // 这一侧要用到的变量（data 段里 client 那份）
-    const vars = { MINECRAFT_JAR: mcJar, ROOT: paths.gameDir() }
+    const vars = { MINECRAFT_JAR: mcJar, ROOT: paths.gameDir(dir) }
     for (const [key, value] of Object.entries(profile.data || {})) {
       const raw =
         value && typeof value === 'object' ? value.client ?? value.server ?? '' : value
@@ -367,7 +370,7 @@ async function runPatchers({ profile, jar, gameVersion }, { onStage, onProgress,
 
       // 形如 [group:artifact:version:classifier] 的是"产物路径"
       if (/^\[.*\]$/.test(String(raw))) {
-        vars[key] = path.join(paths.librariesDir(), coordToPath(raw) || '')
+        vars[key] = path.join(paths.librariesDir(dir), coordToPath(raw) || '')
       } else if (/^['"].*['"]$/.test(String(raw))) {
         vars[key] = String(raw).slice(1, -1) // 带引号的常量
       } else {
@@ -384,7 +387,7 @@ async function runPatchers({ profile, jar, gameVersion }, { onStage, onProgress,
     const classpath = [jarPath]
     for (const dep of processor.classpath || []) {
       const rel = coordToPath(dep)
-      if (rel) classpath.push(path.join(paths.librariesDir(), rel))
+      if (rel) classpath.push(path.join(paths.librariesDir(dir), rel))
     }
 
     const mainClass = readMainClass(jarPath)
@@ -396,7 +399,7 @@ async function runPatchers({ profile, jar, gameVersion }, { onStage, onProgress,
     const { spawn } = require('node:child_process')
     await new Promise((resolve, reject) => {
       const child = spawn(javaExe, ['-cp', classpath.join(path.delimiter), mainClass, ...args], {
-        cwd: paths.gameDir(),
+        cwd: paths.gameDir(dir),
         windowsHide: true
       })
 

@@ -365,11 +365,15 @@ function globalLaunchSettings() {
  * 算出某个版本这次启动真正用的设置：
  * 它自己单独设过的用自己的，没设的跟随全局。
  *
+ * @param {string} key **版本在配置里的键**（`versionKey(dir, id)` 算出来的那个），
+ *   不是裸版本号。默认目录里的版本，键恰好就是版本号；别的目录里的是
+ *   `<目录>|<版本号>`。传错不会报错、只会读到"没有这个版本的单独设置"，
+ *   所以调用点请一律用 `settings.versionKey(dir, id)` 现算，别自己拼。
  * @returns {{memoryMB: number, windowWidth: number, windowHeight: number,
  *            isolation: boolean, overridden: {memoryMB: boolean, window: boolean, isolation: boolean}}}
  */
-function effectiveLaunchSettings(versionId) {
-  const override = (readConfig().versionSettings || {})[versionId] || {}
+function effectiveLaunchSettings(key) {
+  const override = (readConfig().versionSettings || {})[key] || {}
   const global = globalLaunchSettings()
 
   const hasMemory = Number(override.memoryMB) > 0

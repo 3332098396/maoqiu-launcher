@@ -268,9 +268,37 @@ body {
 }
 
 .pick__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 0 2px;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+/**
+ * 「展开/收起版本列表」那个小箭头。
+ *
+ * 【为什么要有它】版本一多，左边这一串会把下面的「版本设置」按钮顶到屏幕外面
+ * （2026-10-08 用户实测反馈）。所以列表默认只显示当前选中的那个，
+ * 点这个箭头才展开全部。
+ */
+.pick__toggle {
+  padding: 0 6px;
+  font-family: var(--font);
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.pick__toggle:hover {
+  color: var(--text);
+  border-color: var(--card-border-hover);
 }
 
 .pick__list {
@@ -280,6 +308,21 @@ body {
   margin: 0;
   padding: 0;
   list-style: none;
+  /* 就算展开了，也不许长到把下面的按钮顶出去——里面自己滚 */
+  max-height: 38vh;
+  overflow-y: auto;
+}
+
+/* 版本属于"别的游戏目录"时，名字后面缀的那个小标签 */
+.pick__dir {
+  flex: 0 0 auto;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-style: normal;
+  font-size: 11px;
+  color: #2f6fb5;
+  background: #eef6ff;
+  border-radius: 999px;
 }
 
 .pick__item {
