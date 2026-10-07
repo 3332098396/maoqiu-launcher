@@ -533,7 +533,7 @@ function registerIpcHandlers() {
   // ——— 整合包（M11）———
 
   /** 看一眼拖进来的压缩包是什么（不装，只认） */
-  ipcMain.handle('pack:inspect', (_event, filePath) => pack.inspect(filePath))
+  ipcMain.handle('pack:inspect', (_event, filePath, password) => pack.inspect(filePath, password))
 
   /**
    * 让用户自己挑一个整合包文件（不方便拖拽的时候用）。
@@ -608,6 +608,7 @@ function registerIpcHandlers() {
         targetVersionId: options.targetVersionId,
         versionName: options.versionName,
         dir: known(options.dir),
+        password: options.password,
         onStage: (text) => send('pack:stage', text),
         onProgress: (stats) => send('pack:progress', stats),
         onTask: (task) => {

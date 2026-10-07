@@ -1180,6 +1180,10 @@ const packDirRowEl = document.getElementById('pack-dir-row')
 const packDirEl = document.getElementById('pack-dir')
 const packDirHintEl = document.getElementById('pack-dir-hint')
 const packDirPickEl = document.getElementById('pack-dir-pick')
+const packPwdRowEl = document.getElementById('pack-pwd-row')
+const packPwdEl = document.getElementById('pack-pwd')
+const packPwdHintEl = document.getElementById('pack-pwd-hint')
+const packPwdTryEl = document.getElementById('pack-pwd-try')
 
 /** 这次拖进来的是哪个文件 */
 let packFilePath = ''
@@ -1202,6 +1206,8 @@ let packDone = false
 let packDir = ''
 /** 选的这个目录里是不是还没装过游戏（用来提前说清"要重新下一份库和资源"） */
 let packDirIsEmpty = false
+/** 加密压缩包的密码（安装的时候每个文件都要用它解） */
+let packPassword = ''
 
 // 文件拖到窗口上时：盖一层提示（不 preventDefault 的话，浏览器会直接打开这个文件）
 document.addEventListener('dragover', (event) => {
@@ -1244,11 +1250,13 @@ function closePackDialog() {
   packCancelEl.hidden = false
 }
 
-async function openPackDialog(filePath) {
+async function openPackDialog(filePath, password) {
   packFilePath = filePath
   packInfo = null
   packInstalling = false
   packDone = false
+  // 记住密码，安装那一步还要用（加密包里每个文件都得拿它解）
+  packPassword = password || ''
   // 默认装到"上次装过的那个目录"（没装过就是默认目录）
   packDir = launchInfo?.lastPackDir || ''
   packDirIsEmpty = false
@@ -1266,11 +1274,17 @@ async function openPackDialog(filePath) {
   packDirEl.value = ''
   packDirHintEl.textContent = ''
   renderPackDir()
+  packPwdRowEl.hidden = true
+  // 输了密码重试时，别把框里已经打的清掉——多半是打错一个字，改改就行
+  if (!password) {
+    packPwdEl.value = ''
+    packPwdHintEl.textContent = ''
+  }
   packTargetRowEl.hidden = true
   packInstallEl.disabled = true
   packModalEl.hidden = false
 
-  const info = await window.api.inspectPack(filePath)
+  const info = await window.api.inspectPack(filePath, password)
   if (packFilePath !== filePath) return // 看的时候又拖了别的，忽略这次
 
   if (!info.ok) {
@@ -1290,8 +1304,22 @@ async function openPackDialog(filePath) {
     return
   }
 
+  // ——— 带密码的：先把密码问出来，密码对了才往下认 ———
+  if (info.kind === 'encrypted' && info.needPassword) {
+    packTitleEl.textContent = '这个包锁着呢'
+    packPwdRowEl.hidden = false
+    packPwdHintEl.textContent = info.badPassword
+      ? '密码不对，再想想？（一般就写在下载它的那个帖子或群公告里）'
+      : ''
+    packPwdHintEl.className = info.badPassword ? 'delbox delbox--warn' : 'delbox'
+    packInstallEl.disabled = true
+    packPwdEl.focus()
+    return
+  }
+
+  // 目录都读不出来的（坏了、或者不认识的加密方式）：说清楚，别让用户干等
   if (info.kind === 'encrypted') {
-    packWarnEl.textContent = '这个压缩包打不开。带密码的压缩包要等下一步做完才能装。'
+    packWarnEl.textContent = info.summary || '这个压缩包打不开。'
     return
   }
 
@@ -1395,6 +1423,26 @@ packNameEl.addEventListener('input', () => {
   checkPackName()
 })
 
+// 加密包：输密码 → 点「试试」（或者直接回车）→ 拿这个密码重新认一遍
+async function tryPackPassword() {
+  const pwd = packPwdEl.value
+  if (!pwd) {
+    packPwdHintEl.textContent = '先把密码填上'
+    packPwdHintEl.className = 'delbox delbox--warn'
+    packPwdEl.focus()
+    return
+  }
+
+  packPwdHintEl.textContent = '正在试…'
+  packPwdHintEl.className = 'delbox'
+  await openPackDialog(packFilePath, pwd)
+}
+
+packPwdTryEl.addEventListener('click', tryPackPassword)
+packPwdEl.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') tryPackPassword()
+})
+
 // 换个目录装（弹系统的文件夹选择框）。
 // 按钮和那个框都挂上——用户看着那个框像能点的，点它就该有反应
 packDirEl.addEventListener('click', () => packDirPickEl.click())
@@ -1448,7 +1496,8 @@ packInstallEl.addEventListener('click', async () => {
       filePath: packFilePath,
       targetVersionId,
       versionName,
-      dir: targetDir
+      dir: targetDir,
+      password: packPassword
     })
   } catch (error) {
     result = { ok: false, error: String(error?.message ?? error) }
@@ -1465,6 +1514,7 @@ packInstallEl.addEventListener('click', async () => {
 
   // 装完了：按钮换成「完成」，那一行"装到哪个版本"也收起来（已经装完了，改不了了）
   packDone = true
+  packPassword = ''
   packInstallEl.textContent = '完成'
   packCancelEl.hidden = true
   packTargetRowEl.hidden = true

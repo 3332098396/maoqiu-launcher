@@ -237,7 +237,7 @@ contextBridge.exposeInMainWorld('api', {
   pickPackFile: () => ipcRenderer.invoke('pack:pick'),
 
   /** 看一眼这个压缩包是什么（不装） */
-  inspectPack: (filePath) => ipcRenderer.invoke('pack:inspect', filePath),
+  inspectPack: (filePath, password) => ipcRenderer.invoke('pack:inspect', filePath, password),
 
   /**
    * 用户给版本起的那个名字行不行（名字会变成 versions\<名字>\ 这个文件夹）。

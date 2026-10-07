@@ -31,13 +31,38 @@ const MRPACK_INDEX = 'modrinth.index.json'
 /** 解压时挡在前面的公共前缀（有些包外面套了一层 .minecraft/） */
 const WRAPPER_DIRS = ['.minecraft', 'minecraft']
 
-/** 读一个压缩包（读不了 = 可能是加密的） */
+/** 读一个压缩包（读不了 = 多半是加密的，或者文件坏了） */
 function readArchive(filePath) {
   const buffer = fs.readFileSync(filePath)
   try {
     return { buffer, entries: zip.listEntries(buffer) }
   } catch (error) {
     return { buffer: null, entries: null, error: String(error?.message ?? error) }
+  }
+}
+
+/**
+ * 密码行不行：挑一个**最小的**加密文件试解一下。
+ *
+ * 【为什么挑最小的】解一个文件就能知道密码对不对（解密算法自带校验），
+ * 挑最小的那个最省时间。整合包里动辄几千个文件，不能挨个试。
+ *
+ * @returns {'ok' | 'wrong' | 'need'}
+ */
+function tryPassword(buffer, entries, password) {
+  const locked = entries.filter((entry) => entry.encrypted && !entry.name.endsWith('/'))
+  if (locked.length === 0) return 'ok'
+
+  if (!password) return 'need'
+
+  locked.sort((a, b) => a.compressedSize - b.compressedSize)
+
+  try {
+    zip.readEntry(buffer, locked[0], password)
+    return 'ok'
+  } catch (error) {
+    if (error && error.code === 'WRONG_PASSWORD') return 'wrong'
+    throw error
   }
 }
 
@@ -67,7 +92,7 @@ function topLevelNames(entries) {
  * 看一眼这个压缩包是什么。
  * @returns {{ok: boolean, kind: string, ...}}
  */
-function inspect(filePath) {
+function inspect(filePath, password) {
   if (!fs.existsSync(filePath)) {
     return { ok: false, error: '找不到这个文件' }
   }
@@ -80,8 +105,38 @@ function inspect(filePath) {
       kind: 'encrypted',
       error: archive.error,
       name: path.basename(filePath),
-      summary: '这个压缩包打不开——如果它带密码，M11.2 做完就能输了'
+      summary:
+        '这个压缩包连目录都读不出来，可能是坏了、也可能是一种我们还不认识的加密方式。'
     }
+  }
+
+  // ——— 带密码的：先问密码，密码对了再往下认 ———
+  if (zip.isEncrypted(archive.entries)) {
+    const state = tryPassword(archive.buffer, archive.entries, password)
+
+    if (state === 'need') {
+      return {
+        ok: true,
+        kind: 'encrypted',
+        needPassword: true,
+        name: path.basename(filePath),
+        summary:
+          '这个压缩包带密码。密码一般在下载它的那个帖子 / 群里写着——输进去就能装。'
+      }
+    }
+
+    if (state === 'wrong') {
+      return {
+        ok: true,
+        kind: 'encrypted',
+        needPassword: true,
+        badPassword: true,
+        name: path.basename(filePath),
+        summary: '密码不对，再想想？'
+      }
+    }
+
+    // 密码对了，接着往下认（下面的读取都要带上密码）
   }
 
   const find = (name) => archive.entries.find((e) => e.name.replace(/^\//, '') === name)
@@ -90,7 +145,7 @@ function inspect(filePath) {
   const index = find(MRPACK_INDEX)
   if (index) {
     try {
-      const data = JSON.parse(zip.readEntry(archive.buffer, index).toString('utf8'))
+      const data = JSON.parse(zip.readEntry(archive.buffer, index, password).toString('utf8'))
       const deps = data.dependencies || {}
       const loaderName = deps['fabric-loader']
         ? 'Fabric'
@@ -127,7 +182,7 @@ function inspect(filePath) {
   const cfManifest = find('manifest.json')
   if (cfManifest) {
     try {
-      const data = JSON.parse(zip.readEntry(archive.buffer, cfManifest).toString('utf8'))
+      const data = JSON.parse(zip.readEntry(archive.buffer, cfManifest, password).toString('utf8'))
       if (data.minecraft && data.files) {
         return {
           ok: true,
@@ -414,7 +469,7 @@ async function installModrinthPack(filePath, data, { onStage, onProgress, onTask
     if (!target.startsWith(packRoot)) continue
 
     paths.ensureDir(path.dirname(target))
-    fs.writeFileSync(target, zip.readEntry(buffer, entry))
+    fs.writeFileSync(target, zip.readEntry(buffer, entry, password))
     overrides++
   }
 
@@ -427,7 +482,7 @@ async function installModrinthPack(filePath, data, { onStage, onProgress, onTask
  * layout='instance' → 解到选中的那个版本的文件夹
  * layout='gamedir'  → 解到游戏目录（里面带着版本文件的情况）
  */
-async function installPlainPack(filePath, layout, targetVersionId, { onStage, onProgress, versionName, dir } = {}) {
+async function installPlainPack(filePath, layout, targetVersionId, { onStage, onProgress, versionName, dir, password } = {}) {
   const buffer = fs.readFileSync(filePath)
   const entries = zip.listEntries(buffer)
 
@@ -442,7 +497,7 @@ async function installPlainPack(filePath, layout, targetVersionId, { onStage, on
   // 所以照搬就行：versions / assets / libraries 原样放，
   // 其余的游戏文件归到版本文件夹里，PCL 自己的东西丢掉。
   if (layout === 'gamedir') {
-    return installGameDirPack(buffer, entries, { onStage, onProgress, versionName, dir })
+    return installGameDirPack(buffer, entries, { onStage, onProgress, versionName, dir, password })
   }
 
   let dest = null
@@ -471,7 +526,7 @@ async function installPlainPack(filePath, layout, targetVersionId, { onStage, on
     if (!target.startsWith(root)) continue
 
     paths.ensureDir(path.dirname(target))
-    fs.writeFileSync(target, zip.readEntry(buffer, entry))
+    fs.writeFileSync(target, zip.readEntry(buffer, entry, password))
     written++
 
     if (onProgress && written % 50 === 0) {
@@ -506,12 +561,12 @@ function safePackName(name, versionId) {
 }
 
 /** 把 .mrpack 里的清单读出来 */
-function readModrinthIndex(filePath) {
+function readModrinthIndex(filePath, password) {
   const buffer = fs.readFileSync(filePath)
   const entries = zip.listEntries(buffer)
   const index = entries.find((e) => e.name.replace(/^\//, '') === MRPACK_INDEX)
   if (!index) throw new Error('这不是 Modrinth 整合包（里面没有 modrinth.index.json）')
-  return JSON.parse(zip.readEntry(buffer, index).toString('utf8'))
+  return JSON.parse(zip.readEntry(buffer, index, password).toString('utf8'))
 }
 
 /**
@@ -519,14 +574,19 @@ function readModrinthIndex(filePath) {
  * 界面只需要把"拖进来的文件路径"交给它就行。
  */
 async function installPack(filePath, options = {}) {
-  const info = inspect(filePath)
+  // 认包的时候就把密码带上——加密包里连清单都读不出来，不给密码认不出是什么包
+  const info = inspect(filePath, options.password)
 
   if (!info.ok) return { ok: false, error: info.error }
 
   if (info.kind === 'encrypted') {
     return {
       ok: false,
-      error: '这个压缩包打不开。如果它带密码，要等"加密压缩包"那一步做完才能装。'
+      error: info.needPassword
+        ? info.badPassword
+          ? '密码不对，装不了。回对话框里重新输一次吧。'
+          : '这个压缩包要密码才能装。回对话框里把密码输进去。'
+        : '这个压缩包打不开，可能是坏了。'
     }
   }
 
@@ -541,7 +601,7 @@ async function installPack(filePath, options = {}) {
   }
 
   if (info.kind === 'modrinth') {
-    const data = readModrinthIndex(filePath)
+    const data = readModrinthIndex(filePath, options.password)
     return installModrinthPack(filePath, data, options)
   }
 
@@ -557,7 +617,7 @@ async function installPack(filePath, options = {}) {
  * 装一个"整个游戏目录快照"的整合包（里面是 .minecraft/ 那种）。
  * 见 installPlainPack 里那段说明：我们的布局和 PCL 的一样，照搬即可。
  */
-async function installGameDirPack(buffer, entries, { onStage, onProgress, versionName, dir } = {}) {
+async function installGameDirPack(buffer, entries, { onStage, onProgress, versionName, dir, password } = {}) {
   const stage = (text) => {
     if (onStage) onStage(text)
   }
@@ -627,7 +687,7 @@ async function installGameDirPack(buffer, entries, { onStage, onProgress, versio
       // 不存在就往下走
     }
 
-    let data = zip.readEntry(buffer, entry)
+    let data = zip.readEntry(buffer, entry, password)
 
     // 版本 JSON 里写着 `"id": "老名字"`，也得改成新名字——游戏认的是这个
     if (renaming && newName === `${targetVersion}.json`) {

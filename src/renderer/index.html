@@ -636,6 +636,21 @@
 
         <p class="delbox" id="pack-summary">正在翻这个压缩包，看看里面有什么…</p>
 
+        <div class="field" id="pack-pwd-row" hidden>
+          <span class="field__label">这个包带密码，输进来吧</span>
+          <div class="join-row">
+            <input
+              class="input input--edit"
+              id="pack-pwd"
+              type="password"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button class="btn btn--sm" type="button" id="pack-pwd-try">试试</button>
+          </div>
+          <p class="delbox" id="pack-pwd-hint"></p>
+        </div>
+
         <div class="field" id="pack-name-row" hidden>
           <span class="field__label">起个名字吧（这里能改）</span>
           <input class="input input--edit" id="pack-name" type="text" autocomplete="off" spellcheck="false" />
