@@ -23,6 +23,7 @@ const settings = require('./settings')
 const accounts = require('./accounts')
 const yggdrasil = require('./yggdrasil')
 const microsoft = require('./microsoft')
+const skins = require('./skins')
 const javaUtil = require('./java')
 const launch = require('./launch')
 const versions = require('./versions')
@@ -371,6 +372,12 @@ function registerIpcHandlers() {
   ipcMain.handle('account:switch', (_event, key) => accounts.setCurrent(key))
 
   ipcMain.handle('account:remove', (_event, key) => accounts.remove(key))
+
+  // ——— 账号的皮肤（M16.3）：取回来贴到启动页那个 3D 小人身上 ———
+  //
+  // 【为什么不让界面自己去下】界面不许碰网络（安全红线），而且下载文件要校验、
+  // 要超时、要镜像——这些都归主进程管。
+  ipcMain.handle('skin:account', () => skins.fetchFor(accounts.getAccount()))
 
   /**
    * 启动游戏。

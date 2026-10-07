@@ -438,9 +438,31 @@ async function refresh(account) {
   }
 }
 
+/**
+ * 这个正版账号现在用的皮肤，地址是多少。
+ * 【为什么每次现问】用户可能刚在官网换了皮肤——存下来的旧地址就不对了。
+ * 反正只是一次很小的请求。
+ *
+ * @returns {Promise<string>} 没设皮肤就返回空字符串
+ */
+async function skinUrl(account) {
+  if (!account?.mcAccessToken) return ''
+
+  const data = await fetchJson(MC_PROFILE_URL, {
+    timeout: 15000,
+    headers: { Authorization: `Bearer ${account.mcAccessToken}` }
+  })
+
+  const skins = data.skins || []
+  // 皮肤可以有好几张，只有 ACTIVE 那张是"正在用的"
+  const active = skins.find((one) => one.state === 'ACTIVE') || skins[0]
+  return active?.url || ''
+}
+
 module.exports = {
   REDIRECT_URI,
   login,
   refresh,
+  skinUrl,
   dashedUuid
 }

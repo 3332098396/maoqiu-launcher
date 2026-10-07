@@ -520,6 +520,10 @@ function renderAccountCard() {
   accNameEl.textContent = account?.name || '还没有账号'
   accAvatarEl.textContent = account?.name ? account.name.slice(0, 1).toUpperCase() : '⛏'
 
+  // 账号变了，把右边那个 3D 小人换成这个账号的皮肤（M16.3）。
+  // 内部有"同一个账号不重复取"的判断，所以在这儿调用是安全的
+  refreshAccountSkin()
+
   // 只有"真账号"（外置 / 微软）需要"退出登录"——离线账号就是个名字，改掉就行
   accSignoutEl.hidden = account?.type !== 'yggdrasil' && account?.type !== 'microsoft'
 
@@ -3835,14 +3839,65 @@ document.getElementById('skin-reset').addEventListener('click', async () => {
 })
 
 // ——————————————————————————————————————————————
+// 账号皮肤（M16.3）：登了真账号就把小人换成你自己的皮肤
+// ——————————————————————————————————————————————
+
+/** 上一次是按哪个账号取的皮肤——记着它，免得每次刷新界面都重新下一遍 */
+let skinAccountKey = ''
+
+/**
+ * 账号变了就换皮肤。
+ *
+ * 【离线账号不管】它没有"网上的皮肤"，保持用户自己选的那张（或默认）。
+ * 【取不到不算错】网络抖一下、账号压根没设皮肤——都只提示一句、保持现状，
+ * 绝不能因为这个把人挡住不让玩。
+ */
+async function refreshAccountSkin() {
+  const account = launchInfo?.account
+  const remote = account && (account.type === 'yggdrasil' || account.type === 'microsoft')
+  const key = remote ? `${account.type}:${account.uuid}` : ''
+
+  if (key === skinAccountKey) return
+  skinAccountKey = key
+
+  whenSkinReady(async () => {
+    if (!key) {
+      // 退回"你自己选的那张 / 默认"（比如刚退出登录）
+      const saved = settingsInfo?.look?.skin
+      if (saved && (await loadSkinFrom(saved))) return
+      window.skinViewer.useDefaultSkin()
+      return
+    }
+
+    const result = await window.api.fetchAccountSkin()
+    if (!result.ok) {
+      skinHintEl.textContent = result.error
+      return
+    }
+
+    const image = new Image()
+    image.onload = () => {
+      window.skinViewer.setSkin(image)
+      skinHintEl.textContent =
+        result.source === 'microsoft' ? '这是你正版账号上的皮肤。' : '这是你皮肤站账号上的皮肤。'
+    }
+    image.onerror = () => {
+      skinHintEl.textContent = '皮肤下下来了但读不出来，先用默认的。'
+    }
+    image.src = result.dataUrl
+  })
+}
+
+// ——————————————————————————————————————————————
 // 最后一步：把启动页显示出来
 //
-// 【为什么必须放在**文件真正的最后**】启动页要用到上面几乎所有变量。
+// 【为什么必须放在**整个文件的最后一行**】启动页要用到上面几乎所有变量。
 // 这里踩过两次坑：一开始写在中间，后面又追加了新代码段（联机、个性化、3D 皮肤），
 // 结果它一跑就碰到还没初始化的变量（Cannot access 'xxx' before initialization）。
-// 所以：**新加的代码一律加在这行之前**，别加在它后面。
+// **2026-10-08 又犯了一次**：M15 的樱花穿透整段加在了这行后面。
+// 这次没出事（因为启动页不碰穿透那几个变量），但属于"运气好"。
+// 所以这行**挪到文件最末尾**了——以后新加的代码都加在它前面，不用再记着这条规矩。
 // ——————————————————————————————————————————————
-showPage('launch')
 
 // ═══════════════════════════════════════
 // 樱花内网穿透（M15）
@@ -3924,3 +3979,9 @@ frpStopEl.addEventListener('click', async () => {
   await window.api.frpStop()
   setTimeout(refreshFrp, 500)
 })
+
+// ——————————————————————————————————————————————
+// 真正的最后一步：把启动页显示出来
+// （上面那条注释说的"踩过的坑"就是它——所以它必须在**最后一行**）
+// ——————————————————————————————————————————————
+showPage('launch')

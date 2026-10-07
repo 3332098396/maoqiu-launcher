@@ -22,7 +22,7 @@
 //   用户有权用任何一个兼容的服务器。
 
 const crypto = require('node:crypto')
-const { openStream, postJson, HttpError } = require('./http')
+const { openStream, postJson, fetchJson, HttpError } = require('./http')
 
 /** 界面上的预填值。只是"默认"，用户随时能改成别的服务器 */
 const DEFAULT_SERVER = 'littleskin.cn'
@@ -292,6 +292,32 @@ async function validate(account) {
   }
 }
 
+/**
+ * 这个角色在验证服务器上的皮肤，地址是多少。
+ *
+ * 【为什么要绕一圈解码】Yggdrasil 不是直接给个图片地址，而是给一段 Base64，
+ * 里面是**签过名的 JSON**——这样别的服务器才能确认"这皮肤真是他的"。
+ * 我们只是本地看一眼预览，不做签名校验（走的是 HTTPS，服务器也是用户自己选的），
+ * 解开拿到 URL 就行。
+ *
+ * @returns {Promise<string>} 没设皮肤就返回空字符串
+ */
+async function skinUrl(account) {
+  if (!account?.apiRoot || !account?.uuid) return ''
+
+  const id = String(account.uuid).replace(/-/g, '')
+  const data = await fetchJson(
+    `${account.apiRoot}/sessionserver/session/minecraft/profile/${id}`,
+    { timeout: 15000 }
+  )
+
+  const entry = (data.properties || []).find((one) => one.name === 'textures')
+  if (!entry?.value) return ''
+
+  const decoded = JSON.parse(Buffer.from(entry.value, 'base64').toString('utf8'))
+  return decoded?.textures?.SKIN?.url || ''
+}
+
 /** 退出登录时把这个令牌作废掉（对得起用户，别让令牌在外面飘着） */
 async function invalidate(account) {
   if (!account?.apiRoot || !account?.accessToken) return
@@ -313,5 +339,7 @@ module.exports = {
   authenticate,
   refresh,
   validate,
+  skinUrl,
+  networkErrorText,
   invalidate
 }

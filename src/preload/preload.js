@@ -107,6 +107,13 @@ contextBridge.exposeInMainWorld('api', {
   setMicrosoftClientId: (value) => ipcRenderer.invoke('microsoft:setClientId', value),
 
   /**
+   * 取当前账号在你那个皮肤站/正版账号上的皮肤（M16.3）。
+   * 回来的是一张现成的图（data URL），界面直接贴到 3D 小人身上就行。
+   * @returns {Promise<{ok: boolean, dataUrl?: string, source?: string, error?: string}>}
+   */
+  fetchAccountSkin: () => ipcRenderer.invoke('skin:account'),
+
+  /**
    * 启动游戏。检查不通过马上返回 { ok:false, error }；
    * 起来了返回 { ok:true, java, memoryMB }，之后靠下面两个事件推消息。
    * @returns {Promise<{ok: boolean, error?: string, java?: object, memoryMB?: number}>}
