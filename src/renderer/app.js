@@ -3469,7 +3469,7 @@ document.getElementById('skin-pick').addEventListener('click', async () => {
     return
   }
 
-  skinHintEl.textContent = '换好了。用鼠标拖着可以转。'
+  skinHintEl.textContent = '换好了。鼠标左右移动就能转。'
   await saveLook({ skin: picked.path })
 })
 

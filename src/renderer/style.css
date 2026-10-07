@@ -2162,7 +2162,7 @@ body.has-bg {
 }
 
 .skin-stage {
-  height: 240px;
+  height: 300px;
   margin: 4px 0 8px;
   border-radius: 12px;
   /* 深一点的底，皮肤小人（浅色）在上面才看得清 */

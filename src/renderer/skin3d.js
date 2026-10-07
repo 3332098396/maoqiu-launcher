@@ -119,9 +119,13 @@ function cropTexture(source, rect, flipY) {
   ctx.drawImage(source, rect[0], rect[1], rect[2], rect[3], 0, 0, rect[2], rect[3])
 
   const texture = new THREE.CanvasTexture(canvas)
-  texture.magFilter = THREE.NearestFilter // 像素风：别给我糊成一团
+  // 像素风：放大用最近邻（一格一格清清楚楚），也不生成 mipmap（那玩意会让远处发糊）
+  texture.magFilter = THREE.NearestFilter
   texture.minFilter = THREE.NearestFilter
+  texture.generateMipmaps = false
+  texture.anisotropy = 1
   texture.flipY = flipY
+  texture.needsUpdate = true
   return texture
 }
 
@@ -212,8 +216,7 @@ let scene = null
 let camera = null
 let player = null
 let skinCanvas = makeDefaultSkin()
-let dragging = false
-let lastX = 0
+let targetSpin = 0
 let spin = 0
 let walkPhase = 0
 let raf = null
@@ -258,6 +261,8 @@ function animate() {
   }
   if (player) {
     player.position.y = Math.sin(walkPhase * 2) * 0.12
+    // 平滑地追向鼠标指的角度（0.12 越小越"慢半拍"，看着越自然）
+    spin += (targetSpin - spin) * 0.12
     player.rotation.y = spin
   }
 
@@ -269,9 +274,12 @@ function mount(container) {
   if (renderer) return
 
   scene = new THREE.Scene()
+  // 【相机距离是算出来的，别乱改】小人总高 32 个单位，竖直视角 40° 时
+  // 距离 52 能看到约 38 个单位（刚好占满还有一点边距）。
+  // 踩过两次：太远 → 小人小小的发虚；太近 → 头都出画了。
   camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100)
   // 相机在斜前方，稍微高一点——和 KAMUCL 那个视角差不多
-  camera.position.set(0, 24, 36)
+  camera.position.set(0, 22, 52)
   camera.lookAt(0, 16, 0)
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
@@ -286,21 +294,19 @@ function mount(container) {
   resize()
   window.addEventListener('resize', resize)
 
-  // 拖着转
-  renderer.domElement.addEventListener('pointerdown', (event) => {
-    dragging = true
-    lastX = event.clientX
-    renderer.domElement.style.cursor = 'grabbing'
+  // 鼠标在卡片上一动，小人就跟着转（不用按着拖）
+  //
+  // 【怎么算的】把鼠标在卡片里的横向位置（0~1）映射成角度：
+  // 最左边转到 -50°，最右边 +50°，中间朝前。转头用"追"的（见 animate 里的 lerp），
+  // 不然鼠标一动小人就"啪"地跳过去，很生硬。
+  renderer.domElement.style.cursor = 'default'
+  renderer.domElement.addEventListener('pointerleave', () => {
+    targetSpin = 0
   })
-  window.addEventListener('pointerup', () => {
-    if (!renderer) return
-    dragging = false
-    renderer.domElement.style.cursor = 'grab'
-  })
-  window.addEventListener('pointermove', (event) => {
-    if (!dragging) return
-    spin += (event.clientX - lastX) * 0.01
-    lastX = event.clientX
+  renderer.domElement.addEventListener('pointermove', (event) => {
+    const rect = renderer.domElement.getBoundingClientRect()
+    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
+    targetSpin = (ratio - 0.5) * 1.8 // 左右各约 50 度
   })
 
   animate()
