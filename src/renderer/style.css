@@ -317,6 +317,19 @@ body {
   color: var(--text-muted);
 }
 
+/* 「开始游戏」点不了的原因，写在按钮下面。只在点不了的时候出现 */
+.side__tip {
+  margin-top: -6px;
+  font-size: 11.5px;
+  line-height: 1.65;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.side__tip[hidden] {
+  display: none;
+}
+
 .pick__empty[hidden] {
   display: none;
 }

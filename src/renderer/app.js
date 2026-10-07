@@ -372,6 +372,7 @@ const accAvatarEl = document.getElementById('acc-avatar')
 const pickListEl = document.getElementById('pick-list')
 const pickEmptyEl = document.getElementById('pick-empty')
 const launchBtnEl = document.getElementById('launch-btn')
+const launchTipEl = document.getElementById('launch-tip')
 const launchNoticeEl = document.getElementById('launch-notice')
 const launchLogEl = document.getElementById('launch-log')
 const logClearEl = document.getElementById('log-clear')
@@ -448,6 +449,17 @@ function refreshLaunchUi() {
   const problem = nameProblem(accInputEl.value)
   launchBtnEl.disabled = launching || !selectedVersion || Boolean(problem)
   launchBtnEl.textContent = launching ? '游戏运行中…' : '开始游戏'
+
+  // 按钮点不了的时候，直接把"缺什么"写在旁边——
+  // 光把按钮变灰，用户只能自己猜（实测时用户就问过"为什么点不了"）
+  let tip = ''
+  if (!launching) {
+    if (!selectedVersion) tip = '先到「下载」页装一个版本，才能开始游戏'
+    else if (!accInputEl.value.trim()) tip = '填一个游戏名字（上面那个框），按钮就能点了'
+    else if (problem) tip = problem
+  }
+  launchTipEl.textContent = tip
+  launchTipEl.hidden = tip === ''
 
   factVersionEl.textContent = selectedVersion || '—'
 
