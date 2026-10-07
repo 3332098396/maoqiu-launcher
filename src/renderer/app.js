@@ -1311,16 +1311,20 @@ async function openPackDialog(filePath) {
     packTargetRowEl.hidden = false
     packTargetEl.textContent = ''
 
-    // 只列**默认目录**里的版本：这种包是"解到某个已有版本里"的，
-    // 而选目录是 M11.4 第 4 步才做的事（那时这里要跟着所选目录重列）
+    // 列出**所有目录**里的版本，每项标着它在哪儿。
+    // 选中哪个，就解到"哪个目录里的哪个版本"——所以选项上要带着 dir，
+    // 光有版本号的话，两个目录有同名版本时就会装错地方（而且是悄悄装错）。
     const installed = versionList()
     for (const one of installed) {
       const option = document.createElement('option')
       option.value = one.id
+      option.dataset.dir = one.dir
       option.textContent = one.isDefault ? one.id : `${one.id}（${dirTail(one.dir)}）`
       packTargetEl.appendChild(option)
     }
-    packTargetEl.value = selectedVersion || (installed[0] ? installed[0].id : '')
+    const mine = installed.find((one) => one.id === selectedVersion && samePath(one.dir, selectedDir))
+    packTargetEl.value = mine ? mine.id : installed[0] ? installed[0].id : ''
+    if (mine) packTargetEl.selectedOptions[0].dataset.dir = mine.dir
 
     if (installed.length === 0) {
       packWarnEl.textContent = '本机还没装游戏版本——先到「下载」页装一个，再拖这个包'
@@ -1391,7 +1395,10 @@ packNameEl.addEventListener('input', () => {
   checkPackName()
 })
 
-// 换个目录装（弹系统的文件夹选择框）
+// 换个目录装（弹系统的文件夹选择框）。
+// 按钮和那个框都挂上——用户看着那个框像能点的，点它就该有反应
+packDirEl.addEventListener('click', () => packDirPickEl.click())
+
 packDirPickEl.addEventListener('click', async () => {
   const picked = await window.api.pickPackDir()
   if (picked.canceled) return
@@ -1419,8 +1426,12 @@ packInstallEl.addEventListener('click', async () => {
 
   if (!packInfo || packInstalling) return
 
-  const targetVersionId =
-    packInfo.kind === 'files' && packInfo.layout === 'instance' ? packTargetEl.value : ''
+  const isInstance = packInfo.kind === 'files' && packInfo.layout === 'instance'
+  const targetVersionId = isInstance ? packTargetEl.value : ''
+  // "解到已有版本里"的包：目录跟着**下拉里选的那个版本**走，不是跟着"装到哪儿"那行
+  const targetDir = isInstance
+    ? packTargetEl.selectedOptions[0]?.dataset.dir || ''
+    : packDir
 
   // 名字再验一遍（界面上虽然一边打字一边在验，但"点下去那一刻"才是准的）
   if (!packNameRowEl.hidden && !(await checkPackName())) return
@@ -1437,7 +1448,7 @@ packInstallEl.addEventListener('click', async () => {
       filePath: packFilePath,
       targetVersionId,
       versionName,
-      dir: packDir
+      dir: targetDir
     })
   } catch (error) {
     result = { ok: false, error: String(error?.message ?? error) }
@@ -1467,7 +1478,7 @@ packInstallEl.addEventListener('click', async () => {
 
   // 版本列表刷新，并把新版本选上（装在哪个目录就选哪个目录里的那个）
   await refreshLaunchFacts()
-  const fresh = findVersion(result.versionId, packDir)
+  const fresh = findVersion(result.versionId, targetDir)
   if (fresh) {
     selectedVersion = fresh.id
     selectedDir = fresh.dir

@@ -645,7 +645,10 @@
         <div class="field" id="pack-dir-row" hidden>
           <span class="field__label">装到哪儿</span>
           <div class="join-row">
-            <input class="input" id="pack-dir" type="text" readonly />
+            <!-- 和"起个名字"那个框一样高亮：这两个都是"用户说了算"的地方。
+                 框本身只读（内容靠右边的按钮换），但点它也照样弹选择框——
+                 看着像个能点的东西，就该真能点 -->
+            <input class="input input--edit" id="pack-dir" type="text" readonly />
             <button class="btn btn--ghost btn--sm" type="button" id="pack-dir-pick">换个目录…</button>
           </div>
           <p class="delbox" id="pack-dir-hint"></p>
