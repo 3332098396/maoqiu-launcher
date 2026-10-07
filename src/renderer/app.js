@@ -800,7 +800,9 @@ accSignoutEl.addEventListener('click', async () => {
   accPassEl.value = ''
   renderAccountCard()
   setLoginHint('已经退出了。要换账号就重新填一次。', '')
-  setNotice('已退出外置账号。', 'ok')
+  // 文案跟着账号类型走。这里原来写死了"外置账号"，
+  // 结果退正版账号时也说"已退出外置账号"（2026-10-08 用户实际看到并指出）
+  setNotice(account.type === 'microsoft' ? '已退出正版账号。' : '已退出外置账号。', 'ok')
   refreshLaunchUi()
 })
 
