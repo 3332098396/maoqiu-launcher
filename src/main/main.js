@@ -134,6 +134,9 @@ function known(dir) {
   return ''
 }
 
+/** 盯着屏幕光标位置的那个计时器（M14.4，3D 皮肤小人用） */
+let cursorWatcher = null
+
 /** 有没有整合包在装（同时只允许一个） */
 let packRunning = false
 
@@ -729,6 +732,37 @@ function registerIpcHandlers() {
     } finally {
       packRunning = false
     }
+  })
+
+  /**
+   * 盯着鼠标在**屏幕**上的位置（M14.4 的 3D 皮肤小人用）。
+   *
+   * 【为什么要主进程来干】界面里的 pointermove 只有鼠标在本窗口上才触发——
+   * 用户要的是鼠标出了窗口也继续跟着转。所以由主进程每隔 60 毫秒问一次系统
+   * 光标现在在屏幕哪儿（screen.getCursorScreenPoint），再推给界面。
+   * 传 true 开始盯、false 停下（界面不显示那个小人时就该停，别白耗电）。
+   */
+  ipcMain.handle('cursor:watch', (event, on) => {
+    if (cursorWatcher) {
+      clearInterval(cursorWatcher)
+      cursorWatcher = null
+    }
+    if (!on) return { ok: true }
+
+    cursorWatcher = setInterval(() => {
+      if (event.sender.isDestroyed()) {
+        clearInterval(cursorWatcher)
+        cursorWatcher = null
+        return
+      }
+      try {
+        event.sender.send('cursor:move', screen.getCursorScreenPoint())
+      } catch {
+        // 界面没了就算了，下一轮会自己收
+      }
+    }, 60)
+
+    return { ok: true }
   })
 
   /** 挑一个皮肤文件（M14.4：3D 预览用）。只返回路径，不复制文件 */

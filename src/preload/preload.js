@@ -269,6 +269,14 @@ contextBridge.exposeInMainWorld('api', {
    */
   pickLookFile: (kind) => ipcRenderer.invoke('look:pick', kind),
 
+  /** 开始/停止盯着屏幕光标（M14.4 的 3D 小人用，出了窗口也要跟） */
+  watchCursor: (on) => ipcRenderer.invoke('cursor:watch', on),
+
+  /** 主进程推来的光标位置（屏幕坐标） */
+  onCursorMove: (callback) => {
+    ipcRenderer.on('cursor:move', (_event, point) => callback(point))
+  },
+
   /** 挑一个皮肤文件（M14.4），只返回路径 */
   pickSkinFile: () => ipcRenderer.invoke('skin:pick'),
 

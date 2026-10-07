@@ -218,6 +218,8 @@ let player = null
 let skinCanvas = makeDefaultSkin()
 let targetSpin = 0
 let spin = 0
+/** 3D 挂上了没有 */
+let mounted = false
 let walkPhase = 0
 let raf = null
 
@@ -272,6 +274,7 @@ function animate() {
 /** 起一个 3D 预览，塞进指定的容器元素里 */
 function mount(container) {
   if (renderer) return
+  mounted = true
 
   scene = new THREE.Scene()
   // 【相机距离是算出来的，别乱改】小人总高 32 个单位，竖直视角 40° 时
@@ -304,14 +307,27 @@ function mount(container) {
   // 【为什么用"追"而不是直接设】直接设的话鼠标一动小人"啪"地跳过去，很生硬；
   // 让它每一帧往目标角度靠一点（见 animate 里的 lerp），看着像真的在转。
   renderer.domElement.style.cursor = 'default'
-  window.addEventListener('pointermove', (event) => {
+
+  // 按光标的**屏幕坐标**算该转到哪（窗口内、窗口外一视同仁）
+  const aimAtScreenX = (screenX) => {
     if (!renderer) return
     const rect = renderer.domElement.getBoundingClientRect()
-    // 不夹在 0~1：允许超出卡片，所以鼠标走到窗口两边还能继续转
+    // 卡片在屏幕上的左边缘 = 窗口左上角 + 卡片在窗口里的位置
+    const cardScreenLeft = window.screenX + rect.left
+    // 不夹在 0~1：允许超出卡片，所以鼠标走到窗口外还能继续转
     // （上限收到 ±0.3 个卡片宽：再往外也不多转，免得转成"侧面对着人"看不出是谁）
-    const ratio = Math.min(1.3, Math.max(-0.3, (event.clientX - rect.left) / rect.width))
-    targetSpin = (ratio - 0.5) * 1.6 // 两侧最多约 ±73 度（能看侧面，但不会转过去背对人）
-  })
+    const ratio = Math.min(1.3, Math.max(-0.3, (screenX - cardScreenLeft) / rect.width))
+    targetSpin = (ratio - 0.5) * 1.6 // 两侧最多约 ±73 度
+  }
+
+  // ① 鼠标在窗口里：直接听（反应最快）
+  window.addEventListener('pointermove', (event) => aimAtScreenX(window.screenX + event.clientX))
+
+  // ② 鼠标跑出窗口了：界面就看不见它了，得让主进程去问系统"光标在哪"（见 main.js 的 cursor:watch）
+  if (window.api && window.api.watchCursor) {
+    window.api.onCursorMove((point) => aimAtScreenX(point.x))
+    window.api.watchCursor(true)
+  }
 
   animate()
 }
@@ -336,12 +352,15 @@ function useDefaultSkin() {
 
 /** 停掉（切页面时省点电） */
 function unmount() {
+  if (window.api && window.api.watchCursor) window.api.watchCursor(false)
   if (raf) cancelAnimationFrame(raf)
   raf = null
   renderer = null
   scene = null
   camera = null
   player = null
+  mounted = false
 }
+
 
 window.skinViewer = { mount, setSkin, useDefaultSkin, unmount, makeDefaultSkin }
