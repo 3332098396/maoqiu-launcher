@@ -478,8 +478,20 @@ function refreshLaunchUi() {
   factVersionEl.textContent = selectedVersion || '—'
 
   if (launchInfo) {
-    factMemoryEl.textContent = `${launchInfo.memoryMB} MB${launchInfo.memoryAuto ? '（自动）' : ''}`
-    factDirEl.textContent = launchInfo.gameDir
+    // 内存和游戏目录都要按"这个版本实际用的"显示——
+    // 版本可能自己单独设过（见版本设置），不能只显示全局值
+    const override = launchInfo.versionSettings?.[selectedVersion] || {}
+    const ownMemory = Number(override.memoryMB) > 0
+    const memoryMB = ownMemory ? override.memoryMB : launchInfo.memoryMB
+    factMemoryEl.textContent =
+      `${memoryMB} MB` +
+      (ownMemory ? '（这个版本单独设的）' : launchInfo.memoryAuto ? '（自动）' : '')
+
+    const isolated =
+      typeof override.isolation === 'boolean' ? override.isolation : launchInfo.isolation
+    factDirEl.textContent = isolated
+      ? `${launchInfo.gameDir}\\versions\\${selectedVersion}`
+      : launchInfo.gameDir
 
     const java = launchInfo.java
     factJavaEl.textContent = java.found
@@ -489,6 +501,16 @@ function refreshLaunchUi() {
 
   renderAccountCard()
   renderPickList()
+}
+
+/** 只把启动页的信息重新读一遍并刷新（比如刚在版本设置里改了内存） */
+async function refreshLaunchFacts() {
+  try {
+    launchInfo = await window.api.getLaunchInfo()
+  } catch {
+    return
+  }
+  refreshLaunchUi()
 }
 
 /** 进启动页（或回到启动页）时读一遍最新状态 */
@@ -695,6 +717,20 @@ const delTitleEl = document.getElementById('del-title')
 const delWhatEl = document.getElementById('del-what')
 const delSafeEl = document.getElementById('del-safe')
 
+// 「这个版本自己的设置」那几个控件
+const verMemoryOnEl = document.getElementById('ver-memory-on')
+const verMemoryEl = document.getElementById('ver-memory')
+const verMemoryNumEl = document.getElementById('ver-memory-num')
+const verWindowOnEl = document.getElementById('ver-window-on')
+const verWidthEl = document.getElementById('ver-width')
+const verHeightEl = document.getElementById('ver-height')
+const verIsolationOnEl = document.getElementById('ver-isolation-on')
+const verIsolationEl = document.getElementById('ver-isolation')
+const verSettingsHintEl = document.getElementById('ver-settings-hint')
+
+/** 版本设置弹窗里，「这个版本自己的设置」的信息（含全局值作对比） */
+let verSettingsInfo = null
+
 /** 版本设置弹窗正在设置哪个版本 */
 let editingVersion = ''
 /** 删除确认弹窗正在确认哪个版本 */
@@ -707,24 +743,95 @@ function formatBytes(bytes) {
   return `${mb.toFixed(1)} MB`
 }
 
-function openVersionSettings() {
+async function openVersionSettings() {
   if (!selectedVersion) return
   editingVersion = selectedVersion
+  const id = editingVersion
 
-  const info = launchInfo?.versionInfo?.[editingVersion] ?? { name: '', note: '' }
-  verTitleEl.textContent = `版本设置 — ${editingVersion}`
+  const info = launchInfo?.versionInfo?.[id] ?? { name: '', note: '' }
+  verTitleEl.textContent = `版本设置 — ${id}`
   verNameEl.value = info.name
   verNoteEl.value = info.note
   verHintEl.textContent = ''
   verHintEl.classList.remove('verform__hint--bad')
   verFolderHintEl.textContent = ''
+  verSettingsHintEl.textContent = '正在读设置…'
   verModalEl.hidden = false
   verNameEl.focus()
+
+  // 「这个版本自己的设置」要现算（还要拿全局值作对比），异步读一下
+  const settings = await window.api.getVersionSettings(id)
+  if (editingVersion !== id) return // 读的过程中弹窗被关了/换了版本
+  verSettingsInfo = settings
+
+  const override = settings.override || {}
+  verMemoryOnEl.checked = Number(override.memoryMB) > 0
+  verWindowOnEl.checked = Number(override.windowWidth) > 0
+  verIsolationOnEl.checked = typeof override.isolation === 'boolean'
+
+  const maxSlider = Math.min(Math.floor(settings.totalMemoryMB / 512) * 512, 16384)
+  verMemoryEl.max = String(maxSlider)
+
+  renderVersionSettings()
+}
+
+/** 按当前状态刷新「这个版本自己的设置」那几行 */
+function renderVersionSettings() {
+  if (!verSettingsInfo) return
+  const { global, effective } = verSettingsInfo
+
+  const memoryOn = verMemoryOnEl.checked
+  verMemoryEl.disabled = !memoryOn
+  verMemoryNumEl.disabled = !memoryOn
+  verMemoryEl.value = String(memoryOn ? effective.memoryMB : global.memoryMB)
+  verMemoryNumEl.value = String(memoryOn ? effective.memoryMB : global.memoryMB)
+
+  const windowOn = verWindowOnEl.checked
+  verWidthEl.disabled = !windowOn
+  verHeightEl.disabled = !windowOn
+  verWidthEl.value = String(windowOn ? effective.windowWidth : global.windowWidth)
+  verHeightEl.value = String(windowOn ? effective.windowHeight : global.windowHeight)
+
+  const isolationOn = verIsolationOnEl.checked
+  verIsolationEl.disabled = !isolationOn
+  verIsolationEl.checked = isolationOn ? effective.isolation : global.isolation
+
+  verSettingsHintEl.textContent =
+    `这个版本实际用：内存 ${effective.memoryMB} MB · ` +
+    `窗口 ${effective.windowWidth} × ${effective.windowHeight} · ` +
+    `隔离${effective.isolation ? '开' : '关'}`
+}
+
+/** 改这个版本的一项设置，存完重新算一遍"真正生效的值" */
+async function saveVersionSetting(patch) {
+  if (!editingVersion) return
+  const id = editingVersion
+
+  const result = await window.api.setVersionSettings(id, patch)
+  if (!result.ok) {
+    verHintEl.textContent = result.error
+    verHintEl.classList.add('verform__hint--bad')
+    return
+  }
+
+  verSettingsInfo = await window.api.getVersionSettings(id)
+  if (editingVersion !== id) return
+
+  verHintEl.classList.remove('verform__hint--bad')
+  verHintEl.textContent = '已保存'
+  setTimeout(() => {
+    if (editingVersion === id && verHintEl.textContent === '已保存') verHintEl.textContent = ''
+  }, 2000)
+
+  renderVersionSettings()
 }
 
 function closeVersionSettings() {
   verModalEl.hidden = true
   editingVersion = ''
+  verSettingsInfo = null
+  // 回到启动页时信息卡（内存等）要跟着变
+  refreshLaunchFacts()
 }
 
 async function saveVersionSettings() {
@@ -803,6 +910,57 @@ async function confirmDeleteVersion() {
   loadInstalled()
   setNotice(`版本 ${id} 已删除。`, 'ok')
 }
+
+// ——— 「这个版本自己的设置」那几个控件 ———
+
+verMemoryOnEl.addEventListener('change', () => {
+  if (!verSettingsInfo) return
+  saveVersionSetting(
+    verMemoryOnEl.checked ? { memoryMB: verSettingsInfo.global.memoryMB } : { memoryMB: null }
+  )
+})
+verMemoryEl.addEventListener('input', () => {
+  verMemoryNumEl.value = verMemoryEl.value
+})
+verMemoryEl.addEventListener('change', () =>
+  saveVersionSetting({ memoryMB: Number(verMemoryEl.value) })
+)
+verMemoryNumEl.addEventListener('change', () =>
+  saveVersionSetting({ memoryMB: Number(verMemoryNumEl.value) })
+)
+
+verWindowOnEl.addEventListener('change', () => {
+  if (!verSettingsInfo) return
+  saveVersionSetting(
+    verWindowOnEl.checked
+      ? {
+          window: {
+            width: verSettingsInfo.global.windowWidth,
+            height: verSettingsInfo.global.windowHeight
+          }
+        }
+      : { window: null }
+  )
+})
+
+const saveVersionWindow = () =>
+  saveVersionSetting({
+    window: { width: Number(verWidthEl.value), height: Number(verHeightEl.value) }
+  })
+verWidthEl.addEventListener('change', saveVersionWindow)
+verHeightEl.addEventListener('change', saveVersionWindow)
+
+verIsolationOnEl.addEventListener('change', () => {
+  if (!verSettingsInfo) return
+  saveVersionSetting(
+    verIsolationOnEl.checked
+      ? { isolation: verSettingsInfo.global.isolation }
+      : { isolation: null }
+  )
+})
+verIsolationEl.addEventListener('change', () =>
+  saveVersionSetting({ isolation: verIsolationEl.checked })
+)
 
 verSettingsBtnEl.addEventListener('click', openVersionSettings)
 document.getElementById('ver-close').addEventListener('click', closeVersionSettings)

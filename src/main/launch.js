@@ -88,7 +88,7 @@ function makeSubstituter(values, unknown) {
  * 不能直接用 paths.gameDir()
  */
 function effectiveGameDir(versionId) {
-  const isolated = Boolean(settings.readConfig().launch.isolation)
+  const isolated = settings.effectiveLaunchSettings(versionId).isolation
   return isolated ? paths.versionDir(versionId) : paths.gameDir()
 }
 
@@ -574,16 +574,14 @@ async function launch(versionId, options = {}) {
     return { ok: false, error: '这个版本装了 Mod 加载器，暂时还启动不了，先玩纯原版' }
   }
 
-  // ——— ③ 内存和窗口大小（都在设置页里改） ———
-  const launchSettings = settings.readConfig().launch
-  const memoryMB = settings.currentMemoryMB()
+  // ——— ③ 内存和窗口大小 ———
+  // 这个版本自己单独设过就用自己的，没设过跟随全局（见 settings.effectiveLaunchSettings）
+  const effective = settings.effectiveLaunchSettings(versionId)
+  const memoryMB = effective.memoryMB
   const memoryCheck = settings.validateMemoryMB(memoryMB)
   if (!memoryCheck.ok) return { ok: false, error: memoryCheck.error }
 
-  const windowSize = {
-    width: Number(launchSettings.windowWidth) || 854,
-    height: Number(launchSettings.windowHeight) || 480
-  }
+  const windowSize = { width: effective.windowWidth, height: effective.windowHeight }
 
   // ——— ④ Java ———
   const javaExe = javaUtil.findJava(versionJson)
@@ -653,10 +651,10 @@ async function launch(versionId, options = {}) {
   const log = createLogCollector({ onLog, logFile })
   log.line(`[启动器] 版本 ${versionId} · Java ${probe.version}（${javaExe.source}）· 内存 ${memoryMB} MB`)
   log.line(`[启动器] 游戏窗口：${windowSize.width} × ${windowSize.height}`)
-  log.line(
-    `[启动器] 游戏目录：${runDir}` +
-      (settings.readConfig().launch.isolation ? '（开着版本隔离）' : '')
-  )
+  log.line(`[启动器] 游戏目录：${runDir}${effective.isolation ? '（开着版本隔离）' : ''}`)
+  if (effective.overridden.memoryMB || effective.overridden.window || effective.overridden.isolation) {
+    log.line('[启动器] 这个版本有自己的单独设置（内存/窗口/隔离里的某几项）')
+  }
   log.line(`[启动器] 完整日志会存到：${logFile}`)
   if (javaWarning) log.line(`[启动器] ${javaWarning}`)
   if (command.unknown.length > 0) {

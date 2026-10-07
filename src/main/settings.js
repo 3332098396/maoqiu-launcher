@@ -46,7 +46,16 @@ const DEFAULTS = {
     windowHeight: 480,
     /** 版本隔离：每个版本的存档/Mod 各放各的（默认开，见 docs/01 默认值表） */
     isolation: true
-  }
+  },
+  /**
+   * 单个版本自己的启动设置（上面那份是全局的）。
+   * 只存"用户单独改过"的项，没写的就跟随全局：
+   * { "26.3": { memoryMB: 4096, isolation: false } }
+   *
+   * 【为什么要有这一层】有的版本吃内存多、有的版本想单独开隔离，
+   * 一个全局值伺候不了所有版本（PCL 也是这么分的）。
+   */
+  versionSettings: {}
 }
 
 /** 读配置。没有文件或者内容坏了，都返回默认值，不抛异常 */
@@ -159,6 +168,42 @@ function validateWindow(width, height) {
   return { ok: true }
 }
 
+/** 全局的启动设置（把"自动内存"解析成具体数字，界面直接能用） */
+function globalLaunchSettings() {
+  const launch = readConfig().launch
+  return {
+    memoryMB: Number(launch.memoryMB) > 0 ? Math.round(launch.memoryMB) : defaultMemoryMB(),
+    memoryAuto: !(Number(launch.memoryMB) > 0),
+    windowWidth: Number(launch.windowWidth) > 0 ? Math.round(launch.windowWidth) : 854,
+    windowHeight: Number(launch.windowHeight) > 0 ? Math.round(launch.windowHeight) : 480,
+    isolation: Boolean(launch.isolation)
+  }
+}
+
+/**
+ * 算出某个版本这次启动真正用的设置：
+ * 它自己单独设过的用自己的，没设的跟随全局。
+ *
+ * @returns {{memoryMB: number, windowWidth: number, windowHeight: number,
+ *            isolation: boolean, overridden: {memoryMB: boolean, window: boolean, isolation: boolean}}}
+ */
+function effectiveLaunchSettings(versionId) {
+  const override = (readConfig().versionSettings || {})[versionId] || {}
+  const global = globalLaunchSettings()
+
+  const hasMemory = Number(override.memoryMB) > 0
+  const hasWindow = Number(override.windowWidth) > 0 && Number(override.windowHeight) > 0
+  const hasIsolation = typeof override.isolation === 'boolean'
+
+  return {
+    memoryMB: hasMemory ? Math.round(override.memoryMB) : global.memoryMB,
+    windowWidth: hasWindow ? Math.round(override.windowWidth) : global.windowWidth,
+    windowHeight: hasWindow ? Math.round(override.windowHeight) : global.windowHeight,
+    isolation: hasIsolation ? override.isolation : global.isolation,
+    overridden: { memoryMB: hasMemory, window: hasWindow, isolation: hasIsolation }
+  }
+}
+
 module.exports = {
   readConfig,
   writeConfig,
@@ -167,5 +212,7 @@ module.exports = {
   currentMemoryMB,
   validateMemoryMB,
   validateWindow,
-  WINDOW_LIMITS
+  WINDOW_LIMITS,
+  globalLaunchSettings,
+  effectiveLaunchSettings
 }

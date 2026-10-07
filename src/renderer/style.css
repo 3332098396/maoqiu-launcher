@@ -831,6 +831,12 @@ body {
   accent-color: #4a9bff;
 }
 
+/* 没勾"单独设置"的时候，这些控件是灰的、不能动 */
+.range:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .check {
   display: flex;
   align-items: center;
@@ -844,6 +850,17 @@ body {
   height: 16px;
   accent-color: #4a9bff;
   cursor: pointer;
+}
+
+/* 没勾"单独设置"的时候，里面的控件是灰的、点了也没用，得让人看出来 */
+.check input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.check:has(input:disabled) {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .join-row {

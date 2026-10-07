@@ -266,7 +266,8 @@
             <h3 class="panel__title">版本隔离</h3>
             <p class="panel__desc">
               <b>开着（推荐）</b>：每个版本的存档、Mod 各放各的文件夹，互不干扰。<br />
-              <b>关着</b>：所有版本共用游戏目录里的那一套，换个版本玩会看到同一批存档。
+              <b>关着</b>：所有版本共用游戏目录里的那一套，换个版本玩会看到同一批存档。<br />
+              这里是<b>全局默认</b>——想给某一个版本单独开或关，去那个版本的「版本设置」里改。
             </p>
             <label class="check">
               <input type="checkbox" id="set-isolation" />
@@ -334,6 +335,41 @@
             spellcheck="false"
           />
         </label>
+
+        <div class="field">
+          <span class="field__label">这个版本自己的设置（不勾就跟随设置页里的全局设置）</span>
+
+          <label class="check">
+            <input type="checkbox" id="ver-memory-on" />
+            <span>单独设置内存</span>
+          </label>
+          <div class="setrow">
+            <input class="range" id="ver-memory" type="range" min="512" max="8192" step="512" />
+            <input class="input input--num" id="ver-memory-num" type="number" min="512" step="512" />
+            <span class="setrow__unit">MB</span>
+          </div>
+
+          <label class="check">
+            <input type="checkbox" id="ver-window-on" />
+            <span>单独设置窗口大小</span>
+          </label>
+          <div class="setrow">
+            <input class="input input--num" id="ver-width" type="number" min="320" max="3840" step="10" />
+            <span class="setrow__x">×</span>
+            <input class="input input--num" id="ver-height" type="number" min="240" max="2160" step="10" />
+          </div>
+
+          <label class="check">
+            <input type="checkbox" id="ver-isolation-on" />
+            <span>单独设置版本隔离</span>
+          </label>
+          <label class="check">
+            <input type="checkbox" id="ver-isolation" />
+            <span>这个版本开启版本隔离（存档、Mod 放它自己的文件夹）</span>
+          </label>
+
+          <span class="field__hint" id="ver-settings-hint"></span>
+        </div>
 
         <div class="field">
           <span class="field__label">快捷打开</span>

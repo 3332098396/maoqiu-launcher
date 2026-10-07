@@ -97,20 +97,80 @@ function versionSize(id) {
   return total
 }
 
-/** 当前有没有开版本隔离（决定存档/Mod 在版本目录里还是游戏目录里） */
-function isIsolated() {
-  return Boolean(settings.readConfig().launch.isolation)
+/** 这个版本有没有开隔离（它自己设过就用它自己的，没设过跟随全局） */
+function isIsolated(id) {
+  return settings.effectiveLaunchSettings(id).isolation
+}
+
+/** 某个版本单独设过的启动设置（空对象 = 全都跟随全局） */
+function getVersionSettings(id) {
+  const all = settings.readConfig().versionSettings || {}
+  return all[id] || {}
+}
+
+/**
+ * 改某个版本的单独设置。没传的项不动，传 null 表示"这一项改回跟随全局"。
+ *
+ * @param {{memoryMB?: number|null, window?: {width: number, height: number}|null,
+ *          isolation?: boolean|null}} patch
+ * @returns {{ok: boolean, settings?: object, error?: string}}
+ */
+function setVersionSettings(id, patch = {}) {
+  if (!paths.isVersionInstalled(id)) return { ok: false, error: '这个版本已经不在了' }
+
+  const config = settings.readConfig()
+  const all = { ...(config.versionSettings || {}) }
+  const current = { ...(all[id] || {}) }
+
+  if (patch.memoryMB !== undefined) {
+    if (patch.memoryMB === null) {
+      delete current.memoryMB
+    } else {
+      const check = settings.validateMemoryMB(Number(patch.memoryMB))
+      if (!check.ok) return check
+      current.memoryMB = Math.round(Number(patch.memoryMB))
+    }
+  }
+
+  if (patch.window !== undefined) {
+    if (patch.window === null) {
+      delete current.windowWidth
+      delete current.windowHeight
+    } else {
+      const check = settings.validateWindow(Number(patch.window.width), Number(patch.window.height))
+      if (!check.ok) return check
+      current.windowWidth = Math.round(Number(patch.window.width))
+      current.windowHeight = Math.round(Number(patch.window.height))
+    }
+  }
+
+  if (patch.isolation !== undefined) {
+    if (patch.isolation === null) delete current.isolation
+    else current.isolation = Boolean(patch.isolation)
+  }
+
+  // 一项都不剩就整条删掉，别在配置里留空壳
+  if (Object.keys(current).length === 0) delete all[id]
+  else all[id] = current
+
+  try {
+    settings.writeConfig({ versionSettings: all })
+  } catch (error) {
+    return { ok: false, error: `存不下来：${error.message}` }
+  }
+
+  return { ok: true, settings: current }
 }
 
 /**
  * 某个版本的四个文件夹在哪。
  *
  * 【存档/Mod/截图的区别】开启版本隔离后，它们在版本目录里面（各版本互不干扰）；
- * 关着的时候在游戏目录里（所有版本共用）。隔离功能做在 M6.2，
- * 这里先把路径算对，将来打开开关就自动跟着变。
+ * 关着的时候在游戏目录里（所有版本共用）。
+ * 隔离开没开，**按这个版本自己的设置算**（它没单独设过才看全局）。
  */
 function folderFor(id, which) {
-  const isolated = isIsolated()
+  const isolated = isIsolated(id)
   const versionDir = paths.versionDir(id)
 
   switch (which) {
@@ -208,5 +268,7 @@ module.exports = {
   openFolder,
   deleteVersion,
   folderFor,
-  isIsolated
+  isIsolated,
+  getVersionSettings,
+  setVersionSettings
 }

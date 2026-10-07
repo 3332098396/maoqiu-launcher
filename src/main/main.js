@@ -159,11 +159,13 @@ function registerIpcHandlers() {
     return {
       installed,
       versionInfo: versions.versionInfoMap(),
+      versionSettings: config.versionSettings || {},
       account: accounts.getAccount(),
       lastVersion: config.launch.lastVersion || '',
       memoryMB: settings.currentMemoryMB(),
       memoryAuto: !(Number(config.launch.memoryMB) > 0),
       totalMemoryMB: settings.totalMemoryMB(),
+      isolation: Boolean(config.launch.isolation),
       gameDir: paths.gameDir(),
       java: javaInfo
     }
@@ -277,6 +279,20 @@ function registerIpcHandlers() {
     }
     return versions.deleteVersion(id)
   })
+
+  /** 某个版本的单独设置：它自己设过什么、以及算下来真正生效的值 */
+  ipcMain.handle('versions:getSettings', (_event, id) => ({
+    override: versions.getVersionSettings(id),
+    effective: settings.effectiveLaunchSettings(id),
+    global: settings.globalLaunchSettings(),
+    totalMemoryMB: settings.totalMemoryMB(),
+    suggestedMemoryMB: settings.defaultMemoryMB()
+  }))
+
+  /** 改某个版本的单独设置（传 null = 这一项改回跟随全局） */
+  ipcMain.handle('versions:setSettings', (_event, id, patch) =>
+    versions.setVersionSettings(id, patch)
+  )
 
   // ——— 启动设置（M6.2）———
 

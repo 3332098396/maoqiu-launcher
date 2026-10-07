@@ -136,5 +136,21 @@ contextBridge.exposeInMainWorld('api', {
    * 改启动设置，只传要改的那几项（memoryMB / windowWidth / windowHeight / isolation）。
    * @returns {Promise<{ok: boolean, error?: string}>}
    */
-  setSettings: (patch) => ipcRenderer.invoke('settings:set', patch)
+  setSettings: (patch) => ipcRenderer.invoke('settings:set', patch),
+
+  // ——— 单个版本自己的启动设置（M6.2 追加）———
+
+  /**
+   * 某个版本单独设过什么、以及算下来真正生效的值。
+   * @returns {Promise<{override: object, effective: object, global: object,
+   *                    totalMemoryMB: number, suggestedMemoryMB: number}>}
+   */
+  getVersionSettings: (id) => ipcRenderer.invoke('versions:getSettings', id),
+
+  /**
+   * 改某个版本的单独设置（传 null 的那一项 = 改回跟随全局）。
+   * patch: { memoryMB?, window?: {width,height}|null, isolation? }
+   * @returns {Promise<{ok: boolean, settings?: object, error?: string}>}
+   */
+  setVersionSettings: (id, patch) => ipcRenderer.invoke('versions:setSettings', id, patch)
 })
