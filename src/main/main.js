@@ -1,4 +1,4 @@
-// MC启动器 — 主进程入口
+// 毛球 — 主进程入口
 //
 // 主进程负责所有"重活"：窗口、下载、装游戏、启动游戏、读写配置。
 // 界面（renderer）只负责显示和上报点击，不直接碰系统能力，
@@ -26,8 +26,39 @@ const launch = require('./launch')
 const versions = require('./versions')
 const backup = require('./backup')
 
-// 软件名。它会决定数据存放目录：%APPDATA%\MC启动器\
-app.setName('MC启动器')
+// 软件名。它会决定数据存放目录：%APPDATA%\毛球\
+app.setName('毛球')
+
+/**
+ * 从旧名字的目录搬一次家。
+ *
+ * 【为什么必须做】软件原来叫「MC启动器」，配置存在 %APPDATA%\MC启动器\
+ * （账号、设置、备份、日志都在里面）。改名后程序会去找 %APPDATA%\毛球\——
+ * 不搬的话，用户打开软件会发现**账号和备份凭空消失了**。
+ *
+ * 只在新目录还不存在、旧目录存在时搬一次；是"移动"不是"复制"。
+ * 搬不动就退一步复制；再不行就算了（程序照常能用，只是回到默认设置）。
+ */
+function migrateDataDirFromOldName() {
+  try {
+    const appData = app.getPath('appData')
+    const oldDir = path.join(appData, 'MC启动器')
+    const newDir = path.join(appData, '毛球')
+
+    if (fs.existsSync(newDir) || !fs.existsSync(oldDir)) return
+
+    try {
+      fs.renameSync(oldDir, newDir)
+    } catch {
+      fs.cpSync(oldDir, newDir, { recursive: true })
+    }
+    console.log(`已把数据目录搬到新名字下：${oldDir} → ${newDir}`)
+  } catch (error) {
+    console.warn('数据目录没搬成（不影响使用，只是设置会回到默认）：', error.message)
+  }
+}
+
+migrateDataDirFromOldName()
 
 /** 主窗口 */
 let mainWindow = null
@@ -38,7 +69,7 @@ function createWindow() {
     height: 660,
     minWidth: 860,
     minHeight: 560,
-    title: 'MC启动器',
+    title: '毛球',
     icon: path.join(__dirname, '..', '..', 'assets', 'app-256.png'),
     backgroundColor: '#F2F8FF',
     show: false, // 先不显示，等页面画好再显示，避免白屏闪烁

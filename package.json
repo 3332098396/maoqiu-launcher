@@ -1,8 +1,8 @@
 {
   "name": "mc-launcher",
-  "productName": "MC启动器",
+  "productName": "毛球",
   "version": "0.1.0",
-  "description": "MC启动器 — Minecraft Java 版启动器（Windows 本地）",
+  "description": "毛球 — Minecraft Java 版启动器（Windows 本地）",
   "main": "src/main/main.js",
   "private": true,
   "scripts": {
@@ -16,7 +16,7 @@
   },
   "build": {
     "appId": "com.local.mc-launcher",
-    "productName": "MC启动器",
+    "productName": "毛球",
     "directories": {
       "output": "release"
     },
@@ -32,8 +32,8 @@
     },
     "nsis": {
       "include": "build/installer.nsh",
-      "shortcutName": "MC启动器",
-      "artifactName": "MC启动器-安装程序-${version}.${ext}",
+      "shortcutName": "毛球",
+      "artifactName": "毛球-安装程序-${version}.${ext}",
       "deleteAppDataOnUninstall": false
     }
   }

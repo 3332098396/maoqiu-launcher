@@ -1,4 +1,4 @@
-// MC启动器 — 找 Java
+// 毛球 — 找 Java
 //
 // 每个 Minecraft 版本都要求特定大版本的 Java（26.3 要 Java 25）。
 // M4 已经按版本 JSON 的声明，把对应的 Java 运行时下到了

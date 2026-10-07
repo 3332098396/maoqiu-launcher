@@ -1,8 +1,8 @@
-// MC启动器 — 启动器
+// 毛球 — 启动器
 //
 // 这个文件有两个身份：
 //   1. `npm start` 时运行它
-//   2. 双击「启动MC启动器.bat」时也运行它
+//   2. 双击「启动毛球.bat」时也运行它
 //
 // 【为什么让 .bat 转一手调 Node，而不是直接写命令】
 // cmd 的批处理按系统 GBK 码页读文件，而我们的文件是 UTF-8，
@@ -35,7 +35,7 @@ const projectRoot = path.join(__dirname, '..')
 const extraArgs = process.argv.slice(2)
 
 console.log('')
-console.log('  正在启动 MC启动器…')
+console.log('  正在启动 毛球…')
 console.log('  稍等几秒，软件窗口会自动出现。')
 console.log('')
 

@@ -1,4 +1,4 @@
-// MC启动器 — 一键备份（M6.3 / 需求 R9.1）
+// 毛球 — 一键备份（M6.3 / 需求 R9.1）
 //
 // 把重要的东西打包存一份，防手滑、防意外。
 //
@@ -177,7 +177,7 @@ function buildReadme(categories, fileCount, format) {
   const now = new Date()
 
   const lines = [
-    'MC启动器 · 一键备份',
+    '毛球 · 一键备份',
     '',
     `备份时间：${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ` +
       `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,
@@ -197,7 +197,7 @@ function buildReadme(categories, fileCount, format) {
     '1. 先别动原文件，把这份备份留着',
     '2. 想恢复存档：把 saves 里的世界文件夹，复制回 游戏目录\\saves\\',
     '   （开了版本隔离的版本，就复制到 versions\\<版本号>\\saves\\）',
-    '3. 想恢复设置：把 config.json 复制回 %APPDATA%\\MC启动器\\',
+    '3. 想恢复设置：把 config.json 复制回 %APPDATA%\\毛球\\',
     '4. 拿不准就找懂电脑的人帮忙，别急着覆盖原文件',
     '',
     '提醒：备份是"当时那一刻"的快照。备份之后玩出来的新进度不在里面。'

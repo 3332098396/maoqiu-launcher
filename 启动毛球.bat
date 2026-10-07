@@ -1,5 +1,5 @@
 @echo off
-rem MC Launcher - double-click launcher
+rem Maoqiu (MC Launcher) - double-click launcher
 rem
 rem Keep this file ASCII-only on purpose: cmd.exe reads batch files using the
 rem system code page (GBK on a Chinese Windows), so UTF-8 Chinese text here

@@ -1,4 +1,4 @@
-// MC启动器 — 启动游戏
+// 毛球 — 启动游戏
 //
 // 这是整个启动器"最后的临门一脚"：把前面几个里程碑装好的东西
 // （客户端 jar、库文件、资源文件、Java 运行时）拼成一条命令，把游戏跑起来。
@@ -29,7 +29,7 @@ const javaUtil = require('./java')
 const install = require('./install')
 const downloader = require('./downloader')
 
-const LAUNCHER_NAME = 'MC启动器'
+const LAUNCHER_NAME = '毛球'
 const LAUNCHER_VERSION = '0.1.0'
 
 /** 日志最多留多少行给界面显示（再多界面也看不过来） */

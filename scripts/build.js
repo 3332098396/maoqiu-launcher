@@ -1,4 +1,4 @@
-// MC启动器 — 打包脚本
+// 毛球 — 打包脚本
 //
 // 【为什么不直接在 package.json 里写 "electron-builder --win nsis"】
 //
