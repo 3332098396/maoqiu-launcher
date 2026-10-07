@@ -22,6 +22,7 @@ const paths = require('./paths')
 const settings = require('./settings')
 const accounts = require('./accounts')
 const yggdrasil = require('./yggdrasil')
+const microsoft = require('./microsoft')
 const javaUtil = require('./java')
 const launch = require('./launch')
 const versions = require('./versions')
@@ -288,6 +289,8 @@ function registerIpcHandlers() {
       // 账号在列表里的标识。界面"退出登录"要拿它删账号——
       // 格式（类型+UUID）只在 accounts.js 里定义一次，界面别自己拼
       accountKey: accounts.accountKey(accounts.getAccount()),
+      // 正版登录配了没有（界面要拿它决定"能不能点登录"）
+      microsoftClientId: config.microsoft?.clientId || '',
       lastVersion: config.launch.lastVersion || '',
       memoryMB: settings.currentMemoryMB(),
       memoryAuto: !(Number(config.launch.memoryMB) > 0),
@@ -314,10 +317,50 @@ function registerIpcHandlers() {
     const result = await yggdrasil.authenticate(input)
     if (!result.ok) return result
 
-    const saved = accounts.saveYggdrasil(result.account)
+    const saved = accounts.saveAccount(result.account)
     if (!saved.ok) return saved
 
     return { ok: true, account: saved.account, note: result.note || '' }
+  })
+
+  // ——— 正版登录（微软，M13）———
+
+  /**
+   * 弹微软登录窗口，走完四道关卡。
+   * 【为什么把窗口交给主进程开】密码必须输在**微软自己的页面**上，
+   * 毛球一行密码都不碰；界面那边只负责点一下、然后等结果。
+   */
+  ipcMain.handle('account:loginMicrosoft', async () => {
+    const config = settings.readConfig()
+    const result = await microsoft.login({
+      clientId: config.microsoft?.clientId || '',
+      parentWindow: mainWindow
+    })
+    if (!result.ok) return result
+
+    const saved = accounts.saveAccount(result.account)
+    if (!saved.ok) return saved
+
+    return { ok: true, account: saved.account }
+  })
+
+  /** 存客户端 ID。顺手检查一下格式——抄错一位的话报错很难看懂 */
+  ipcMain.handle('microsoft:setClientId', (_event, value) => {
+    const clientId = String(value ?? '').trim()
+
+    if (clientId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)) {
+      return {
+        ok: false,
+        error: '这串 ID 的样子不对。它应该是 8-4-4-4-12 的格式，像 12345678-1234-1234-1234-123456789abc'
+      }
+    }
+
+    try {
+      settings.writeConfig({ microsoft: { clientId } })
+    } catch (error) {
+      return { ok: false, error: `存不下来：${error.message}` }
+    }
+    return { ok: true, clientId }
   })
 
   ipcMain.handle('account:list', () => ({

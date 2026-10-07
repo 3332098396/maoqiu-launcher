@@ -35,6 +35,19 @@ const DEFAULTS = {
   /** 账号。第一期只有离线：{ type: 'offline', name: '玩家名', uuid: '...' } */
   account: null,
   /**
+   * 正版登录（M13）用的东西。
+   *
+   * 【clientId 为什么空着、要用户自己填】微软的应用条款要求每个启动器
+   * 用**自己注册的** ID，不许借别人的。而且借来的 ID 一旦被停，
+   * 用户会毫无预兆地登不上、还查不出原因。注册步骤见 docs/09。
+   *
+   * 【这里绝不存微软账号密码】密码只在微软自己的页面上输入，
+   * 毛球只接住跳回来时那串临时码。存进账号里的是**登录令牌**。
+   */
+  microsoft: {
+    clientId: ''
+  },
+  /**
    * 游戏目录：除了默认那个（%APPDATA%\.minecraft），用户还选了哪些。
    *
    * 用途：拖整合包的时候可以选"装到哪儿"（比如装到 D 盘去）。选过的目录记在这儿，
@@ -318,6 +331,7 @@ function writeConfig(patch) {
     launch: { ...config.launch, ...(patch.launch || {}) },
     gameDirs: { ...config.gameDirs, ...(patch.gameDirs || {}) },
     online: { ...config.online, ...(patch.online || {}) },
+    microsoft: { ...config.microsoft, ...(patch.microsoft || {}) },
     look: { ...config.look, ...(patch.look || {}) }
   }
 

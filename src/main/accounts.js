@@ -134,9 +134,9 @@ function save(account, failPrefix = '账号存不下来') {
   }
 }
 
-/** 存一个外置登录账号（令牌已经在 account 里了，密码不在这儿） */
-function saveYggdrasil(account) {
-  return save(account, '外置账号存不下来')
+/** 存一个登录到手的账号（外置登录 / 正版登录都走这儿；令牌在里面，密码不在） */
+function saveAccount(account) {
+  return save(account, '账号存不下来')
 }
 
 /** 切换当前账号 */
@@ -185,7 +185,7 @@ module.exports = {
   accountKey,
   getAccount,
   setAccount,
-  saveYggdrasil,
+  saveAccount,
   listAccounts,
   setCurrent,
   remove

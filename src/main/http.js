@@ -32,7 +32,7 @@ const MAX_REDIRECTS = 5
  *          total 是服务器声明的内容长度；服务器没给就是 0
  */
 function openStream(url, options = {}) {
-  const { timeout = 30000, signal, redirectsLeft = MAX_REDIRECTS } = options
+  const { timeout = 30000, signal, redirectsLeft = MAX_REDIRECTS, headers = {} } = options
 
   return new Promise((resolve, reject) => {
     let parsed
@@ -47,7 +47,7 @@ function openStream(url, options = {}) {
 
     const req = client.get(
       parsed,
-      { headers: { 'User-Agent': USER_AGENT, Accept: '*/*' }, signal },
+      { headers: { 'User-Agent': USER_AGENT, Accept: '*/*', ...headers }, signal },
       (res) => {
         // —— 跳转：跟过去 ——
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
@@ -114,14 +114,23 @@ class HttpError extends Error {
 }
 
 /**
- * POST 一段 JSON，把响应当 JSON 读回来（外置登录要用）。
+ * POST 一段内容，把响应当 JSON 读回来。
  *
  * 【为什么不复用上面的 openStream】那个只走 GET。
- * 【为什么失败也要把响应体读回来】Yggdrasil 出错时会在响应体里写清楚原因
- * （账号密码不对、令牌过期……），只看状态码分不出是哪种。
+ * 【为什么失败也要把响应体读回来】登录接口出错时会在响应体里写清楚原因
+ * （账号密码不对、令牌过期、应用没登记……），只看状态码分不出是哪种。
+ *
+ * @param {object|null} payload JSON 内容（用 body 直接给内容时传 null）
+ * @param {{body?: Buffer, contentType?: string}} options
  */
-function postJson(url, payload, options = {}) {
-  const { timeout = 30000, signal, headers = {} } = options
+function post(url, payload, options = {}) {
+  const {
+    timeout = 30000,
+    signal,
+    headers = {},
+    contentType = 'application/json; charset=utf-8',
+    body
+  } = options
 
   return new Promise((resolve, reject) => {
     let parsed
@@ -133,7 +142,7 @@ function postJson(url, payload, options = {}) {
     }
 
     const client = parsed.protocol === 'https:' ? https : http
-    const data = Buffer.from(JSON.stringify(payload), 'utf8')
+    const data = body || Buffer.from(JSON.stringify(payload ?? {}), 'utf8')
 
     const req = client.request(
       parsed,
@@ -142,7 +151,7 @@ function postJson(url, payload, options = {}) {
         headers: {
           'User-Agent': USER_AGENT,
           Accept: 'application/json',
-          'Content-Type': 'application/json; charset=utf-8',
+          'Content-Type': contentType,
           'Content-Length': data.length,
           ...headers
         },
@@ -208,6 +217,25 @@ async function fetchBuffer(url, options = {}) {
   })
 }
 
+/** POST 一个 JSON（登录接口用） */
+function postJson(url, payload, options = {}) {
+  return post(url, payload, options)
+}
+
+/**
+ * POST 一个表单。
+ * 【为什么要单独一个】微软换令牌那个接口**只收表单格式**，发 JSON 会被拒。
+ * 这是 OAuth 的规矩，不是微软的怪癖。
+ */
+function postForm(url, fields, options = {}) {
+  const body = Buffer.from(new URLSearchParams(fields).toString(), 'utf8')
+  return post(url, null, {
+    ...options,
+    body,
+    contentType: 'application/x-www-form-urlencoded; charset=utf-8'
+  })
+}
+
 /** 下载一个地址，当作 UTF-8 文本返回 */
 async function fetchText(url, options) {
   return (await fetchBuffer(url, options)).toString('utf8')
@@ -223,4 +251,4 @@ async function fetchJson(url, options) {
   }
 }
 
-module.exports = { openStream, fetchBuffer, fetchText, fetchJson, postJson, HttpError, USER_AGENT }
+module.exports = { openStream, fetchBuffer, fetchText, fetchJson, post, postJson, postForm, HttpError, USER_AGENT }

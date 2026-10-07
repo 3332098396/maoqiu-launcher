@@ -446,6 +446,12 @@ const accPassEl = document.getElementById('acc-pass')
 const accLoginBtnEl = document.getElementById('acc-login-btn')
 const accLoginHintEl = document.getElementById('acc-login-hint')
 const accWarnEl = document.getElementById('acc-warn')
+// 正版登录（微软，M13）
+const accTabMicrosoftEl = document.getElementById('acc-tab-microsoft')
+const accPaneMicrosoftEl = document.getElementById('acc-pane-microsoft')
+const accMsLoginEl = document.getElementById('acc-ms-login')
+const accMsGoSetupEl = document.getElementById('acc-ms-gosetup')
+const accMsHintEl = document.getElementById('acc-ms-hint')
 const accSignoutEl = document.getElementById('acc-signout')
 const pickListEl = document.getElementById('pick-list')
 const pickEmptyEl = document.getElementById('pick-empty')
@@ -514,8 +520,8 @@ function renderAccountCard() {
   accNameEl.textContent = account?.name || '还没有账号'
   accAvatarEl.textContent = account?.name ? account.name.slice(0, 1).toUpperCase() : '⛏'
 
-  // 只有外置登录的账号需要"退出登录"——离线账号就是个名字，改掉就行
-  accSignoutEl.hidden = account?.type !== 'yggdrasil'
+  // 只有"真账号"（外置 / 微软）需要"退出登录"——离线账号就是个名字，改掉就行
+  accSignoutEl.hidden = account?.type !== 'yggdrasil' && account?.type !== 'microsoft'
 
   // 输入框里已经有内容但还不合法时，把原因写在提示上
   const typed = accInputEl.value
@@ -566,34 +572,142 @@ function setLoginHint(text, kind = '') {
  * 但想换回随便一个离线名字——表单该听他点的那一下。
  */
 function setAccTab(tab, options = {}) {
-  accTab = tab === 'yggdrasil' ? 'yggdrasil' : 'offline'
+  accTab = ['yggdrasil', 'microsoft'].includes(tab) ? tab : 'offline'
 
-  const isYgg = accTab === 'yggdrasil'
-  accPaneOfflineEl.hidden = isYgg
-  accPaneYggdrasilEl.hidden = !isYgg
-  accTabOfflineEl.classList.toggle('acc__tab--on', !isYgg)
-  accTabYggdrasilEl.classList.toggle('acc__tab--on', isYgg)
-  // "不是正版"那句只在看外置登录时才出现（离线那张表用不着这句）
-  accWarnEl.hidden = !isYgg
+  accPaneOfflineEl.hidden = accTab !== 'offline'
+  accPaneYggdrasilEl.hidden = accTab !== 'yggdrasil'
+  accPaneMicrosoftEl.hidden = accTab !== 'microsoft'
+  accTabOfflineEl.classList.toggle('acc__tab--on', accTab === 'offline')
+  accTabYggdrasilEl.classList.toggle('acc__tab--on', accTab === 'yggdrasil')
+  accTabMicrosoftEl.classList.toggle('acc__tab--on', accTab === 'microsoft')
+  // "不是正版"那句只跟着外置登录走（离线用不着，正版更用不着）
+  accWarnEl.hidden = accTab !== 'yggdrasil'
+
+  if (accTab === 'microsoft') renderMicrosoftPane()
 
   refreshLaunchUi()
 
   // 开机自动选中那张表的时候别抢焦点——用户可能正在别的地方打字
   if (options.focus === false) return
 
-  // 【为什么必须滚一下】这张表比离线的长一截，点在标签上之后「登录」按钮
+  // 【为什么必须滚一下】这几张表比离线的长一截，点在标签上之后按钮
   // 很可能落在窗口外面——用户会以为"点了没反应"。
   // block:'nearest' 是"能看见就行"，不会把页面猛拉到顶上。
   accTabYggdrasilEl.closest('.acc')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
 
-  if (isYgg) {
+  if (accTab === 'yggdrasil') {
     if (!accServerEl.value) accServerEl.value = yggdrasilDefaultServer
     if (launchInfo?.account?.type === 'yggdrasil') accUserEl.value = launchInfo.account.name
     ;(accUserEl.value ? accPassEl : accUserEl).focus()
+  } else if (accTab === 'microsoft') {
+    accMsLoginEl.focus()
   } else {
     accInputEl.focus()
   }
 }
+
+// ——— 正版登录（微软，M13）———
+
+/** 登录中：按钮变灰防连点 */
+let msLoggingIn = false
+
+function setMsHint(text, kind = '') {
+  accMsHintEl.textContent = text || ''
+  accMsHintEl.hidden = !text
+  accMsHintEl.classList.toggle('acc__hint--error', kind === 'error')
+  accMsHintEl.classList.toggle('acc__hint--ok', kind === 'ok')
+}
+
+/** 没填客户端 ID 的时候，直接把"该去哪儿弄"摆出来 */
+function renderMicrosoftPane() {
+  const hasId = Boolean(launchInfo?.microsoftClientId)
+  accMsGoSetupEl.hidden = hasId
+  if (!hasId) {
+    setMsHint('还没填客户端 ID。照着 docs/09 注册一个（免费，十分钟），填进「设置 → 账号」就能用了。', '')
+  } else if (launchInfo?.account?.type !== 'microsoft') {
+    setMsHint('点上面那个按钮，会弹出微软自己的登录页。密码是输在那儿的，毛球碰不到。', '')
+  }
+}
+
+async function doMicrosoftLogin() {
+  if (msLoggingIn) return
+
+  if (!launchInfo?.microsoftClientId) {
+    setMsHint('还没填客户端 ID。照着 docs/09 注册一个（免费，十分钟），填进「设置 → 账号」就能用了。', 'error')
+    accMsGoSetupEl.hidden = false
+    return
+  }
+
+  msLoggingIn = true
+  accMsLoginEl.disabled = true
+  accMsLoginEl.textContent = '登录中…'
+  setMsHint('正在打开微软的登录页…', '')
+
+  try {
+    const result = await window.api.loginMicrosoft()
+
+    if (!result.ok) {
+      // 用户自己关掉窗口不算出错，别用红字吓人
+      setMsHint(result.error, result.cancelled ? '' : 'error')
+      return
+    }
+
+    if (launchInfo) {
+      launchInfo.account = result.account
+      launchInfo.accountKey = `${result.account.type}:${result.account.uuid}`
+    }
+    renderAccountCard()
+    setMsHint(`登录成功，现在是「${result.account.name}」`, 'ok')
+    setNotice(`已登录：${result.account.name}`, 'ok')
+  } catch (error) {
+    setMsHint(`登录时出了点意外：${error.message}`, 'error')
+  } finally {
+    msLoggingIn = false
+    accMsLoginEl.disabled = false
+    accMsLoginEl.textContent = '用微软账号登录'
+    refreshLaunchUi()
+  }
+}
+
+accTabMicrosoftEl.addEventListener('click', () => setAccTab('microsoft'))
+accMsLoginEl.addEventListener('click', doMicrosoftLogin)
+accMsGoSetupEl.addEventListener('click', () => {
+  // 直接把人送到该填的地方，别让他自己在设置里找
+  showPage('settings')
+  showSettingsTab('account')
+  msClientIdEl.focus()
+})
+
+// ——— 设置页 · 账号：客户端 ID（M13）———
+
+const msClientIdEl = document.getElementById('ms-client-id')
+const msClientIdSaveEl = document.getElementById('ms-client-id-save')
+const msClientIdHintEl = document.getElementById('ms-client-id-hint')
+
+function renderMicrosoftClientId() {
+  const id = launchInfo?.microsoftClientId || ''
+  // 用户正在改的话别去覆盖他手里的字
+  if (document.activeElement !== msClientIdEl) msClientIdEl.value = id
+
+  msClientIdHintEl.textContent = id
+    ? '已保存。到「启动」页左边点「正版」，就能用微软账号登录了。'
+    : '还没填。注册步骤在项目目录的 docs/09-正版登录申请步骤.md 里'
+  msClientIdHintEl.classList.toggle('acc__hint--ok', Boolean(id))
+}
+
+msClientIdSaveEl.addEventListener('click', async () => {
+  const result = await window.api.setMicrosoftClientId(msClientIdEl.value)
+
+  if (!result.ok) {
+    msClientIdHintEl.textContent = result.error
+    msClientIdHintEl.classList.remove('acc__hint--ok')
+    return
+  }
+
+  if (launchInfo) launchInfo.microsoftClientId = result.clientId
+  renderMicrosoftClientId()
+  if (accTab === 'microsoft') renderMicrosoftPane()
+})
 
 async function doYggdrasilLogin() {
   if (loggingIn) return
@@ -655,12 +769,17 @@ for (const el of [accServerEl, accUserEl, accPassEl]) {
 
 accSignoutEl.addEventListener('click', async () => {
   const account = launchInfo?.account
-  if (account?.type !== 'yggdrasil') return
+  if (account?.type !== 'yggdrasil' && account?.type !== 'microsoft') return
+
+  const extra =
+    account.type === 'yggdrasil'
+      ? '那个网站上的角色和皮肤不受影响。'
+      : '你的微软账号和已经买的游戏都不受影响。'
 
   const yes = window.confirm(
     `要在这台电脑上退出「${account.name}」吗？\n\n` +
       '账号和令牌会从本机删掉，下次要用得重新登录一次（密码我们本来就没存）。\n' +
-      '那个网站上的角色和皮肤不受影响。'
+      extra
   )
   if (!yes) return
 
@@ -830,6 +949,10 @@ function accountProblem() {
     if (launchInfo?.account?.type === 'yggdrasil') return ''
     return '先在上面登录一个外置账号，按钮就能点了'
   }
+  if (accTab === 'microsoft') {
+    if (launchInfo?.account?.type === 'microsoft') return ''
+    return '先在上面用微软账号登录，按钮就能点了'
+  }
 
   const typed = accInputEl.value.trim()
   if (!typed) return '填一个游戏名字（上面那个框），按钮就能点了'
@@ -957,7 +1080,8 @@ async function loadLaunchPage() {
 
   // 只在第一次把存下来的**离线**账号填进名字框，别把用户正在敲的字冲掉。
   // 外置账号的名字是服务器给的、不能改，填进去反而会让人以为"改了名字就能换账号"
-  if (!accInputEl.value && launchInfo.account?.type !== 'yggdrasil' && launchInfo.account) {
+  const savedType = launchInfo.account?.type
+  if (!accInputEl.value && launchInfo.account && (!savedType || savedType === 'offline')) {
     accInputEl.value = launchInfo.account.name
   }
 
@@ -965,7 +1089,8 @@ async function loadLaunchPage() {
   // 之后就不再动它了（用户点过哪张就停在哪张）
   if (!accTabInitialized) {
     accTabInitialized = true
-    setAccTab(launchInfo.account?.type === 'yggdrasil' ? 'yggdrasil' : 'offline', { focus: false })
+    const type = launchInfo.account?.type
+    setAccTab(type === 'yggdrasil' || type === 'microsoft' ? type : 'offline', { focus: false })
   }
 
   refreshLaunchNotice()
@@ -1091,12 +1216,14 @@ pickToggleEl.addEventListener('click', () => {
 async function startGame() {
   if (!selectedVersion) return
 
-  // ——— 账号：两种表单要的东西不一样 ———
-  if (accTab === 'yggdrasil') {
-    // 外置账号在登录那一步就存好了，这儿不用再存一遍
-    if (launchInfo?.account?.type !== 'yggdrasil') {
-      setNotice('先在上面登录一个外置账号，再点「开始游戏」', 'error')
-      accUserEl.focus()
+  // ——— 账号：三种表单要的东西不一样 ———
+  // 外置账号和微软账号都在"登录"那一步就存好了，这儿不用再存一遍
+  if (accTab !== 'offline') {
+    if (launchInfo?.account?.type !== accTab) {
+      const which = accTab === 'yggdrasil' ? '外置账号' : '微软账号'
+      setNotice(`先在上面登录一个${which}，再点「开始游戏」`, 'error')
+      if (accTab === 'yggdrasil') accUserEl.focus()
+      else accMsLoginEl.focus()
       return
     }
   } else {
@@ -2575,6 +2702,7 @@ function showSettingsTab(name) {
   if (name === 'backup') loadBackupTab()
   if (name === 'clean') loadCleanTab()
   if (name === 'look') renderLookTab()
+  if (name === 'account') renderMicrosoftClientId()
 }
 
 // ——— 帮助页（M13）———

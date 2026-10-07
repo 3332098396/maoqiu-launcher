@@ -94,6 +94,18 @@ contextBridge.exposeInMainWorld('api', {
   /** 删掉一个账号（外置账号会顺手把令牌作废） */
   removeAccount: (key) => ipcRenderer.invoke('account:remove', key),
 
+  // ——— 正版登录（微软，M13）———
+
+  /**
+   * 弹微软登录窗口，走完整条链路。
+   * 【密码不经过这里】密码是输在微软自己页面上的，毛球只接跳回来的临时码。
+   * @returns {Promise<{ok: boolean, account?: object, error?: string, cancelled?: boolean}>}
+   */
+  loginMicrosoft: () => ipcRenderer.invoke('account:loginMicrosoft'),
+
+  /** 存客户端 ID（用户自己注册的那个，步骤见 docs/09） */
+  setMicrosoftClientId: (value) => ipcRenderer.invoke('microsoft:setClientId', value),
+
   /**
    * 启动游戏。检查不通过马上返回 { ok:false, error }；
    * 起来了返回 { ok:true, java, memoryMB }，之后靠下面两个事件推消息。

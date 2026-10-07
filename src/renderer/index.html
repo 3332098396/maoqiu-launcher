@@ -108,7 +108,7 @@
                 <div class="acc__tabs">
                   <button class="acc__tab" type="button" id="acc-tab-offline">离线</button>
                   <button class="acc__tab" type="button" id="acc-tab-yggdrasil">外置登录</button>
-                  <span class="acc__tab acc__tab--off" title="正版登录要等 Mojang 审批，排在后面做">正版</span>
+                  <button class="acc__tab" type="button" id="acc-tab-microsoft">正版</button>
                 </div>
 
                 <!-- 这句话必须**一直在看得见的地方**：卡片往下还有三个输入框，
@@ -169,6 +169,17 @@
                     登录
                   </button>
                   <div class="acc__hint" id="acc-login-hint" hidden></div>
+                </div>
+
+                <!-- 正版登录（微软，M13）：密码输在微软自己的页面上，毛球不碰 -->
+                <div class="acc__pane" id="acc-pane-microsoft" hidden>
+                  <button class="btn btn--primary acc__login-btn" type="button" id="acc-ms-login">
+                    用微软账号登录
+                  </button>
+                  <button class="btn btn--ghost btn--sm" type="button" id="acc-ms-gosetup" hidden>
+                    去设置里填客户端 ID
+                  </button>
+                  <div class="acc__hint" id="acc-ms-hint" hidden></div>
                 </div>
 
                 <button class="acc__signout" type="button" id="acc-signout" hidden>
@@ -470,6 +481,7 @@
         <aside class="side">
           <nav class="menu" id="settings-menu">
             <span class="menu__item menu__item--on" data-settings-tab="launch">启动选项</span>
+            <span class="menu__item" data-settings-tab="account">账号</span>
             <span class="menu__item" data-settings-tab="backup">备份</span>
             <span class="menu__item" data-settings-tab="clean">清理</span>
             <span class="menu__item" data-settings-tab="look">个性化</span>
@@ -595,6 +607,55 @@
           </div>
 
           <!-- ——— 备份（M6.3）——— -->
+          <!-- ═══ 设置 · 账号（M13 正版登录）═══ -->
+          <div class="settings-tab" data-settings-tab="account" hidden>
+            <div class="notice">
+              这里配"用哪种账号进游戏"。离线账号在「启动」页左边直接填名字就行。
+            </div>
+
+            <section class="panel">
+              <h3 class="panel__title">正版登录（微软账号）</h3>
+              <p class="panel__desc">
+                要用微软账号登录，得先注册一个<b>属于你自己的</b>微软应用，
+                把它的「客户端 ID」填在下面。
+                <b>免费，大概十分钟</b>，每一步都写成中文了：
+                项目目录里的 <b>docs/09-正版登录申请步骤.md</b>。
+              </p>
+              <p class="panel__desc">
+                <b>为什么不帮你内置一个 ID</b>：微软的条款要求每个启动器用自己注册的；
+                而且借用别人的 ID，人家哪天停了，你会<b>毫无预兆地登不上</b>，
+                还查不出原因——因为不归你管。
+              </p>
+              <div class="join-row">
+                <input
+                  class="input input--edit"
+                  id="ms-client-id"
+                  type="text"
+                  placeholder="像 12345678-1234-1234-1234-123456789abc"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <button class="btn btn--primary btn--sm" type="button" id="ms-client-id-save">
+                  保存
+                </button>
+              </div>
+              <p class="delbox" id="ms-client-id-hint"></p>
+            </section>
+
+            <section class="panel">
+              <h3 class="panel__title">填完之后还有一道门</h3>
+              <p class="panel__desc">
+                填了 ID 之后，点「正版」登录能一路走到最后一步，
+                但 <b>Mojang 还要人工审核你这个应用</b>。没批之前，最后一步会被挡回来——
+                毛球会明确告诉你"就是这个原因"，不是软件坏了。
+              </p>
+              <p class="panel__desc">
+                申请地址和要准备的东西写在 <b>docs/09</b> 的第二部分。
+                批下来之后<b>一行代码都不用改</b>，直接就能用。
+              </p>
+            </section>
+          </div>
+
           <div class="settings-tab" data-settings-tab="backup" hidden>
             <div class="notice" id="backup-notice">
               勾上要备份的东西、选个存法，点「开始备份」就行。备份只读不写，不会动你的原文件。
