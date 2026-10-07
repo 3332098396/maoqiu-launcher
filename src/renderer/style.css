@@ -1103,6 +1103,16 @@ body {
   padding: 12px 14px;
 }
 
+/* 图标：加载不出来时就是个浅蓝方块，不显得像坏了 */
+.mr__icon {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #eef6ff;
+  object-fit: cover;
+}
+
 .mr__main {
   flex: 1 1 auto;
   min-width: 0;

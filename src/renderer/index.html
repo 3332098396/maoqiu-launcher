@@ -2,9 +2,12 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <!-- 安全限制（CSP）：只允许加载软件自己的东西。
+         img-src 里额外放行了 cdn.modrinth.com——社区资源的图标在那个站上，
+         这是"下载页搜索"功能要求的（域名已登记在 docs/06，只有主动搜索时才连） -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:"
+      content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data: https://cdn.modrinth.com"
     />
     <title>毛球</title>
     <link rel="stylesheet" href="style.css" />

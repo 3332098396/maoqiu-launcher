@@ -850,6 +850,14 @@ function renderMrList(hits) {
     const li = document.createElement('li')
     li.className = 'ver mr'
 
+    // 图标（Modrinth 的 cdn 上）。加载不出来也不影响用，空着就行
+    const icon = document.createElement('img')
+    icon.className = 'mr__icon'
+    icon.alt = ''
+    icon.loading = 'lazy'
+    if (hit.icon) icon.src = hit.icon
+    li.appendChild(icon)
+
     const main = document.createElement('div')
     main.className = 'mr__main'
 

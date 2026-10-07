@@ -21,6 +21,7 @@ const paths = require('./paths')
 const mojang = require('./mojang')
 const downloader = require('./downloader')
 const zip = require('./zip')
+const inherit = require('./inherit')
 
 /**
  * Java 运行时清单的地址。
@@ -120,24 +121,35 @@ function rulesAllow(rules, ctx) {
 // ——————————————————————————————————————————————
 
 /**
+ * @param {{onStage?: Function, rootId?: string}} options
+ *   rootId 是"继承链最底下那个带客户端 jar 的版本"；
+ *   不传就当这个版本自己就是（普通原版就是这样）
  * @returns {Promise<{files: Array, natives: Array, javaComponent: string|null, needsNatives: string[]}>}
  */
-async function buildFileList(versionId, versionJson, { onStage }) {
+async function buildFileList(versionId, versionJson, { onStage, rootId } = {}) {
   const ctx = buildContext()
 
   const files = []
   const natives = []
 
   // ——— ① 客户端 jar ———
-  const client = versionJson.downloads && versionJson.downloads.client
-  if (client) {
-    files.push({
-      name: `${versionId}.jar`,
-      url: client.url,
-      saveTo: paths.versionJarFile(versionId),
-      sha1: client.sha1,
-      size: client.size
-    })
+  // 装了 Mod 加载器的版本自己没有客户端 jar（它继承原版的），
+  // 这时候要确认原版那份在硬盘上
+  if (rootId && rootId !== versionId) {
+    if (!fs.existsSync(paths.versionJarFile(rootId))) {
+      throw new Error(`缺了 ${rootId} 的客户端文件——先到「下载」页把它装好`)
+    }
+  } else {
+    const client = versionJson.downloads && versionJson.downloads.client
+    if (client) {
+      files.push({
+        name: `${versionId}.jar`,
+        url: client.url,
+        saveTo: paths.versionJarFile(versionId),
+        sha1: client.sha1,
+        size: client.size
+      })
+    }
   }
 
   // ——— ② libraries ———
@@ -336,25 +348,36 @@ async function installVersion(versionId, options = {}) {
   const wasInstalled = paths.isVersionInstalled(versionId)
 
   try {
-    // ——— 1. 找到并下载这个版本的 JSON ———
+    // ——— 1. 拿到这个版本的 JSON ———
+    // providedJson 是"装 Mod 加载器"时用的：那份 JSON 是我们自己拼/下好的，
+    // 不在官方版本清单里，所以直接传进来
     stage('正在读取版本信息…')
-    const manifest = await mojang.getManifest()
-    const found = manifest.versions.find((v) => v.id === versionId)
-    if (!found) throw new Error('版本清单里没有这个版本，先点一下「刷新」试试')
+    let versionJson = options.providedJson || null
 
-    const versionJson = await fetchJson(found.url)
-
-    // 带了 inheritsFrom 的是"改装版"（比如装了 Mod 加载器的版本），
-    // 要把它继承的那个父版本一起算进来。M4 先只处理纯原版。
-    if (versionJson.inheritsFrom) {
-      throw new Error('这个版本装了 Mod 加载器，暂时还不支持，先装纯原版')
+    if (!versionJson) {
+      const manifest = await mojang.getManifest()
+      const found = manifest.versions.find((v) => v.id === versionId)
+      if (!found) throw new Error('版本清单里没有这个版本，先点一下「刷新」试试')
+      versionJson = await fetchJson(found.url)
     }
+
+    // ——— 1.5 有继承关系就先合并 ———
+    // 装了 Mod 加载器的版本写着一句 inheritsFrom（继承自某个原版），
+    // 库文件、资源、Java 要求这些都要连父版本一起算
+    const resolved = inherit.resolveVersion(versionId, versionJson)
+    if (resolved.missingParent) {
+      throw new Error(`这个版本是装在 ${resolved.missingParent} 上面的，得先把它装好`)
+    }
+    const fullJson = resolved.json
+    const rootId = resolved.rootId
 
     // ——— 2. 算出要下哪些文件 ———
     stage('正在准备下载清单…')
-    const { files, natives } = await buildFileList(versionId, versionJson, { onStage: stage })
+    const { files, natives } = await buildFileList(versionId, fullJson, { onStage: stage, rootId })
 
     // ——— 3. 版本 JSON 本身也存一份 ———
+    // 存"它自己那份"（带 inheritsFrom 的原样），不是合并后的——
+    // 合并是每次用的时候现算的，存合并版会把继承关系弄丢
     paths.ensureDir(paths.versionDir(versionId))
     fs.writeFileSync(
       paths.versionJsonFile(versionId),
