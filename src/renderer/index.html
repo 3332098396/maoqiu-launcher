@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:"
+    />
+    <title>MC启动器</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <span class="topbar__logo">⛏</span>
+      <h1 class="topbar__title">MC启动器</h1>
+      <span class="topbar__tag">M0 · 骨架</span>
+    </header>
+
+    <main class="stage">
+      <section class="card">
+        <h2 class="card__title">骨架已就绪</h2>
+        <p class="card__desc">
+          项目结构和文档已经搭好了。接下来会一步一步把功能做进来，
+          每做完一步你都能直接运行看效果。
+        </p>
+
+        <h3 class="card__subtitle">第一版的目标</h3>
+        <p class="card__desc">
+          能下载原版游戏 → 离线登录 → <b>启动进游戏</b> → 基础的版本设置。
+        </p>
+
+        <h3 class="card__subtitle">接下来的步骤</h3>
+        <ul class="steps">
+          <li class="steps__item"><b>M1</b><span>界面骨架：三个页面能切换</span></li>
+          <li class="steps__item"><b>M2</b><span>版本清单：列出所有可下载的原版版本</span></li>
+          <li class="steps__item"><b>M3</b><span>下载引擎：并发、重试、校验、镜像切换</span></li>
+          <li class="steps__item"><b>M4</b><span>安装一个版本</span></li>
+          <li class="steps__item"><b>M5</b><span>启动游戏（真的能玩上）</span></li>
+          <li class="steps__item"><b>M6</b><span>版本管理：改名、内存、窗口大小、开文件夹</span></li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="statusbar">
+      <span>版本 <span id="version">—</span></span>
+      <span>M0 · 项目骨架</span>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,18 @@
+# 依赖包（体积大，可随时用 npm install 重新下载）
+node_modules/
+
+# 打包产物
+dist/
+release/
+*.exe
+
+# 临时文件
+*.tmp
+*.log
+.DS_Store
+
+# 开发日志中可能出现的临时草稿
+开发日志/~*
+
+# 下载缓存 / 游戏文件（如果在项目目录里测试过）
+.minecraft/

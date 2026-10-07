@@ -1,0 +1,40 @@
+{
+  "name": "mc-launcher",
+  "productName": "MC启动器",
+  "version": "0.1.0",
+  "description": "MC启动器 — Minecraft Java 版启动器（Windows 本地）",
+  "main": "src/main/main.js",
+  "private": true,
+  "scripts": {
+    "start": "node scripts/start.js",
+    "icons": "node scripts/make-icons.js",
+    "dist": "node scripts/build.js"
+  },
+  "devDependencies": {
+    "electron": "^44.6.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.local.mc-launcher",
+    "productName": "MC启动器",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "include": "build/installer.nsh",
+      "shortcutName": "MC启动器",
+      "artifactName": "MC启动器-安装程序-${version}.${ext}",
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}
