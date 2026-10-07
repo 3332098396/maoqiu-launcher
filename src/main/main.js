@@ -13,8 +13,9 @@
 //   M5 启动游戏    → src/main/launch.js + accounts.js
 //   M6 版本管理    → src/main/paths.js + settings.js
 
-const { app, BrowserWindow } = require('electron')
+const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('node:path')
+const mojang = require('./mojang')
 
 // 软件名。它会决定数据存放目录：%APPDATA%\MC启动器\
 app.setName('MC启动器')
@@ -49,7 +50,36 @@ function createWindow() {
   return mainWindow
 }
 
+// ——————————————————————————————————————————————
+// 界面能调用的接口（与 preload 里列出的方法一一对应）
+// ——————————————————————————————————————————————
+
+function registerIpcHandlers() {
+  /**
+   * 取版本清单。先给缓存（快、断网也能看），没有缓存才联网。
+   * 出错时不是抛异常，而是返回 { ok: false, error }——
+   * 界面要的是"能显示一句人话"，不是一个崩掉的 Promise。
+   */
+  ipcMain.handle('manifest:get', async () => {
+    try {
+      return { ok: true, ...(await mojang.getManifest()) }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 强制从网上更新一份版本清单 */
+  ipcMain.handle('manifest:refresh', async () => {
+    try {
+      return { ok: true, ...(await mojang.refreshManifest()) }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+}
+
 app.whenReady().then(() => {
+  registerIpcHandlers()
   createWindow()
 
   app.on('activate', () => {

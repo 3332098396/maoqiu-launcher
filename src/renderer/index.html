@@ -125,29 +125,36 @@
           <nav class="menu">
             <span class="menu__item menu__item--on">原版游戏</span>
             <span class="menu__divider">社区资源</span>
-            <span class="menu__item">Mod</span>
-            <span class="menu__item">整合包</span>
-            <span class="menu__item">数据包</span>
-            <span class="menu__item">资源包</span>
-            <span class="menu__item">光影包</span>
+            <span class="menu__item menu__item--off">Mod</span>
+            <span class="menu__item menu__item--off">整合包</span>
+            <span class="menu__item menu__item--off">数据包</span>
+            <span class="menu__item menu__item--off">资源包</span>
+            <span class="menu__item menu__item--off">光影包</span>
           </nav>
+          <div class="side__note">灰色的以后再做</div>
         </aside>
 
-        <div class="content">
-          <div class="notice">
-            <b>这是布局预览。</b>下载功能从 <b>M2</b> 开始做：先列出所有原版版本，
-            再做下载引擎。
+        <div class="content content--flush">
+          <div class="verbar">
+            <input
+              class="input"
+              id="ver-search"
+              type="text"
+              placeholder="搜索版本号，例如 1.21"
+              autocomplete="off"
+            />
+            <div class="chips" id="ver-filter">
+              <button class="chip chip--on" type="button" data-filter="all">全部</button>
+              <button class="chip" type="button" data-filter="release">正式版</button>
+              <button class="chip" type="button" data-filter="snapshot">快照</button>
+              <button class="chip" type="button" data-filter="old">远古版</button>
+            </div>
+            <button class="btn btn--ghost" type="button" id="ver-refresh">刷新</button>
           </div>
 
-          <div class="preview">
-            <div class="preview__label">这一页以后会有</div>
-            <ul class="preview__list">
-              <li><b>原版游戏</b><span>900 多个版本，能筛选正式版 / 快照 / 远古版</span></li>
-              <li><b>Mod</b><span>从 Modrinth 搜和下载（第二期）</span></li>
-              <li><b>整合包</b><span>一键安装别人做好的整合包（第二期）</span></li>
-              <li><b>数据包 / 资源包 / 光影包</b><span>同上（第二期）</span></li>
-            </ul>
-          </div>
+          <div class="verstatus" id="ver-status">正在读取版本清单…</div>
+
+          <ul class="verlist" id="ver-list"></ul>
         </div>
       </section>
 

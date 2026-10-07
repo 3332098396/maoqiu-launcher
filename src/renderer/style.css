@@ -259,6 +259,19 @@ body {
   color: var(--text-muted);
 }
 
+/* 还没做的分类：灰掉，鼠标也变回普通箭头，别让人以为能点 */
+.menu__item--off {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.side__note {
+  margin-top: auto;
+  padding: 0 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 /* ═══════════════════════════════════════
    按钮
    ═══════════════════════════════════════ */
@@ -448,6 +461,148 @@ body {
 }
 
 .input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════
+   下载页：版本列表
+   ═══════════════════════════════════════ */
+
+/* 这一页内容要贴着边排（列表自己滚），所以去掉内容区的内边距 */
+.content--flush {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.verbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #e8f2ff;
+}
+
+.verbar .input {
+  flex: 1 1 auto;
+  max-width: 320px;
+}
+
+.chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.chip {
+  padding: 6px 14px;
+  font-family: var(--font);
+  font-size: 12.5px;
+  color: var(--text-dim);
+  background: #fff;
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.chip:hover {
+  color: #4a9bff;
+  border-color: var(--card-border-hover);
+}
+
+.chip--on,
+.chip--on:hover {
+  color: #fff;
+  border-color: transparent;
+  background: var(--primary-gradient);
+  box-shadow: 0 2px 8px rgba(74, 155, 255, 0.28);
+}
+
+.chip:active {
+  transform: translateY(1px);
+}
+
+.verstatus {
+  flex: 0 0 auto;
+  padding: 10px 20px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.verstatus--error {
+  color: var(--danger);
+  white-space: pre-wrap;
+  line-height: 1.7;
+}
+
+.verlist {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0 20px 20px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ver {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ver:hover {
+  border-color: var(--card-border-hover);
+  box-shadow: var(--card-shadow);
+}
+
+.ver__id {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  /* 版本号是标识符，用等宽字体更好认，也不容易看错 1 和 l */
+  font-family: Consolas, "Courier New", monospace;
+  user-select: text;
+}
+
+.ver__badge {
+  flex: 0 0 auto;
+  padding: 2px 9px;
+  font-size: 11.5px;
+  border-radius: 999px;
+}
+
+.ver__badge--release {
+  color: #2f8f52;
+  background: #e6f7ec;
+}
+
+.ver__badge--snapshot {
+  color: #b8791a;
+  background: #fff4e0;
+}
+
+.ver__badge--old {
+  color: #7a6a9b;
+  background: #f1ecfb;
+}
+
+.ver__date {
+  flex: 0 0 auto;
+  width: 96px;
+  text-align: right;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
