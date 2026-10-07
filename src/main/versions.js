@@ -30,12 +30,48 @@ function listVersions() {
   }))
 }
 
-/** id → { name, note } 的表，界面用起来方便 */
+/** 这个版本装了什么 Mod 加载器（翻它的版本 JSON 里的库文件） */
+function loaderName(id) {
+  try {
+    const json = JSON.parse(fs.readFileSync(paths.versionJsonFile(id), 'utf8'))
+    const names = (json.libraries || []).map((lib) => String(lib.name || '').toLowerCase())
+
+    if (names.some((n) => n.includes('fabric-loader'))) return 'Fabric'
+    if (names.some((n) => n.includes('neoforge'))) return 'NeoForge'
+    if (names.some((n) => n.includes('forge'))) return 'Forge'
+  } catch {
+    // 读不出来就当没装加载器
+  }
+  return ''
+}
+
+/** 顺着继承往上找，这个版本底下的"游戏版本"是哪个（社区网站只认它） */
+function baseGameVersion(id) {
+  let current = String(id)
+
+  for (let depth = 0; depth < 5; depth++) {
+    try {
+      const json = JSON.parse(fs.readFileSync(paths.versionJsonFile(current), 'utf8'))
+      if (!json.inheritsFrom) return current
+      current = String(json.inheritsFrom)
+    } catch {
+      return current
+    }
+  }
+  return current
+}
+
+/** id → { name, note, loader, base } 的表，界面用起来方便 */
 function versionInfoMap() {
   const custom = settings.readConfig().versions || {}
   const map = {}
   for (const id of paths.listInstalledVersions()) {
-    map[id] = { name: custom[id]?.name || '', note: custom[id]?.note || '' }
+    map[id] = {
+      name: custom[id]?.name || '',
+      note: custom[id]?.note || '',
+      loader: loaderName(id),
+      base: baseGameVersion(id)
+    }
   }
   return map
 }
@@ -268,6 +304,8 @@ function deleteVersion(id) {
 module.exports = {
   listVersions,
   versionInfoMap,
+  loaderName,
+  baseGameVersion,
   updateVersion,
   versionSize,
   openFolder,

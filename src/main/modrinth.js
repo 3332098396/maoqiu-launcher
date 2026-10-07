@@ -71,10 +71,13 @@ function tidyHit(hit) {
  * @param {{type: string, query?: string, gameVersion?: string, limit?: number, offset?: number}} options
  * @returns {Promise<{total: number, hits: Array}>}
  */
-async function search({ type, query = '', gameVersion = '', limit = 20, offset = 0 }) {
+async function search({ type, query = '', gameVersion = '', loader = '', limit = 20, offset = 0 }) {
   // facets 是"必须同时满足"的筛选条件组
   const facets = [[`project_type:${type}`]]
   if (gameVersion) facets.push([`versions:${gameVersion}`])
+  // 加载器（fabric / forge / neoforge）：只找能在这个版本上跑的那种构建。
+  // 不筛的话会挑到别的加载器的构建（实测：Fabric 版本下到了 NeoForge 版的 Sodium）
+  if (loader && type === 'mod') facets.push([`categories:${loader}`])
 
   const params = new URLSearchParams({
     query,

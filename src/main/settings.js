@@ -18,6 +18,15 @@ const paths = require('./paths')
 
 /** 默认配置。读不到文件、文件坏了，都用这份 */
 const DEFAULTS = {
+  /**
+   * 下载源偏好（用户可以在设置里改）：
+   *   'auto'     优先官方，太慢自动换国内镜像（默认）
+   *   'mirror'   优先国内镜像
+   *   'official' 只用官方，不经过任何第三方镜像
+   */
+  download: {
+    source: 'auto'
+  },
   /** 账号。第一期只有离线：{ type: 'offline', name: '玩家名', uuid: '...' } */
   account: null,
   /**
@@ -65,11 +74,22 @@ function readConfig() {
     return {
       ...DEFAULTS,
       ...raw,
-      launch: { ...DEFAULTS.launch, ...(raw.launch || {}) }
+      launch: { ...DEFAULTS.launch, ...(raw.launch || {}) },
+      download: { ...DEFAULTS.download, ...(raw.download || {}) }
     }
   } catch {
-    return { ...DEFAULTS, launch: { ...DEFAULTS.launch } }
+    return {
+      ...DEFAULTS,
+      launch: { ...DEFAULTS.launch },
+      download: { ...DEFAULTS.download }
+    }
   }
+}
+
+/** 下载源偏好：'auto' | 'mirror' | 'official' */
+function downloadSource() {
+  const value = readConfig().download?.source
+  return value === 'mirror' || value === 'official' ? value : 'auto'
 }
 
 /**
@@ -214,5 +234,6 @@ module.exports = {
   validateWindow,
   WINDOW_LIMITS,
   globalLaunchSettings,
-  effectiveLaunchSettings
+  effectiveLaunchSettings,
+  downloadSource
 }

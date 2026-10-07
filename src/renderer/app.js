@@ -353,7 +353,11 @@ async function startInstall(versionId) {
 }
 
 // 主进程推过来的阶段提示和进度
-window.api.onInstallStage((text) => setStage(text))
+window.api.onInstallStage((text) => {
+  setStage(text)
+  // 装 Mod 加载器是在「版本设置」弹窗里点的，进度也要写到那儿去
+  if (loaderInstalling) verLoaderHintEl.textContent = text
+})
 window.api.onInstallProgress((stats) => {
   setFill(stats.percent)
   setDetail(
@@ -361,6 +365,11 @@ window.api.onInstallProgress((stats) => {
       ` · ${formatSpeed(stats.speed)} · 剩 ${formatEta(stats.etaMs)}` +
       (stats.failed > 0 ? ` · 失败 ${stats.failed}` : '')
   )
+  if (loaderInstalling) {
+    verLoaderHintEl.textContent =
+      `正在下载加载器… ${stats.percent}% · ` +
+      `${formatSize(stats.receivedBytes)}/${formatSize(stats.totalBytes)}`
+  }
 })
 
 // 列表里点「安装」
@@ -490,8 +499,13 @@ function renderPickList() {
     // 没起过就显示版本号本身。
     // 外面套一层 span：名字太长时好做省略号，不撑破侧栏
     const label = document.createElement('span')
-    const name = launchInfo?.versionInfo?.[id]?.name
-    label.textContent = name ? `${name}（${id}）` : id
+    const info = launchInfo?.versionInfo?.[id] || {}
+    // 版本名太长（fabric-loader-…）时，后面缀个加载器名，一眼知道这是什么
+    label.textContent = info.name
+      ? `${info.name}（${id}）`
+      : info.loader
+        ? `${id}（${info.loader}）`
+        : id
     li.appendChild(label)
 
     frag.appendChild(li)
@@ -929,10 +943,14 @@ async function runMrSearch() {
 
   renderMrList(result.hits)
 
-  const scope = gameVersion ? `只显示支持 ${gameVersion} 的` : '所有版本'
+  const info = launchInfo?.versionInfo?.[mrTargetVersion()] || {}
+  const scope = gameVersion ? `只显示支持 ${info.base || gameVersion} 的` : '所有版本'
   let status = `共 ${result.total} 个结果 · ${scope}`
+
   if (mrType === 'mod') {
-    status += ' · Mod 要装了加载器才能用（下一步就做），现在可以先下好放着'
+    status += info.loader
+      ? ` · 当前版本用的是 ${info.loader}，只显示 ${info.loader} 版的 Mod`
+      : ' · 这个版本还没装 Mod 加载器——到「版本设置」里装一个，Mod 才能用'
   }
   mrStatusEl.textContent = status
 }
@@ -1056,6 +1074,11 @@ const verHeightEl = document.getElementById('ver-height')
 const verIsolationOnEl = document.getElementById('ver-isolation-on')
 const verIsolationEl = document.getElementById('ver-isolation')
 const verSettingsHintEl = document.getElementById('ver-settings-hint')
+const verInstallFabricEl = document.getElementById('ver-install-fabric')
+const verLoaderHintEl = document.getElementById('ver-loader-hint')
+
+/** 正在装 Mod 加载器吗（进度要写到版本设置弹窗里） */
+let loaderInstalling = false
 
 /** 版本设置弹窗里，「这个版本自己的设置」的信息（含全局值作对比） */
 let verSettingsInfo = null
@@ -1292,6 +1315,45 @@ verIsolationEl.addEventListener('change', () =>
   saveVersionSetting({ isolation: verIsolationEl.checked })
 )
 
+// ——— 装 Mod 加载器（M10）———
+
+verInstallFabricEl.addEventListener('click', async () => {
+  if (!editingVersion || loaderInstalling) return
+  const base = editingVersion
+
+  loaderInstalling = true
+  verInstallFabricEl.disabled = true
+  verLoaderHintEl.textContent = '正在准备…'
+  // 提示文字在弹窗底部，可能看不到——滚过去让用户看见进度
+  verLoaderHintEl.scrollIntoView({ block: 'nearest' })
+
+  let result
+  try {
+    result = await window.api.installLoader({ gameVersion: base, loader: 'fabric' })
+  } catch (error) {
+    result = { ok: false, error: String(error?.message ?? error) }
+  }
+
+  loaderInstalling = false
+  verInstallFabricEl.disabled = false
+
+  if (!result.ok) {
+    verLoaderHintEl.textContent = `装不上：${result.error}`
+    return
+  }
+
+  verLoaderHintEl.textContent = result.already
+    ? `${result.versionId} 之前就装好了`
+    : `装好了：${result.versionId}——回启动页选它就能用 Mod 了`
+
+  // 版本列表刷新，并把新装好的那个选上（省得用户自己找）
+  await refreshLaunchFacts()
+  if (launchInfo?.installed?.includes(result.versionId)) {
+    selectedVersion = result.versionId
+    refreshLaunchUi()
+  }
+})
+
 verSettingsBtnEl.addEventListener('click', openVersionSettings)
 document.getElementById('ver-close').addEventListener('click', closeVersionSettings)
 document.getElementById('ver-save').addEventListener('click', saveVersionSettings)
@@ -1454,6 +1516,12 @@ async function loadSettingsPage() {
 
   setIsolationEl.checked = settingsInfo.isolation
   renderIsolationHint()
+
+  // ——— 下载源 ———
+  const source = settingsInfo.downloadSource || 'auto'
+  for (const radio of document.querySelectorAll('input[name="set-source"]')) {
+    radio.checked = radio.value === source
+  }
 }
 
 /** 把一项设置存下去，顺手刷新提示 */
@@ -1529,6 +1597,16 @@ setIsolationEl.addEventListener('change', () => {
     renderIsolationHint()
   })
 })
+
+// ——— 下载源 ———
+for (const radio of document.querySelectorAll('input[name="set-source"]')) {
+  radio.addEventListener('change', () => {
+    if (!radio.checked) return
+    saveSetting({ downloadSource: radio.value }, () => {
+      if (settingsInfo) settingsInfo.downloadSource = radio.value
+    })
+  })
+}
 
 // ═══════════════════════════════════════
 // 设置页：备份（M6.3）

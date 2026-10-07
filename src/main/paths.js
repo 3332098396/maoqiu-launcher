@@ -162,10 +162,43 @@ function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true })
 }
 
-/** 某个版本装好了吗（有版本 JSON、客户端 jar，而且没有"装到一半"标记） */
+/**
+ * 某个版本装好了吗。
+ *
+ * 【注意"继承版"】装了 Mod 加载器的版本（Fabric / Forge）**自己没有客户端 jar**，
+ * 它继承原版的。所以判断规则是：
+ *   · 有"装到一半"标记 → 没装好
+ *   · 有版本 JSON + 自己的 jar → 装好了（普通版本）
+ *   · 没有自己的 jar，但写着继承谁 → 顺着往上找，找到那一层有 jar 就算装好
+ * （M10 实测发现：一开始只认"有自己的 jar"，结果 Fabric 版本装完了
+ *   却不出现在版本列表里——因为它本来就不该有自己的 jar）
+ */
 function isVersionInstalled(id) {
-  if (fs.existsSync(versionIncompleteMarker(id))) return false
-  return fs.existsSync(versionJsonFile(id)) && fs.existsSync(versionJarFile(id))
+  let current = String(id)
+
+  for (let depth = 0; depth < 5; depth++) {
+    if (fs.existsSync(versionIncompleteMarker(current))) return false
+
+    const jsonFile = versionJsonFile(current)
+    if (!fs.existsSync(jsonFile)) return false
+
+    // 自己有 jar → 这层就是本体，装好了
+    if (fs.existsSync(versionJarFile(current))) return true
+
+    let json
+    try {
+      json = JSON.parse(fs.readFileSync(jsonFile, 'utf8'))
+    } catch {
+      return false
+    }
+
+    // 没有 jar 也没继承谁 → 文件不全
+    if (!json.inheritsFrom) return false
+
+    current = String(json.inheritsFrom)
+  }
+
+  return false
 }
 
 /** 列出本机已装的所有版本（按目录名） */

@@ -28,6 +28,7 @@ const accounts = require('./accounts')
 const javaUtil = require('./java')
 const install = require('./install')
 const downloader = require('./downloader')
+const inherit = require('./inherit')
 
 const LAUNCHER_NAME = '毛球'
 const LAUNCHER_VERSION = '0.1.0'
@@ -99,7 +100,7 @@ function effectiveGameDir(versionId) {
  *            nativesDir: string, assetsIndex: string,
  *            missing: string[], unknown: string[]}}
  */
-function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath, gameDir, window }) {
+function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath, gameDir, window, rootId }) {
   const ctx = install.buildContext()
   // 告诉规则判断："我们支持自定义分辨率"——版本 JSON 里那两条
   // --width/--height 参数就是靠这个开关才生效的
@@ -122,9 +123,11 @@ function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath
     if (!fs.existsSync(file)) missing.push(artifact.path)
   }
 
-  const clientJar = paths.versionJarFile(versionId)
+  // 客户端 jar：装了 Mod 加载器的版本自己没有，用最底下那个父版本的
+  const jarOwner = rootId || versionId
+  const clientJar = paths.versionJarFile(jarOwner)
   cpFiles.push(clientJar)
-  if (!fs.existsSync(clientJar)) missing.push(`${versionId}.jar`)
+  if (!fs.existsSync(clientJar)) missing.push(`${jarOwner}.jar`)
 
   const classpath = cpFiles.join(path.delimiter)
   const assetsIndex =
@@ -570,9 +573,17 @@ async function launch(versionId, options = {}) {
     return { ok: false, error: `${versionId} 的版本文件读不出来（可能坏了）。到「下载」页重新安装一次。` }
   }
 
-  if (versionJson.inheritsFrom) {
-    return { ok: false, error: '这个版本装了 Mod 加载器，暂时还启动不了，先玩纯原版' }
+  // 装了 Mod 加载器的版本写着一句 inheritsFrom（继承自某个原版）：
+  // 库文件、启动参数、主类都要连父版本一起算，客户端 jar 用父版本那份
+  const resolved = inherit.resolveVersion(versionId, versionJson)
+  if (resolved.missingParent) {
+    return {
+      ok: false,
+      error: `这个版本是装在 ${resolved.missingParent} 上面的，得先把它装好（到「下载」页重装一下）`
+    }
   }
+  const fullJson = resolved.json
+  const rootId = resolved.rootId
 
   // ——— ③ 内存和窗口大小 ———
   // 这个版本自己单独设过就用自己的，没设过跟随全局（见 settings.effectiveLaunchSettings）
@@ -584,7 +595,7 @@ async function launch(versionId, options = {}) {
   const windowSize = { width: effective.windowWidth, height: effective.windowHeight }
 
   // ——— ④ Java ———
-  const javaExe = javaUtil.findJava(versionJson)
+  const javaExe = javaUtil.findJava(fullJson)
   if (!javaExe) {
     return {
       ok: false,
@@ -598,7 +609,7 @@ async function launch(versionId, options = {}) {
   }
 
   // 版本要求的大版本对不上时只提醒、不拦——有些版本差一点也能跑
-  const wantedMajor = versionJson.javaVersion && versionJson.javaVersion.majorVersion
+  const wantedMajor = fullJson.javaVersion && fullJson.javaVersion.majorVersion
   const javaWarning =
     wantedMajor && probe.major && probe.major !== wantedMajor
       ? `注意：这个版本建议用 Java ${wantedMajor}，现在找到的是 Java ${probe.version}，可能会起不来。`
@@ -609,15 +620,16 @@ async function launch(versionId, options = {}) {
   paths.ensureDir(runDir)
 
   // ——— ⑥ 日志配置（很小，没有就补下；下不到不致命） ———
-  const logConfigPath = await ensureLogConfig(versionJson)
+  const logConfigPath = await ensureLogConfig(fullJson)
 
   // ——— ⑦ 拼参数，并检查文件齐不齐 ———
-  const command = buildCommand(versionId, versionJson, {
+  const command = buildCommand(versionId, fullJson, {
     account,
     memoryMB,
     logConfigPath,
     gameDir: runDir,
-    window: windowSize
+    window: windowSize,
+    rootId
   })
 
   if (command.missing.length > 0) {
@@ -639,10 +651,10 @@ async function launch(versionId, options = {}) {
   }
 
   // ——— ⑧ natives 目录 ———
-  prepareNatives(versionId, versionJson)
+  prepareNatives(versionId, fullJson)
 
   // ——— ⑨ 起进程 ———
-  const args = [...command.jvmArgs, versionJson.mainClass, ...command.gameArgs]
+  const args = [...command.jvmArgs, fullJson.mainClass, ...command.gameArgs]
 
   paths.ensureDir(paths.logsDir())
   const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)

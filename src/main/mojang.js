@@ -18,6 +18,7 @@ const fs = require('node:fs')
 const paths = require('./paths')
 const { fetchJson } = require('./http')
 const mirror = require('./mirror')
+const settings = require('./settings')
 
 /** 版本清单的官方地址 */
 const MANIFEST_URL = 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'
@@ -94,25 +95,33 @@ function writeCache(tidied) {
  */
 async function downloadManifest() {
   const errors = []
-
-  // 先官方
-  try {
-    return tidy(await fetchJson(MANIFEST_URL, { timeout: 20000 }))
-  } catch (error) {
-    errors.push(`官方源：${error.message}`)
-  }
-
-  // 再镜像
   const mirrorUrl = mirror.toMirror(MANIFEST_URL)
-  if (mirrorUrl) {
+  const source = settings.downloadSource()
+
+  // 用户选了"只用官方"或者"优先官方" → 先官方；
+  // 选了"优先镜像" → 先镜像（镜像不行再回官方）
+  const tries =
+    source === 'mirror' && mirrorUrl
+      ? [
+          { name: '国内镜像', url: mirrorUrl },
+          { name: '官方源', url: MANIFEST_URL }
+        ]
+      : [
+          { name: '官方源', url: MANIFEST_URL },
+          ...(mirrorUrl && source !== 'official'
+            ? [{ name: '国内镜像', url: mirrorUrl }]
+            : [])
+        ]
+
+  for (const attempt of tries) {
     try {
-      return tidy(await fetchJson(mirrorUrl, { timeout: 20000 }))
+      return tidy(await fetchJson(attempt.url, { timeout: 30000 }))
     } catch (error) {
-      errors.push(`国内镜像：${error.message}`)
+      errors.push(`${attempt.name}：${error.message}`)
     }
   }
 
-  throw new Error(`两个下载源都没连上。\n${errors.join('\n')}`)
+  throw new Error(`下载源都没连上。\n${errors.join('\n')}`)
 }
 
 /**

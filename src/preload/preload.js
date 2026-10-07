@@ -205,5 +205,16 @@ contextBridge.exposeInMainWorld('api', {
   /** 下载进度（和安装版本共用一套字段） */
   onContentProgress: (callback) => {
     ipcRenderer.on('content:progress', (_event, stats) => callback(stats))
-  }
+  },
+
+  // ——— Mod 加载器（M10）———
+
+  /**
+   * 给某个游戏版本装 Mod 加载器（先支持 Fabric）。
+   * 进度通过 onInstallStage / onInstallProgress 推过来。
+   * @param {{gameVersion: string, loader?: 'fabric'}} options
+   * @returns {Promise<{ok: boolean, versionId?: string, loaderVersion?: string,
+   *                    already?: boolean, error?: string}>}
+   */
+  installLoader: (options) => ipcRenderer.invoke('loader:install', options)
 })

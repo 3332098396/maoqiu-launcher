@@ -29,6 +29,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const crypto = require('node:crypto')
 const { openStream } = require('./http')
+const settings = require('./settings')
 const mirror = require('./mirror')
 
 /** 同时下几个文件。8 是个平衡点：再多人家的服务器可能限速，再少下得慢 */
@@ -178,7 +179,7 @@ function streamToFile(url, dest, { signal, onBytes }) {
  *
  * @returns {Promise<{bytes: number, usedMirror: boolean}>}
  */
-async function downloadOneFile(file, { signal, preferMirror, onBytes }) {
+async function downloadOneFile(file, { signal, preferMirror, onBytes, sourcePreference = 'auto' }) {
   const mirrorUrl = mirror.toMirror(file.url)
   const partPath = `${file.saveTo}.part`
 
@@ -189,7 +190,10 @@ async function downloadOneFile(file, { signal, preferMirror, onBytes }) {
   const candidates = []
   if (preferMirror && mirrorUrl) candidates.push({ url: mirrorUrl, isMirror: true })
   candidates.push({ url: file.url, isMirror: false })
-  if (!preferMirror && mirrorUrl) candidates.push({ url: mirrorUrl, isMirror: true })
+  // 用户选了"只用官方"就绝不碰镜像（设置里写的明白，不能偷着用）
+  if (!preferMirror && mirrorUrl && sourcePreference !== 'official') {
+    candidates.push({ url: mirrorUrl, isMirror: true })
+  }
 
   let lastError = null
 
@@ -269,6 +273,14 @@ function createTask(files, options = {}) {
 
   const failures = []
   const speed = createSpeedMeter()
+
+  /**
+   * 用户选的下载源偏好（设置里能改）：
+   *   auto      优先官方，太慢自动换镜像（默认）
+   *   mirror    直接优先镜像，镜像不行再回官方
+   *   official  只用官方，绝不碰镜像
+   */
+  const sourcePreference = settings.downloadSource()
   /**
    * 这次任务真下下来（不是跳过）的文件。
    * "取消安装 + 全部删掉"要用它——但删之前必须核对别的版本还在不在用它，
@@ -277,7 +289,7 @@ function createTask(files, options = {}) {
   const downloaded = []
 
   /** 当前偏向哪个源。会在两个源之间来回切换，不会卡死在某一边 */
-  let preferMirror = false
+  let preferMirror = sourcePreference === 'mirror'
   /** 连续几次"当前偏向的源不行" */
   let badStreak = 0
 
@@ -321,6 +333,9 @@ function createTask(files, options = {}) {
    * 所以不存在"永久卡在某个坏源上"。
    */
   function updateSourcePreference({ usedFallback, size, bytes, elapsedMs }) {
+    // 用户选了"只用官方"，就不做任何换源——设置里怎么写的就怎么做
+    if (sourcePreference === 'official') return
+
     let bad = false
 
     if (usedFallback) {
@@ -363,6 +378,7 @@ function createTask(files, options = {}) {
         const result = await downloadOneFile(file, {
           signal: controller.signal,
           preferMirror,
+          sourcePreference,
           onBytes: (n) => {
             currentBytes += n
             speed.add(n)

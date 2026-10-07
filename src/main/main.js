@@ -27,6 +27,7 @@ const versions = require('./versions')
 const backup = require('./backup')
 const modrinth = require('./modrinth')
 const content = require('./content')
+const loaders = require('./loaders')
 
 // 软件名。它会决定数据存放目录：%APPDATA%\毛球\
 app.setName('毛球')
@@ -423,6 +424,7 @@ function registerIpcHandlers() {
       windowWidth: Number(config.launch.windowWidth) || 854,
       windowHeight: Number(config.launch.windowHeight) || 480,
       isolation: Boolean(config.launch.isolation),
+      downloadSource: settings.downloadSource(),
       screenWidth: display.width,
       screenHeight: display.height,
       gameDir: paths.gameDir(),
@@ -461,6 +463,19 @@ function registerIpcHandlers() {
       launchPatch.isolation = Boolean(patch.isolation)
     }
 
+    // 下载源是顶层配置（不是 launch 里的），单独存
+    if (patch.downloadSource !== undefined) {
+      const value = String(patch.downloadSource)
+      if (!['auto', 'mirror', 'official'].includes(value)) {
+        return { ok: false, error: '不认识的下载源' }
+      }
+      try {
+        settings.writeConfig({ download: { source: value } })
+      } catch (error) {
+        return { ok: false, error: `存不下来：${error.message}` }
+      }
+    }
+
     try {
       settings.writeConfig({ launch: launchPatch })
     } catch (error) {
@@ -477,12 +492,62 @@ function registerIpcHandlers() {
       const result = await modrinth.search({
         type: options.type,
         query: options.query || '',
-        gameVersion: options.gameVersion || '',
+        gameVersion: resolveGameVersion(options.gameVersion || ''),
+        loader: loaderSlugFor(options.gameVersion || ''),
         limit: options.limit || 20
       })
       return { ok: true, ...result }
     } catch (error) {
       return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /**
+   * 给某个版本装 Mod 加载器（M10，先支持 Fabric）。
+   * 装完会多出一个新版本（比如 fabric-loader-0.16.5-26.3），原来的版本不动。
+   * 进度复用 install:stage / install:progress 两条通道。
+   */
+  ipcMain.handle('loader:install', async (event, options) => {
+    if (currentInstall) return { ok: false, error: '已经有一个安装任务在跑了，等它完成' }
+
+    const send = (channel, payload) => {
+      if (!event.sender.isDestroyed()) event.sender.send(channel, payload)
+    }
+
+    currentInstall = true
+    try {
+      const { gameVersion, loader } = options
+      if (loader && loader !== 'fabric') {
+        return { ok: false, error: '现在只支持装 Fabric，Forge / NeoForge 后面再做' }
+      }
+      if (!paths.isVersionInstalled(gameVersion)) {
+        return { ok: false, error: `先把 ${gameVersion} 装好，才能在它上面装加载器` }
+      }
+
+      send('install:stage', '正在问 Fabric 有哪些加载器版本…')
+      const built = await loaders.buildFabricProfile(gameVersion)
+
+      if (paths.isVersionInstalled(built.versionId)) {
+        return { ok: true, already: true, versionId: built.versionId }
+      }
+
+      send('install:stage', `正在装 Fabric ${built.loaderVersion}…`)
+      const result = await install.installVersion(built.versionId, {
+        providedJson: built.json,
+        onStage: (text) => send('install:stage', text),
+        onProgress: (stats) => send('install:progress', stats),
+        onTask: (task) => {
+          currentInstallTask = task
+        }
+      })
+
+      if (!result.ok) return result
+      return { ok: true, versionId: built.versionId, loaderVersion: built.loaderVersion }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    } finally {
+      currentInstall = null
+      currentInstallTask = null
     }
   })
 
@@ -497,9 +562,11 @@ function registerIpcHandlers() {
     try {
       const { projectId, type, versionId } = options
 
+      // 筛选用"游戏版本"（装了 Fabric 的版本要顺着继承找到 26.3），
+      // 但**放文件还是放进选中的那个版本**（Mod 就要放进 Fabric 版本的 mods 里）
       const list = await modrinth.getVersions(projectId, {
-        gameVersion: versionId || '',
-        loader: modrinth.loaderFor(type)
+        gameVersion: resolveGameVersion(versionId || ''),
+        loader: loaderSlugFor(versionId || '')
       })
       const best = modrinth.pickBest(list)
 
@@ -537,6 +604,37 @@ function registerIpcHandlers() {
       contentRunning = false
     }
   })
+}
+
+/** 我们认的加载器名 → Modrinth 用的代号 */
+const LOADER_SLUGS = { Fabric: 'fabric', Forge: 'forge', NeoForge: 'neoforge' }
+
+/** 这个版本用的是哪种加载器（Modrinth 的写法）；没有就返回空 */
+function loaderSlugFor(versionId) {
+  if (!versionId) return ''
+  return LOADER_SLUGS[versions.loaderName(versionId)] || ''
+}
+
+/**
+ * 把一个版本号还原成"游戏版本号"。
+ *
+ * 【为什么需要】装了 Mod 加载器的版本（fabric-loader-0.19.5-26.3）在社区网站上
+ * 是查不到的——网站只认"26.3"这个游戏版本。所以搜资源之前要先顺着
+ * inheritsFrom 往上找，找到最底下那个原版版本号。
+ */
+function resolveGameVersion(versionId) {
+  let current = String(versionId || '')
+
+  for (let depth = 0; depth < 5 && current; depth++) {
+    try {
+      const json = JSON.parse(fs.readFileSync(paths.versionJsonFile(current), 'utf8'))
+      if (!json.inheritsFrom) return current
+      current = String(json.inheritsFrom)
+    } catch {
+      return current
+    }
+  }
+  return current
 }
 
 /** 共享存档目录里有几个世界（开版本隔离时提示用） */

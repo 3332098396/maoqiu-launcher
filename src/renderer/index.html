@@ -317,6 +317,34 @@
             </label>
             <p class="panel__desc" id="set-isolation-hint"></p>
           </section>
+
+          <section class="panel">
+            <h3 class="panel__title">下载源</h3>
+            <p class="panel__desc">
+              游戏文件从哪儿下。国内直连官方服务器很慢，一般交给启动器自己挑就行。
+            </p>
+            <label class="check check--block">
+              <input type="radio" name="set-source" value="auto" />
+              <span>
+                <b>自动（推荐）</b>
+                <em class="check__help">优先官方源，太慢自动换国内镜像</em>
+              </span>
+            </label>
+            <label class="check check--block">
+              <input type="radio" name="set-source" value="mirror" />
+              <span>
+                <b>优先国内镜像</b>
+                <em class="check__help">国内网络下最快；镜像抽风时会自动回官方源</em>
+              </span>
+            </label>
+            <label class="check check--block">
+              <input type="radio" name="set-source" value="official" />
+              <span>
+                <b>只用官方</b>
+                <em class="check__help">完全不经过第三方镜像（可能比较慢）</em>
+              </span>
+            </label>
+          </section>
           </div>
 
           <!-- ——— 备份（M6.3）——— -->
@@ -490,6 +518,23 @@
           </label>
 
           <span class="field__hint" id="ver-settings-hint"></span>
+        </div>
+
+        <div class="field">
+          <span class="field__label">Mod 加载器</span>
+          <p class="panel__desc">
+            装 Mod 之前得先有加载器。装完会<b>多出一个新版本</b>（比如
+            fabric-loader-…-26.3，原来的版本不动），启动时选那个新版本就能用 Mod。
+          </p>
+          <div class="setrow">
+            <button class="btn btn--ghost btn--sm" type="button" id="ver-install-fabric">
+              装 Fabric 加载器
+            </button>
+            <button class="btn btn--ghost btn--sm" type="button" disabled title="下一步做">
+              Forge / NeoForge（下一步）
+            </button>
+          </div>
+          <span class="field__hint" id="ver-loader-hint"></span>
         </div>
 
         <div class="field">
