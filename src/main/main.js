@@ -513,7 +513,9 @@ function registerIpcHandlers() {
       // 新装版本往哪儿装，都以它为准（别的目录是拖包时按需加的，见 docs/01 R6.8）
       gameDir: paths.gameDir(),
       gameDirs: settings.knownGameDirs(),
-      sharedWorlds: countSharedWorlds()
+      sharedWorlds: countSharedWorlds(),
+      // 个性化那栏要的东西（M13）
+      look: config.look
     }
   })
 
@@ -561,12 +563,73 @@ function registerIpcHandlers() {
       }
     }
 
+    // 下载速度（M13）：并发数 + 限速，都存进 download 里
+    if (patch.downloadConcurrency !== undefined || patch.downloadSpeedLimitKB !== undefined) {
+      const current = settings.readConfig().download || {}
+      const concurrency =
+        patch.downloadConcurrency !== undefined
+          ? Math.min(32, Math.max(1, Math.round(Number(patch.downloadConcurrency) || 8)))
+          : Number(current.concurrency) || 8
+      const speedLimitKB =
+        patch.downloadSpeedLimitKB !== undefined
+          ? Math.max(0, Math.round(Number(patch.downloadSpeedLimitKB) || 0))
+          : Number(current.speedLimitKB) || 0
+
+      try {
+        settings.writeConfig({ download: { concurrency, speedLimitKB } })
+      } catch (error) {
+        return { ok: false, error: `存不下来：${error.message}` }
+      }
+    }
+
+    // 个性化（M13）：藏哪些页面、背景图/音乐、顶栏样式
+    if (patch.look !== undefined) {
+      const look = patch.look || {}
+      const lookPatch = {}
+
+      if (Array.isArray(look.hiddenPages)) {
+        // 「启动」和「设置」不许藏——藏了就没地方改回来了
+        lookPatch.hiddenPages = look.hiddenPages
+          .map((one) => String(one))
+          .filter((one) => ['online', 'download', 'help'].includes(one))
+      }
+      if (typeof look.background === 'string') lookPatch.background = look.background
+      if (typeof look.bgm === 'string') lookPatch.bgm = look.bgm
+      if (look.bgmVolume !== undefined) {
+        lookPatch.bgmVolume = Math.min(100, Math.max(0, Math.round(Number(look.bgmVolume) || 0)))
+      }
+      if (typeof look.theme === 'string' && ['blue', 'plain', 'dark'].includes(look.theme)) {
+        lookPatch.theme = look.theme
+      }
+
+      try {
+        settings.writeConfig({ look: lookPatch })
+      } catch (error) {
+        return { ok: false, error: `存不下来：${error.message}` }
+      }
+    }
+
     try {
       settings.writeConfig({ launch: launchPatch })
     } catch (error) {
       return { ok: false, error: `存不下来：${error.message}` }
     }
     return { ok: true }
+  })
+
+  /** 挑背景图 / 背景音乐（弹系统的文件选择框） */
+  ipcMain.handle('look:pick', async (_event, kind) => {
+    const isImage = kind === 'background'
+    const result = await dialog.showOpenDialog({
+      title: isImage ? '挑一张背景图' : '挑一首背景音乐',
+      properties: ['openFile'],
+      filters: isImage
+        ? [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }]
+        : [{ name: '音频', extensions: ['mp3', 'ogg', 'wav', 'm4a', 'flac'] }]
+    })
+
+    if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true }
+    return { ok: true, path: result.filePaths[0] }
   })
 
   // ——— 整合包（M11）———
@@ -658,6 +721,21 @@ function registerIpcHandlers() {
       return { ok: false, error: String(error?.message ?? error) }
     } finally {
       packRunning = false
+    }
+  })
+
+  /** 帮助页那三个"一键打开"：游戏目录 / 配置目录（日志那个早就有了） */
+  ipcMain.handle('app:openFolder', async (_event, which) => {
+    try {
+      const target =
+        which === 'config' ? paths.configDir() : which === 'game' ? paths.gameDir() : ''
+      if (!target) return { ok: false, error: '不认识的文件夹' }
+
+      paths.ensureDir(target)
+      const message = await shell.openPath(target)
+      return message ? { ok: false, error: message } : { ok: true, dir: target }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
     }
   })
 

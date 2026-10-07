@@ -31,6 +31,9 @@
         <button class="nav__btn" type="button" data-page="settings">
           <span class="nav__icon">⚙</span>设置
         </button>
+        <button class="nav__btn" type="button" data-page="help">
+          <span class="nav__icon">?</span>帮助
+        </button>
       </nav>
 
       <button class="topbar__btn" type="button" id="log-btn">📄 日志</button>
@@ -304,11 +307,9 @@
             <span class="menu__item menu__item--on" data-settings-tab="launch">启动选项</span>
             <span class="menu__item" data-settings-tab="backup">备份</span>
             <span class="menu__item" data-settings-tab="clean">清理</span>
-            <span class="menu__divider">以后再说</span>
-            <span class="menu__item menu__item--off">个性化</span>
-            <span class="menu__item menu__item--off">其他</span>
+            <span class="menu__item" data-settings-tab="look">个性化</span>
           </nav>
-          <div class="side__note">灰色的以后再做</div>
+          <div class="side__note">还想加什么，跟作者说</div>
         </aside>
 
         <div class="content">
@@ -388,6 +389,32 @@
                 <em class="check__help">完全不经过第三方镜像（可能比较慢）</em>
               </span>
             </label>
+          </section>
+
+          <!-- 下载速度（M13：对照 PCL 整理的 ⭐ 项） -->
+          <section class="panel">
+            <h3 class="panel__title">下载速度</h3>
+            <p class="panel__desc">
+              同时下几个文件、要不要限速。默认就行；网络不好或者怕占满带宽时再动。
+            </p>
+
+            <label class="field">
+              <span class="field__label">同时下载几个文件</span>
+              <div class="join-row">
+                <input class="input" id="set-threads" type="number" min="1" max="32" step="1" />
+                <span class="field__suffix">个（1～32，默认 8）</span>
+              </div>
+            </label>
+
+            <label class="field">
+              <span class="field__label">最大下载速度</span>
+              <div class="join-row">
+                <input class="input" id="set-speed" type="number" min="0" max="102400" step="128" />
+                <span class="field__suffix">KB/s（填 0 = 不限速）</span>
+              </div>
+            </label>
+
+            <p class="delbox" id="set-speed-hint"></p>
           </section>
           </div>
 
@@ -496,9 +523,157 @@
               <p class="panel__desc" id="clean-result"></p>
             </section>
           </div>
+
+          <!-- ——— 个性化（M13：功能隐藏 + 背景 + 标题栏）——— -->
+          <div class="settings-tab" data-settings-tab="look" hidden>
+            <div class="notice">
+              这里的改动都是"看着玩"的，不影响游戏本身。改完立刻生效。
+            </div>
+
+            <section class="panel">
+              <h3 class="panel__title">显示哪些页面</h3>
+              <p class="panel__desc">
+                用不上的页面可以藏起来，顶栏会清爽些。「启动」和「设置」是必留的。
+              </p>
+              <div class="checks" id="look-pages"></div>
+            </section>
+
+            <section class="panel">
+              <h3 class="panel__title">背景</h3>
+              <p class="panel__desc">挑一张图当背景；喜欢安静的话也可以放点背景音乐。</p>
+
+              <div class="join-row">
+                <input class="input" id="look-bg" type="text" readonly placeholder="没设背景图" />
+                <button class="btn btn--ghost btn--sm" type="button" id="look-bg-pick">挑一张图…</button>
+                <button class="btn btn--ghost btn--sm" type="button" id="look-bg-clear">清掉</button>
+              </div>
+
+              <div class="join-row">
+                <input class="input" id="look-bgm" type="text" readonly placeholder="没设背景音乐" />
+                <button class="btn btn--ghost btn--sm" type="button" id="look-bgm-pick">挑一首…</button>
+                <button class="btn btn--ghost btn--sm" type="button" id="look-bgm-clear">清掉</button>
+              </div>
+
+              <p class="delbox" id="look-hint"></p>
+            </section>
+
+            <section class="panel">
+              <h3 class="panel__title">顶栏样式</h3>
+              <div class="icon-picker" id="look-themes"></div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════ 帮助页（M13）═══════════ -->
+      <section class="page" data-page="help" hidden>
+        <aside class="side">
+          <nav class="menu">
+            <span class="menu__item menu__item--on">常见问题</span>
+          </nav>
+        </aside>
+
+        <div class="content">
+          <div class="notice">
+            哪儿不对劲，先在这儿找找。找不到就把日志发给作者——
+            一键打开日志文件夹的按钮在最下面。
+          </div>
+
+          <section class="panel panel--full">
+            <h3 class="panel__title">常见问题</h3>
+
+            <details class="faq">
+              <summary>点了「开始游戏」没反应，或者一闪就退</summary>
+              <p>
+                先看顶栏「日志」按钮里最后几行。<b>最常见的原因</b>是启动器提示
+                "有 N 个游戏文件不在了"——那说明版本装得不全，到「下载」页对着这个版本
+                点「重装」，缺的会自动补齐（已经下好的不会重下）。
+              </p>
+            </details>
+
+            <details class="faq">
+              <summary>游戏报 "Java 版本不对" 或者闪一下就崩</summary>
+              <p>
+                这个版本要的 Java 和本机找到的对不上。毛球会在启动前自动补下正确的 Java
+                （几百 MB，第一次会慢一点）。要是还不行：到「下载」页对着这个版本点「重装」。
+                版本设置里能看到"将会使用的 Java"。
+              </p>
+            </details>
+
+            <details class="faq">
+              <summary>下载特别慢</summary>
+              <p>
+                到「设置 → 启动选项」里把「下载源」换成国内镜像。默认是"自动"，网络不好时
+                它自己也会切，但手动指定更快。
+              </p>
+            </details>
+
+            <details class="faq">
+              <summary>怎么装 Mod / 资源包 / 光影包？</summary>
+              <p>
+                到「下载」页搜名字，点一下就行——毛球会自动放进该放的文件夹。
+                整合包直接把压缩包<b>拖进窗口</b>也能装（带密码的会问你要密码）。
+                装完回启动页选那个版本，点「开始游戏」。
+              </p>
+            </details>
+
+            <details class="faq">
+              <summary>和朋友联机连不上</summary>
+              <p>
+                ① 两个人<b>都要</b>在「联机」页里：一个创建房间、另一个输码进来；
+                ② 房主进游戏开好世界后，按 Esc 点「对局域网开放」；
+                ③ 还进不去就用「直接连接」，填毛球显示的地址（形如 10.126.126.1:54321）;
+                ④ 检查两边的杀毒软件/防火墙有没有拦"虚拟网卡"。
+              </p>
+            </details>
+
+            <details class="faq">
+              <summary>我的存档在哪？会丢吗？</summary>
+              <p>
+                存档在游戏目录的 saves 文件夹里（开了版本隔离的话在
+                <b>versions\版本名\saves</b> 里）。毛球不会动它——删除版本、清理垃圾
+                都不碰存档。怕丢就到「设置 → 备份」一键备份一份。
+              </p>
+            </details>
+
+            <details class="faq">
+              <summary>版本装多了想清一清</summary>
+              <p>
+                两种：① 「设置 → 清理」清游戏日志和崩溃报告；② 到「启动页 → 版本设置 →
+                删除这个版本」整个删掉（**会二次确认**，且只删这个版本自己的文件）。
+              </p>
+            </details>
+
+            <details class="faq">
+              <summary>出问题了，怎么把日志发给别人看？</summary>
+              <p>
+                点下面的「打开日志文件夹」，里面最新的那个 launch-*.log 就是最近一次启动的
+                完整记录；游戏自己的日志在同目录的「游戏日志」里。把文件整个发出去就行。
+              </p>
+            </details>
+          </section>
+
+          <section class="panel panel--full">
+            <h3 class="panel__title">一键打开</h3>
+            <div class="modal__actions">
+              <button class="btn btn--ghost" type="button" id="help-open-logs">
+                打开日志文件夹
+              </button>
+              <button class="btn btn--ghost" type="button" id="help-open-game">
+                打开游戏目录
+              </button>
+              <button class="btn btn--ghost" type="button" id="help-open-config">
+                打开配置目录
+              </button>
+            </div>
+            <p class="panel__desc" id="help-status"></p>
+          </section>
         </div>
       </section>
     </main>
+
+    <!-- 背景音乐（个性化里选的，默认没有） -->
+    <audio id="bgm" loop preload="none"></audio>
 
     <footer class="statusbar">
       <span id="stat-left">版本 0.1.0</span>
@@ -542,6 +717,41 @@
             <span class="vermeta__v" id="ver-java">正在看…</span>
           </div>
         </div>
+
+        <!-- 图标 / 分类 / 收藏（对照 PCL 整理的 ⭐ 项） -->
+        <div class="field">
+          <span class="field__label">图标（在版本列表前面显示）</span>
+          <div class="icon-picker" id="ver-icons"></div>
+        </div>
+
+        <label class="field">
+          <span class="field__label">分类</span>
+          <input
+            class="input"
+            id="ver-category"
+            type="text"
+            maxlength="12"
+            placeholder="比如：生存服、原版、整合包（可以不填）"
+            autocomplete="off"
+            spellcheck="false"
+            list="ver-category-list"
+          />
+          <datalist id="ver-category-list">
+            <option value="原版"></option>
+            <option value="生存"></option>
+            <option value="创造"></option>
+            <option value="整合包"></option>
+            <option value="测试"></option>
+          </datalist>
+        </label>
+
+        <label class="check check--block">
+          <input type="checkbox" id="ver-favorite" />
+          <span>
+            <b>收藏这个版本</b>
+            <em class="check__help">收藏的会排到版本列表最前面</em>
+          </span>
+        </label>
 
         <label class="field">
           <span class="field__label">显示名称</span>

@@ -1539,3 +1539,108 @@ body {
   background: #a9ccff;
   background-clip: content-box;
 }
+
+/* 帮助页的问答（用 <details> 做折叠，不需要额外 JS） */
+.faq {
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+}
+
+.faq > summary {
+  cursor: pointer;
+  font-size: 13.5px;
+  color: var(--text);
+  list-style: none;
+  user-select: none;
+}
+
+.faq > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* 折叠起来时前面挂个加号，展开变成减号 */
+.faq > summary::before {
+  content: '＋';
+  display: inline-block;
+  width: 18px;
+  color: #4a9bff;
+}
+
+.faq[open] > summary::before {
+  content: '－';
+}
+
+.faq > p {
+  margin: 8px 0 0 18px;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--text-dim);
+}
+
+/* 版本设置里的图标选择（一排小方块，点一下选中） */
+.icon-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.icon-picker__item {
+  width: 34px;
+  height: 34px;
+  font-size: 17px;
+  line-height: 1;
+  background: #fff;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.icon-picker__item:hover {
+  border-color: var(--card-border-hover);
+}
+
+.icon-picker__item--on {
+  border-color: #7cc0ff;
+  background: #eef6ff;
+  box-shadow: 0 0 0 2px rgba(74, 155, 255, 0.16);
+}
+
+/* 版本列表里那个"分类"小标签（比目录标签更淡，不抢眼） */
+.pick__cat {
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: #f1f5fa;
+  border-radius: 999px;
+}
+
+/* ——— 个性化：背景图 / 顶栏样式 ——— */
+
+/* 设了背景图时，把原来那层渐变让出来（图和渐变叠在一起会花） */
+body.has-bg {
+  background-image: none !important;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+/* 顶栏：纯色（不要渐变） */
+body.theme-plain .topbar {
+  background: #6fb3ff;
+}
+
+/* 顶栏：深色 */
+body.theme-dark .topbar {
+  background: linear-gradient(180deg, #3a4356 0%, #2f3646 100%);
+}
+
+body.theme-dark .nav__btn--on {
+  color: #dbe6ff;
+}

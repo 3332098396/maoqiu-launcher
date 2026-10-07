@@ -46,6 +46,9 @@ function listAllVersions(dirs) {
       isDefault,
       name: custom[key]?.name || '',
       note: custom[key]?.note || '',
+      icon: custom[key]?.icon || '',
+      category: custom[key]?.category || '',
+      favorite: Boolean(custom[key]?.favorite),
       loader: loaderName(id, dir),
       type: versionType(id, dir),
       base: baseGameVersion(id, dir)
@@ -122,6 +125,9 @@ function versionInfoMap(dirs) {
       isDefault: one.isDefault,
       name: one.name,
       note: one.note,
+      icon: one.icon,
+      category: one.category,
+      favorite: one.favorite,
       loader: one.loader,
       type: one.type,
       base: one.base
@@ -135,22 +141,34 @@ function versionInfoMap(dirs) {
  * 改显示名 / 备注。两个都留空就等于恢复成默认（显示版本号）。
  * @returns {{ok: boolean, version?: object, error?: string}}
  */
-function updateVersion(id, { name, note } = {}, dir) {
+function updateVersion(id, { name, note, icon, category, favorite } = {}, dir) {
   if (!paths.isVersionInstalled(id, dir)) {
     return { ok: false, error: '这个版本已经不在了' }
   }
 
   const trimmedName = String(name ?? '').trim().slice(0, MAX_NAME)
   const trimmedNote = String(note ?? '').trim().slice(0, MAX_NOTE)
+  // 图标就一个字符（emoji 或字母），多了会撑破列表
+  const trimmedIcon = [...String(icon ?? '').trim()].slice(0, 2).join('')
+  const trimmedCategory = String(category ?? '').trim().slice(0, 12)
+  const star = Boolean(favorite)
   const key = settings.versionKey(dir, id)
 
   const config = settings.readConfig()
   const versions = { ...(config.versions || {}) }
 
-  if (!trimmedName && !trimmedNote) {
+  // 一样都没填就整条删掉，别在配置里留空壳
+  const empty = !trimmedName && !trimmedNote && !trimmedIcon && !trimmedCategory && !star
+  if (empty) {
     delete versions[key]
   } else {
-    versions[key] = { name: trimmedName, note: trimmedNote }
+    versions[key] = {
+      name: trimmedName,
+      note: trimmedNote,
+      icon: trimmedIcon,
+      category: trimmedCategory,
+      favorite: star
+    }
   }
 
   try {
@@ -159,7 +177,19 @@ function updateVersion(id, { name, note } = {}, dir) {
     return { ok: false, error: `存不下来：${error.message}` }
   }
 
-  return { ok: true, version: { id, dir, key, name: trimmedName, note: trimmedNote } }
+  return {
+    ok: true,
+    version: {
+      id,
+      dir,
+      key,
+      name: trimmedName,
+      note: trimmedNote,
+      icon: trimmedIcon,
+      category: trimmedCategory,
+      favorite: star
+    }
+  }
 }
 
 /** 这个版本自己的文件夹有多大（只看这一个文件夹，很快） */

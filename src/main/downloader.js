@@ -141,8 +141,67 @@ function createSpeedMeter() {
 // 下一个文件
 // ——————————————————————————————————————————————
 
-/** 把 url 的内容流式写进 dest，边写边报告进度 */
-function streamToFile(url, dest, { signal, onBytes }) {
+/**
+ * 限速器（M13 加的"最大速度"）。
+ *
+ * 【怎么限的】把流**暂停**一下，而不是丢包或者硬等——暂停是 TCP 自己的流控，
+ * 服务器那边会跟着慢下来，比"读进来扔掉"省流量。
+ * 算法很简单：从开始到现在，如果下载量超过了"限速 × 已经过去的时间"，
+ * 就按超出的那部分睡一会儿。
+ *
+ * limitKB 为 0 = 不限速（默认），这时候连对象都不建，一点开销都没有。
+ */
+function createThrottle(limitKB) {
+  if (!limitKB || limitKB <= 0) return null
+
+  const bytesPerMs = (limitKB * 1024) / 1000
+  // 【为什么 startedAt 是 0、等第一批数据才真正开始计时】
+  // 请求发出去到第一个字节回来可能要等一秒多（DNS、服务器思考人生），
+  // 这段时间要是也算进"额度"，就等于白白多给了一两 MB 的额度——
+  // 实测限到 2 MB/s 结果跑出了 6.5 MB/s，就是这么来的。
+  let startedAt = 0
+  let sent = 0
+  let asleep = false
+
+  return {
+    /** 报告下了一批字节；该歇就歇一会儿 */
+    async account(chunkLength) {
+      if (!startedAt) {
+        startedAt = Date.now()
+        sent = 0
+      }
+
+      sent += chunkLength
+
+      const shouldHaveTook = sent / bytesPerMs
+      const took = Date.now() - startedAt
+      const behind = shouldHaveTook - took
+
+      if (behind > 50 && !asleep) {
+        asleep = true
+        await new Promise((resolve) => setTimeout(resolve, behind))
+        asleep = false
+      }
+
+      // 落后太多（比如中途卡了一下）就重新对表，免得越欠越多、一下睡很久
+      if (behind > 5000) {
+        startedAt = Date.now()
+        sent = 0
+      }
+    }
+  }
+}
+
+/**
+ * 把 url 的内容流式写进 dest，边写边报告进度。
+ *
+ * 【限速时为什么不能再用 pipe】踩过的坑：一开始在 'data' 里 `pause()`，
+ * 想停一会儿再 `resume()`——可 `pipe()` 自己会在底层按需 resume，
+ * 把我们的暂停顶掉，结果限速形同虚设（实测限 2 MB/s 跑出 13 MB/s）。
+ * 所以限速时**自己接管**：不 pipe，手动 write，写不动就等 'drain'，
+ * 该歇就歇。不限速时照旧用 pipe（那条路最快、也最不容易出岔子）。
+ */
+function streamToFile(url, dest, { signal, onBytes, throttle }) {
   return openStream(url, { signal, timeout: REQUEST_TIMEOUT }).then(
     ({ stream }) =>
       new Promise((resolve, reject) => {
@@ -157,7 +216,6 @@ function streamToFile(url, dest, { signal, onBytes }) {
           reject(error)
         }
 
-        stream.on('data', (chunk) => onBytes(chunk.length))
         stream.on('error', fail)
         out.on('error', fail)
         out.on('finish', () => {
@@ -166,7 +224,32 @@ function streamToFile(url, dest, { signal, onBytes }) {
           resolve()
         })
 
-        stream.pipe(out)
+        // ——— 不限速：老路子，交给 pipe ———
+        if (!throttle) {
+          stream.on('data', (chunk) => onBytes(chunk.length))
+          stream.pipe(out)
+          return
+        }
+
+        // ——— 限速：自己接管数据流 ———
+        stream.on('data', (chunk) => {
+          onBytes(chunk.length)
+          stream.pause()
+
+          // 先让磁盘跟上（写不动就等 drain），再按限速歇一会儿
+          const flushed = out.write(chunk)
+          const waitFlush = flushed
+            ? Promise.resolve()
+            : new Promise((done) => out.once('drain', done))
+
+          waitFlush
+            .then(() => throttle.account(chunk.length))
+            .then(() => {
+              if (!settled) stream.resume()
+            })
+        })
+
+        stream.on('end', () => out.end())
       })
   )
 }
@@ -179,7 +262,7 @@ function streamToFile(url, dest, { signal, onBytes }) {
  *
  * @returns {Promise<{bytes: number, usedMirror: boolean}>}
  */
-async function downloadOneFile(file, { signal, preferMirror, onBytes, sourcePreference = 'auto' }) {
+async function downloadOneFile(file, { signal, preferMirror, onBytes, sourcePreference = 'auto', throttle }) {
   const mirrorUrl = mirror.toMirror(file.url)
   const partPath = `${file.saveTo}.part`
 
@@ -205,6 +288,7 @@ async function downloadOneFile(file, { signal, preferMirror, onBytes, sourcePref
         let bytes = 0
         await streamToFile(candidate.url, partPath, {
           signal,
+          throttle,
           onBytes: (n) => {
             bytes += n
             onBytes(n)
@@ -254,7 +338,18 @@ async function downloadOneFile(file, { signal, preferMirror, onBytes, sourcePref
  * @returns 控制器：{ start, pause, cancel, getStats }
  */
 function createTask(files, options = {}) {
-  const { concurrency = DEFAULT_CONCURRENCY, onProgress } = options
+  // 并发数：调用方说了算；没说就按设置里的（默认 8），最后兜底成 8。
+  // 【注意别写成 Number.isFinite(concurrency)——那是在声明之前引用自己，
+  //   会抛 TDZ 错误，而且一抛就是"所有下载全挂"。实测踩过。】
+  const asked = Number.isFinite(options.concurrency)
+    ? options.concurrency
+    : settings.downloadConcurrency()
+  const concurrency = Math.min(32, Math.max(1, asked || DEFAULT_CONCURRENCY))
+
+  // 限速（0 = 不限）
+  const throttle = createThrottle(settings.downloadSpeedLimitKB())
+
+  const { onProgress } = options
 
   const list = files.slice()
   const totalBytes = list.reduce((sum, f) => sum + (f.size || 0), 0)
@@ -379,6 +474,7 @@ function createTask(files, options = {}) {
           signal: controller.signal,
           preferMirror,
           sourcePreference,
+          throttle,
           onBytes: (n) => {
             currentBytes += n
             speed.add(n)

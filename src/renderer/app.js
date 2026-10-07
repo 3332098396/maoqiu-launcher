@@ -555,11 +555,14 @@ function renderPickList() {
   const all = versionList()
   const current = selectedItem()
 
+  // 收藏的排前面（sort 是稳定的，所以收藏之间还是原来的顺序）
+  const sorted = [...all].sort((a, b) => Number(b.favorite) - Number(a.favorite))
+
   pickListEl.textContent = ''
   pickEmptyEl.hidden = all.length > 0
 
   // 收起时：只显示选中的那个。没选中（比如刚删掉）就显示前一个，免得列表空着
-  const shown = pickerOpen || !current ? all : [current]
+  const shown = pickerOpen || !current ? sorted : [current]
 
   const frag = document.createDocumentFragment()
   for (const one of shown) {
@@ -574,12 +577,23 @@ function renderPickList() {
     // 用户起过名字就显示名字（后面带上版本号，免得对不上）；
     // 没起过就显示版本号本身
     const label = document.createElement('span')
+    const icon = one.icon ? `${one.icon} ` : ''
     // 版本名太长（fabric-loader-…）时，后面缀个加载器名，一眼知道这是什么
-    label.textContent = one.name
-      ? `${one.name}（${one.id}）`
-      : one.loader
-        ? `${one.id}（${one.loader}）`
-        : one.id
+    label.textContent =
+      icon +
+      (one.name
+        ? `${one.name}（${one.id}）`
+        : one.loader
+          ? `${one.id}（${one.loader}）`
+          : one.id)
+
+    // 有分类的话挂个小标签（浅灰），和"目录标签"区分开
+    if (one.category) {
+      const cat = document.createElement('em')
+      cat.className = 'pick__cat'
+      cat.textContent = one.category
+      label.appendChild(cat)
+    }
     li.appendChild(label)
 
     // 不是默认目录里的版本，名字后面挂个小标签说明它在哪个目录
@@ -1639,6 +1653,9 @@ const verSettingsBtnEl = document.getElementById('ver-settings-btn')
 const verModalEl = document.getElementById('ver-modal')
 const verTitleEl = document.getElementById('ver-title')
 const verTypeEl = document.getElementById('ver-type')
+const verIconsEl = document.getElementById('ver-icons')
+const verCategoryEl = document.getElementById('ver-category')
+const verFavoriteEl = document.getElementById('ver-favorite')
 const verJavaEl = document.getElementById('ver-java')
 const verNameEl = document.getElementById('ver-name')
 const verNoteEl = document.getElementById('ver-note')
@@ -1697,6 +1714,9 @@ async function openVersionSettings() {
   verTitleEl.textContent = `版本设置 — ${id}`
   verNameEl.value = info.name
   verNoteEl.value = info.note
+  verCategoryEl.value = info.category || ''
+  verFavoriteEl.checked = Boolean(info.favorite)
+  renderIconPicker(info.icon || '')
   verHintEl.textContent = ''
   verHintEl.classList.remove('verform__hint--bad')
   verFolderHintEl.textContent = ''
@@ -1790,7 +1810,10 @@ async function saveVersionSettings() {
 
   const result = await window.api.updateVersion(editingVersion, {
     name: verNameEl.value,
-    note: verNoteEl.value
+    note: verNoteEl.value,
+    icon: pickedIcon,
+    category: verCategoryEl.value,
+    favorite: verFavoriteEl.checked
   })
 
   if (!result.ok) {
@@ -2010,6 +2033,34 @@ delModalEl.addEventListener('click', (event) => {
 
 const setMemoryEl = document.getElementById('set-memory')
 const setMemoryNumEl = document.getElementById('set-memory-num')
+const setThreadsEl = document.getElementById('set-threads')
+const setSpeedEl = document.getElementById('set-speed')
+const setSpeedHintEl = document.getElementById('set-speed-hint')
+
+/** 下载速度那两行下面的提示 */
+function renderSpeedHint() {
+  const speed = Number(setSpeedEl.value) || 0
+  setSpeedHintEl.textContent =
+    speed > 0
+      ? `限到 ${speed} KB/s（约 ${(speed / 1024).toFixed(1)} MB/s）——下大版本会慢一些，但不会把家里的网占满。`
+      : '现在不限速。装一个版本动辄几百 MB，限速了会明显变慢。'
+}
+
+// 改完失焦/回车就存（不用点"保存"）
+async function saveSpeedSettings() {
+  const threads = Math.min(32, Math.max(1, Math.round(Number(setThreadsEl.value) || 8)))
+  const speed = Math.max(0, Math.round(Number(setSpeedEl.value) || 0))
+
+  setThreadsEl.value = String(threads)
+  setSpeedEl.value = String(speed)
+  renderSpeedHint()
+
+  await window.api.setSettings({ downloadConcurrency: threads, downloadSpeedLimitKB: speed })
+}
+
+setThreadsEl.addEventListener('change', saveSpeedSettings)
+setSpeedEl.addEventListener('change', saveSpeedSettings)
+setSpeedEl.addEventListener('input', renderSpeedHint)
 const setMemoryHintEl = document.getElementById('set-memory-hint')
 const setWidthEl = document.getElementById('set-width')
 const setHeightEl = document.getElementById('set-height')
@@ -2130,6 +2181,11 @@ async function loadSettingsPage() {
   setMemoryEl.value = String(settingsInfo.memoryMB)
   setMemoryNumEl.value = String(settingsInfo.memoryMB)
   renderMemoryHint()
+
+  // 下载速度那两项（M13）
+  setThreadsEl.value = String(config.downloadConcurrency || 8)
+  setSpeedEl.value = String(config.downloadSpeedLimitKB || 0)
+  renderSpeedHint()
 
   setWidthEl.value = String(settingsInfo.windowWidth)
   setHeightEl.value = String(settingsInfo.windowHeight)
@@ -2258,7 +2314,34 @@ function showSettingsTab(name) {
   }
   if (name === 'backup') loadBackupTab()
   if (name === 'clean') loadCleanTab()
+  if (name === 'look') renderLookTab()
 }
+
+// ——— 帮助页（M13）———
+
+const helpStatusEl = document.getElementById('help-status')
+
+async function openHelpFolder(which, label) {
+  try {
+    const result =
+      which === 'logs' ? await window.api.openLogFolder() : await window.api.openAppFolder(which)
+    helpStatusEl.textContent = result.ok
+      ? `已经打开${label}了。（要是没跳出来，可能被别的窗口挡住了）`
+      : `打不开：${result.error}`
+  } catch (error) {
+    helpStatusEl.textContent = `打不开：${error.message}`
+  }
+}
+
+document
+  .getElementById('help-open-logs')
+  .addEventListener('click', () => openHelpFolder('logs', '日志文件夹'))
+document
+  .getElementById('help-open-game')
+  .addEventListener('click', () => openHelpFolder('game', '游戏目录'))
+document
+  .getElementById('help-open-config')
+  .addEventListener('click', () => openHelpFolder('config', '配置目录'))
 
 // ——— 清理游戏垃圾（M13）———
 
@@ -2581,6 +2664,30 @@ const onlineLeaveEl = document.getElementById('online-leave')
 /** 房主的虚拟地址是固定的（联机模块里定死的），好友永远连这个 */
 const HOST_VIRTUAL_IP = '10.126.126.1'
 
+/** 版本可以挑的图标（就这几个够用了，不搞表情包大全） */
+const VERSION_ICONS = ['', '⭐', '🔥', '🌿', '⛏', '🏰', '🧪', '🐷', '💎', '🚀', '🎮', '🛠']
+/** 当前选中的图标 */
+let pickedIcon = ''
+
+function renderIconPicker(current) {
+  pickedIcon = current || ''
+  verIconsEl.textContent = ''
+
+  for (const icon of VERSION_ICONS) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = icon === pickedIcon ? 'icon-picker__item icon-picker__item--on' : 'icon-picker__item'
+    // 第一个是"不要图标"，给个看得懂的写法
+    button.textContent = icon || '无'
+    button.title = icon || '不显示图标'
+    button.addEventListener('click', () => {
+      pickedIcon = icon
+      renderIconPicker(icon)
+    })
+    verIconsEl.appendChild(button)
+  }
+}
+
 /** 版本 JSON 里的 type → 跟用户说的话 */
 const VERSION_TYPE_LABELS = {
   release: '正式版',
@@ -2850,6 +2957,201 @@ window.api.onOnlineStage((text) => setOnlineNotice(text))
 document.getElementById('stat-left').textContent =
   `版本 ${window.api?.appVersion ?? '未知'}`
 
+// 个性化设置要在开机时就套上：藏了哪些页面、背景图、背景音乐、顶栏样式
+// （读失败就当没设过——这些是"看着玩"的东西，不该拦住软件启动）
+window.api
+  .getSettings()
+  .then((config) => {
+    if (!config) return
+    settingsInfo = config
+    applyLook(config.look)
+  })
+  .catch(() => {})
+
 // 所有定义都就位了，把启动页显示出来。
 // （放在最后调用：启动页要用到上面这些变量，页面还没解析完就调会踩空）
 showPage('launch')
+
+// ═══════════════════════════════════════
+// 个性化（M13）：藏页面 / 背景图 / 背景音乐 / 顶栏样式
+// ═══════════════════════════════════════
+
+const bgmEl = document.getElementById('bgm')
+
+/**
+ * 本机路径 → 界面能用的网址。
+ *
+ * 【为什么要转】Windows 的路径是 `D:\图片\背景.png` 这种反斜杠，
+ * 直接塞进 CSS 的 url() 或 <audio src> 里会被当成转义字符，图/音乐都出不来。
+ * 顺手把中文之类的字符编码一下（encodeURI），免得空格和中文把地址截断。
+ */
+function toFileUrl(localPath) {
+  const forward = String(localPath || '').replace(/\\/g, '/')
+  return encodeURI(forward.startsWith('/') ? `file://${forward}` : `file:///${forward}`)
+}
+const lookPagesEl = document.getElementById('look-pages')
+const lookBgEl = document.getElementById('look-bg')
+const lookBgmEl = document.getElementById('look-bgm')
+const lookHintEl = document.getElementById('look-hint')
+const lookThemesEl = document.getElementById('look-themes')
+
+/** 可以藏的页面（「启动」「设置」不给藏——藏了就没地方改回来） */
+const HIDEABLE_PAGES = [
+  { key: 'online', label: '联机', hint: '不玩联机就藏起来' },
+  { key: 'download', label: '下载', hint: '版本都装好了、也不装 Mod 的话可以藏' },
+  { key: 'help', label: '帮助', hint: '常见问题那一页' }
+]
+
+/** 顶栏样式 */
+const THEMES = [
+  { key: 'blue', label: '渐变淡蓝（默认）' },
+  { key: 'plain', label: '纯色淡蓝' },
+  { key: 'dark', label: '深色' }
+]
+
+/**
+ * 把个性化设置套到界面上。
+ *
+ * 【为什么每次都整个套一遍】设置可能被别处改过（比如刚在这页点了"藏起来"），
+ * 与其记"改了什么"，不如每次照当前配置重画一遍——少一种出错的可能。
+ */
+function applyLook(look) {
+  const settingsLook = look || {}
+
+  // ① 藏页面
+  const hidden = settingsLook.hiddenPages || []
+  for (const button of navButtons) {
+    const page = button.dataset.page
+    if (page === 'launch' || page === 'settings') continue
+    button.hidden = hidden.includes(page)
+  }
+
+  // 藏起来的页面正开着的话，切回启动页（不然用户会看到一片空白）
+  const current = [...pages].find((page) => !page.hidden)
+  if (current && hidden.includes(current.dataset.page)) showPage('launch')
+
+  // ② 背景图（Windows 的路径是反斜杠，塞进 url() 里必须换成正斜杠）
+  document.body.style.backgroundImage = settingsLook.background
+    ? `url("${toFileUrl(settingsLook.background)}")`
+    : ''
+  document.body.classList.toggle('has-bg', Boolean(settingsLook.background))
+
+  // ③ 背景音乐：换一首就重放（同一个文件别打断）
+  if (bgmEl.dataset.src !== (settingsLook.bgm || '')) {
+    bgmEl.dataset.src = settingsLook.bgm || ''
+    if (settingsLook.bgm) {
+      bgmEl.src = toFileUrl(settingsLook.bgm)
+      bgmEl.volume = Math.min(1, Math.max(0, (Number(settingsLook.bgmVolume) || 40) / 100))
+      // 浏览器不许自动播放声音，得等用户先点一下页面——所以这里只准备，不硬播
+      bgmEl.play().catch(() => {
+        lookHintEl.textContent = '背景音乐准备好了，点一下界面就会开始放。'
+      })
+    } else {
+      bgmEl.pause()
+      bgmEl.removeAttribute('src')
+    }
+  }
+
+  // ④ 顶栏样式
+  const theme = settingsLook.theme || 'blue'
+  document.body.classList.toggle('theme-plain', theme === 'plain')
+  document.body.classList.toggle('theme-dark', theme === 'dark')
+}
+
+/** 用户第一次点页面时，把没放成的背景音乐补上（浏览器的自动播放限制） */
+function resumeBgmOnce() {
+  if (bgmEl.dataset.src && bgmEl.paused) bgmEl.play().catch(() => {})
+  window.removeEventListener('click', resumeBgmOnce)
+}
+window.addEventListener('click', resumeBgmOnce)
+
+/** 画「个性化」那一栏 */
+function renderLookTab() {
+  const look = settingsInfo?.look || {}
+
+  // 页面开关
+  lookPagesEl.textContent = ''
+  for (const one of HIDEABLE_PAGES) {
+    const label = document.createElement('label')
+    label.className = 'check check--block'
+
+    const input = document.createElement('input')
+    input.type = 'checkbox'
+    // 勾上 = 显示（对用户来说，"显示联机"比"藏起联机"好理解）
+    input.checked = !(look.hiddenPages || []).includes(one.key)
+    input.addEventListener('change', async () => {
+      const hiddenNow = HIDEABLE_PAGES.filter((page) => {
+        if (page.key === one.key) return !input.checked
+        const box = lookPagesEl.querySelector(`input[value="${page.key}"]`)
+        return box ? !box.checked : (look.hiddenPages || []).includes(page.key)
+      }).map((page) => page.key)
+
+      await saveLook({ hiddenPages: hiddenNow })
+    })
+    input.value = one.key
+    label.appendChild(input)
+
+    const span = document.createElement('span')
+    const title = document.createElement('b')
+    title.textContent = one.label
+    span.appendChild(title)
+    const help = document.createElement('em')
+    help.className = 'check__help'
+    help.textContent = one.hint
+    span.appendChild(help)
+    label.appendChild(span)
+
+    lookPagesEl.appendChild(label)
+  }
+
+  lookBgEl.value = look.background || ''
+  lookBgmEl.value = look.bgm || ''
+
+  // 顶栏样式
+  lookThemesEl.textContent = ''
+  for (const one of THEMES) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className =
+      (look.theme || 'blue') === one.key
+        ? 'icon-picker__item icon-picker__item--on'
+        : 'icon-picker__item'
+    button.style.width = 'auto'
+    button.style.padding = '4px 10px'
+    button.style.fontSize = '12.5px'
+    button.textContent = one.label
+    button.addEventListener('click', () => saveLook({ theme: one.key }))
+    lookThemesEl.appendChild(button)
+  }
+}
+
+/** 存个性化设置，然后立刻套上去 */
+async function saveLook(patch) {
+  try {
+    const result = await window.api.setSettings({ look: patch })
+    if (!result.ok) {
+      lookHintEl.textContent = result.error
+      return
+    }
+    settingsInfo = { ...settingsInfo, look: { ...(settingsInfo?.look || {}), ...patch } }
+    applyLook(settingsInfo.look)
+    renderLookTab()
+    lookHintEl.textContent = '改好了，立刻生效。'
+  } catch (error) {
+    lookHintEl.textContent = `存不下来：${error.message}`
+  }
+}
+
+document.getElementById('look-bg-pick').addEventListener('click', async () => {
+  const picked = await window.api.pickLookFile('background')
+  if (picked.ok) await saveLook({ background: picked.path })
+})
+
+document.getElementById('look-bg-clear').addEventListener('click', () => saveLook({ background: '' }))
+
+document.getElementById('look-bgm-pick').addEventListener('click', async () => {
+  const picked = await window.api.pickLookFile('bgm')
+  if (picked.ok) await saveLook({ bgm: picked.path })
+})
+
+document.getElementById('look-bgm-clear').addEventListener('click', () => saveLook({ bgm: '' }))

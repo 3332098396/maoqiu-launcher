@@ -263,6 +263,15 @@ contextBridge.exposeInMainWorld('api', {
    */
   installPack: (options) => ipcRenderer.invoke('pack:install', options),
 
+  /**
+   * 挑背景图 / 背景音乐（弹系统文件选择框，只返回路径，不复制文件）。
+   * @param {'background'|'bgm'} kind
+   */
+  pickLookFile: (kind) => ipcRenderer.invoke('look:pick', kind),
+
+  /** 帮助页的一键打开：'game' 游戏目录 / 'config' 配置目录 */
+  openAppFolder: (which) => ipcRenderer.invoke('app:openFolder', which),
+
   // ——— 清理游戏垃圾（M13）———
 
   /** 扫一遍能清多少（不动任何文件） */

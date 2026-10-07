@@ -26,7 +26,11 @@ const DEFAULTS = {
    *   'official' 只用官方，不经过任何第三方镜像
    */
   download: {
-    source: 'auto'
+    source: 'auto',
+    /** 同时下几个文件（M13，默认 8） */
+    concurrency: 8,
+    /** 限速 KB/s（M13，0 = 不限） */
+    speedLimitKB: 0
   },
   /** 账号。第一期只有离线：{ type: 'offline', name: '玩家名', uuid: '...' } */
   account: null,
@@ -44,6 +48,21 @@ const DEFAULTS = {
     known: [],
     /** 上次拖包装到哪儿了——下次打开那个对话框时默认选它 */
     lastPackDir: ''
+  },
+  /**
+   * 界面个性化（M13）：藏哪些页面、背景图、背景音乐、顶栏样式。
+   * 全是看着玩的东西，坏了不影响游戏——所以读取时一律兜底成空值。
+   */
+  look: {
+    /** 要藏起来的页面（'online' / 'download' / 'help'） */
+    hiddenPages: [],
+    /** 背景图的完整路径（空 = 不设） */
+    background: '',
+    /** 背景音乐的完整路径（空 = 不设），还有音量 0-100 */
+    bgm: '',
+    bgmVolume: 40,
+    /** 顶栏样式：'blue'（默认渐变淡蓝）/ 'plain'（纯色）/ 'dark' */
+    theme: 'blue'
   },
   /**
    * 联机（M12）。记着上次的房间码和用的组件版本，下次打开界面能直接接上。
@@ -107,7 +126,8 @@ function readConfig() {
         known: Array.isArray(dirs.known) ? dirs.known.filter((d) => typeof d === 'string' && d) : [],
         lastPackDir: typeof dirs.lastPackDir === 'string' ? dirs.lastPackDir : ''
       },
-      online: { ...DEFAULTS.online, ...((raw.online) || {}) }
+      online: { ...DEFAULTS.online, ...((raw.online) || {}) },
+      look: { ...DEFAULTS.look, ...((raw.look) || {}) }
     }
   } catch {
     return {
@@ -115,9 +135,24 @@ function readConfig() {
       launch: { ...DEFAULTS.launch },
       download: { ...DEFAULTS.download },
       gameDirs: { known: [], lastPackDir: '' },
-      online: { ...DEFAULTS.online }
+      online: { ...DEFAULTS.online },
+      look: { ...DEFAULTS.look }
     }
   }
+}
+
+/** 同时下几个文件（1-32，默认 8）。网络不好时调小能稳一点 */
+function downloadConcurrency() {
+  const value = Number(readConfig().download?.concurrency)
+  if (!Number.isFinite(value) || value <= 0) return 8
+  return Math.min(32, Math.max(1, Math.round(value)))
+}
+
+/** 下载限速（KB/s，0 = 不限）。单位是 KB，不是 KB/s 之外的什么奇怪东西 */
+function downloadSpeedLimitKB() {
+  const value = Number(readConfig().download?.speedLimitKB)
+  if (!Number.isFinite(value) || value <= 0) return 0
+  return Math.min(1024 * 100, Math.round(value))
 }
 
 /** 下载源偏好：'auto' | 'mirror' | 'official' */
@@ -275,7 +310,8 @@ function writeConfig(patch) {
     ...patch,
     launch: { ...config.launch, ...(patch.launch || {}) },
     gameDirs: { ...config.gameDirs, ...(patch.gameDirs || {}) },
-    online: { ...config.online, ...(patch.online || {}) }
+    online: { ...config.online, ...(patch.online || {}) },
+    look: { ...config.look, ...(patch.look || {}) }
   }
 
   paths.ensureDir(paths.configDir())
@@ -413,6 +449,8 @@ module.exports = {
   globalLaunchSettings,
   effectiveLaunchSettings,
   downloadSource,
+  downloadConcurrency,
+  downloadSpeedLimitKB,
   knownGameDirs,
   rememberGameDir,
   validateGameDir,
