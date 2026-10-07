@@ -216,9 +216,9 @@
       <!-- ═══════════ 设置页 ═══════════ -->
       <section class="page" data-page="settings" hidden>
         <aside class="side">
-          <nav class="menu">
-            <span class="menu__item menu__item--on">启动选项</span>
-            <span class="menu__item menu__item--off" title="下一步就做">备份</span>
+          <nav class="menu" id="settings-menu">
+            <span class="menu__item menu__item--on" data-settings-tab="launch">启动选项</span>
+            <span class="menu__item" data-settings-tab="backup">备份</span>
             <span class="menu__divider">以后再说</span>
             <span class="menu__item menu__item--off">个性化</span>
             <span class="menu__item menu__item--off">其他</span>
@@ -227,6 +227,7 @@
         </aside>
 
         <div class="content">
+          <div class="settings-tab" data-settings-tab="launch">
           <div class="notice" id="settings-notice">
             这里改完马上生效，下次启动游戏就按这里的来。
           </div>
@@ -275,6 +276,85 @@
             </label>
             <p class="panel__desc" id="set-isolation-hint"></p>
           </section>
+          </div>
+
+          <!-- ——— 备份（M6.3）——— -->
+          <div class="settings-tab" data-settings-tab="backup" hidden>
+            <div class="notice" id="backup-notice">
+              勾上要备份的东西、选个存法，点「开始备份」就行。备份只读不写，不会动你的原文件。
+            </div>
+
+            <section class="panel">
+              <h3 class="panel__title">要备份什么</h3>
+              <p class="panel__desc">每一类后面写着它是什么、大概多大。</p>
+
+              <label class="check check--block">
+                <input type="checkbox" id="bk-saves" checked />
+                <span>
+                  <b>存档</b>
+                  <em class="check__help" id="bk-saves-help"></em>
+                  <i class="check__size" id="bk-saves-size"></i>
+                </span>
+              </label>
+
+              <label class="check check--block">
+                <input type="checkbox" id="bk-mods" />
+                <span>
+                  <b>Mod</b>
+                  <em class="check__help" id="bk-mods-help"></em>
+                  <i class="check__size" id="bk-mods-size"></i>
+                </span>
+              </label>
+
+              <label class="check check--block">
+                <input type="checkbox" id="bk-settings" checked />
+                <span>
+                  <b>启动器设置</b>
+                  <em class="check__help" id="bk-settings-help"></em>
+                  <i class="check__size" id="bk-settings-size"></i>
+                </span>
+              </label>
+
+              <label class="check check--block">
+                <input type="checkbox" id="bk-game" />
+                <span>
+                  <b>游戏本体与资源</b>
+                  <em class="check__help" id="bk-game-help"></em>
+                  <i class="check__size" id="bk-game-size"></i>
+                </span>
+              </label>
+            </section>
+
+            <section class="panel">
+              <h3 class="panel__title">存成什么形式</h3>
+              <label class="check check--block">
+                <input type="radio" name="bk-format" value="zip" checked />
+                <span>
+                  <b>压缩包</b>
+                  <em class="check__help">一个文件，省地方，方便放网盘或发给别人</em>
+                </span>
+              </label>
+              <label class="check check--block">
+                <input type="radio" name="bk-format" value="folder" />
+                <span>
+                  <b>文件夹</b>
+                  <em class="check__help">双击就能看里面的东西，想自己动手的时候方便</em>
+                </span>
+              </label>
+            </section>
+
+            <section class="panel">
+              <h3 class="panel__title">开始</h3>
+              <div class="setrow">
+                <button class="btn btn--primary" type="button" id="bk-start">开始备份</button>
+                <button class="btn btn--ghost" type="button" id="bk-open">打开备份文件夹</button>
+              </div>
+              <div class="bar" id="bk-bar-wrap" hidden>
+                <div class="bar__fill" id="bk-bar"></div>
+              </div>
+              <p class="panel__desc" id="bk-status"></p>
+            </section>
+          </div>
         </div>
       </section>
     </main>

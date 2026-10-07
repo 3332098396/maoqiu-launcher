@@ -24,6 +24,7 @@ const accounts = require('./accounts')
 const javaUtil = require('./java')
 const launch = require('./launch')
 const versions = require('./versions')
+const backup = require('./backup')
 
 // 软件名。它会决定数据存放目录：%APPDATA%\MC启动器\
 app.setName('MC启动器')
@@ -64,6 +65,9 @@ function createWindow() {
 
 /** 当前正在跑的安装任务（同时只允许一个） */
 let currentInstall = null
+
+/** 有没有备份正在跑（同时只允许一个） */
+let backupRunning = false
 
 function registerIpcHandlers() {
   /** 本机已装了哪些版本 */
@@ -293,6 +297,37 @@ function registerIpcHandlers() {
   ipcMain.handle('versions:setSettings', (_event, id, patch) =>
     versions.setVersionSettings(id, patch)
   )
+
+  // ——— 一键备份（M6.3）———
+
+  /** 每一类大概多大（界面显示"约 XX MB"用） */
+  ipcMain.handle('backup:estimate', () => ({
+    sizes: backup.estimateSizes(),
+    help: backup.CATEGORY_HELP,
+    names: backup.CATEGORIES,
+    dir: paths.backupsDir()
+  }))
+
+  /** 开始备份。进度通过 backup:progress 推给界面 */
+  ipcMain.handle('backup:start', async (event, options) => {
+    if (backupRunning) return { ok: false, error: '已经有一个备份在跑了，等它完成' }
+
+    backupRunning = true
+    try {
+      return await backup.createBackup(options, {
+        // 每次报进度都让出一下主线程，界面才不会卡死
+        onProgress: async (payload) => {
+          if (!event.sender.isDestroyed()) event.sender.send('backup:progress', payload)
+          await new Promise((resolve) => setImmediate(resolve))
+        }
+      })
+    } finally {
+      backupRunning = false
+    }
+  })
+
+  /** 打开备份文件夹 */
+  ipcMain.handle('backup:openFolder', () => backup.openBackupFolder(shell))
 
   // ——— 启动设置（M6.2）———
 

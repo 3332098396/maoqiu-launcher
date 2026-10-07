@@ -738,6 +738,7 @@ let deletingVersion = ''
 
 function formatBytes(bytes) {
   if (!bytes) return '0 MB'
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
   const mb = bytes / 1024 / 1024
   if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`
   return `${mb.toFixed(1)} MB`
@@ -1198,6 +1199,129 @@ setIsolationEl.addEventListener('change', () => {
     settingsInfo.isolation = setIsolationEl.checked
     renderIsolationHint()
   })
+})
+
+// ═══════════════════════════════════════
+// 设置页：备份（M6.3）
+// ═══════════════════════════════════════
+
+const settingsMenuEl = document.getElementById('settings-menu')
+const settingsTabEls = document.querySelectorAll('.settings-tab')
+const backupNoticeEl = document.getElementById('backup-notice')
+const bkStartEl = document.getElementById('bk-start')
+const bkOpenEl = document.getElementById('bk-open')
+const bkBarWrapEl = document.getElementById('bk-bar-wrap')
+const bkBarEl = document.getElementById('bk-bar')
+const bkStatusEl = document.getElementById('bk-status')
+
+/** 每一类多大、说明是什么（第一次打开备份页时算一次） */
+let backupInfo = null
+/** 有没有备份在跑 */
+let backupBusy = false
+
+function showSettingsTab(name) {
+  for (const item of settingsMenuEl.children) {
+    if (item.dataset && item.dataset.settingsTab) {
+      item.classList.toggle('menu__item--on', item.dataset.settingsTab === name)
+    }
+  }
+  for (const tab of settingsTabEls) {
+    tab.hidden = tab.dataset.settingsTab !== name
+  }
+  if (name === 'backup') loadBackupTab()
+}
+
+settingsMenuEl.addEventListener('click', (event) => {
+  const item = event.target.closest('.menu__item[data-settings-tab]')
+  if (item) showSettingsTab(item.dataset.settingsTab)
+})
+
+async function loadBackupTab() {
+  if (backupInfo) return
+  backupNoticeEl.textContent = '正在算每一类有多大…'
+
+  try {
+    backupInfo = await window.api.getBackupEstimate()
+  } catch (error) {
+    backupNoticeEl.textContent = `读不出来：${error.message}`
+    return
+  }
+
+  for (const key of ['saves', 'mods', 'settings', 'game']) {
+    const help = document.getElementById(`bk-${key}-help`)
+    const size = document.getElementById(`bk-${key}-size`)
+    if (help) help.textContent = backupInfo.help[key] || ''
+    if (size) {
+      size.textContent = backupInfo.sizes[key]
+        ? `约 ${formatBytes(backupInfo.sizes[key])}`
+        : '（现在是空的）'
+    }
+  }
+
+  backupNoticeEl.textContent =
+    `备份会存到：${backupInfo.dir}（只读不写，不会动你的原文件）`
+}
+
+function setBackupBar(percent) {
+  bkBarEl.style.width = `${Math.max(0, Math.min(100, percent))}%`
+}
+
+async function startBackup() {
+  if (backupBusy) return
+
+  const categories = {
+    saves: document.getElementById('bk-saves').checked,
+    mods: document.getElementById('bk-mods').checked,
+    settings: document.getElementById('bk-settings').checked,
+    game: document.getElementById('bk-game').checked
+  }
+  const format = document.querySelector('input[name="bk-format"]:checked').value
+
+  backupBusy = true
+  bkStartEl.disabled = true
+  bkBarWrapEl.hidden = false
+  setBackupBar(0)
+  bkStatusEl.classList.remove('panel__desc--bad')
+  bkStatusEl.textContent = '准备中…'
+
+  let result
+  try {
+    result = await window.api.startBackup({ categories, format })
+  } catch (error) {
+    result = { ok: false, error: String(error?.message ?? error) }
+  }
+
+  backupBusy = false
+  bkStartEl.disabled = false
+
+  if (!result.ok) {
+    setBackupBar(0)
+    bkStatusEl.classList.add('panel__desc--bad')
+    bkStatusEl.textContent = result.error
+    return
+  }
+
+  setBackupBar(100)
+  bkStatusEl.textContent =
+    `备份做完了：${result.path}\n共 ${result.count} 个文件，${formatBytes(result.bytes)}`
+}
+
+bkStartEl.addEventListener('click', startBackup)
+
+bkOpenEl.addEventListener('click', async () => {
+  const result = await window.api.openBackupFolder()
+  if (!result.ok) {
+    bkStatusEl.classList.add('panel__desc--bad')
+    bkStatusEl.textContent = `打不开备份文件夹：${result.error}`
+  }
+})
+
+window.api.onBackupProgress((payload) => {
+  const percent = payload.total > 0 ? Math.round((payload.done / payload.total) * 100) : 0
+  setBackupBar(percent)
+  bkStatusEl.textContent =
+    `正在备份… ${payload.done}/${payload.total} 个文件 · ` +
+    `${formatBytes(payload.bytes)}/${formatBytes(payload.totalBytes)}`
 })
 
 // ═══════════════════════════════════════

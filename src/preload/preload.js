@@ -152,5 +152,28 @@ contextBridge.exposeInMainWorld('api', {
    * patch: { memoryMB?, window?: {width,height}|null, isolation? }
    * @returns {Promise<{ok: boolean, settings?: object, error?: string}>}
    */
-  setVersionSettings: (id, patch) => ipcRenderer.invoke('versions:setSettings', id, patch)
+  setVersionSettings: (id, patch) => ipcRenderer.invoke('versions:setSettings', id, patch),
+
+  // ——— 一键备份（M6.3）———
+
+  /**
+   * 每一类要备份的东西大概多大 + 它们的说明。
+   * @returns {Promise<{sizes: object, help: object, names: object, dir: string}>}
+   */
+  getBackupEstimate: () => ipcRenderer.invoke('backup:estimate'),
+
+  /**
+   * 开始备份。过程中通过 onBackupProgress 推进度。
+   * options: { categories: {saves, mods, settings, game}, format: 'zip' | 'folder' }
+   * @returns {Promise<{ok: boolean, path?: string, bytes?: number, count?: number, error?: string}>}
+   */
+  startBackup: (options) => ipcRenderer.invoke('backup:start', options),
+
+  /** 打开备份文件夹 */
+  openBackupFolder: () => ipcRenderer.invoke('backup:openFolder'),
+
+  /** 备份进度：{ done, total, bytes, totalBytes } */
+  onBackupProgress: (callback) => {
+    ipcRenderer.on('backup:progress', (_event, payload) => callback(payload))
+  }
 })

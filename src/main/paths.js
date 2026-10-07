@@ -39,6 +39,11 @@ function logsDir() {
   return path.join(configDir(), 'logs')
 }
 
+/** 备份放在这儿（一键备份生成的压缩包/文件夹都在里面） */
+function backupsDir() {
+  return path.join(configDir(), 'backups')
+}
+
 // ——————————————————————————————————————————————
 // 游戏目录
 // ——————————————————————————————————————————————
@@ -161,6 +166,7 @@ module.exports = {
   manifestCacheFile,
   settingsFile,
   logsDir,
+  backupsDir,
   gameDir,
   versionsDir,
   librariesDir,
