@@ -598,7 +598,7 @@ function registerIpcHandlers() {
       if (look.bgmVolume !== undefined) {
         lookPatch.bgmVolume = Math.min(100, Math.max(0, Math.round(Number(look.bgmVolume) || 0)))
       }
-      if (typeof look.theme === 'string' && ['blue', 'plain', 'dark'].includes(look.theme)) {
+      if (typeof look.theme === 'string' && ['blue', 'dark', 'matcha', 'sunset', 'sakura'].includes(look.theme)) {
         lookPatch.theme = look.theme
       }
 

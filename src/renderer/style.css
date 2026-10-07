@@ -1,36 +1,229 @@
 /* 毛球 — 界面样式
  *
- * 设计基调：简洁、直观、渐变淡蓝。
- * 所有颜色都写成变量，以后想换配色只改这一块即可。
+ * 设计基调：简洁、直观、渐变淡蓝（M14.1 起另有多套主题可切）。
  *
- * 当前进度：M5（启动游戏）。启动页的账号、版本选择、日志面板都在这一版。
+ * 【M14.1 的大扫除】原来界面里散着 28 种写死的颜色、129 处，
+ * 想换配色根本没法换。现在**所有颜色都必须走这里定义的变量**：
+ * 换主题 = 改一组变量，别的地方一行不用动。
+ * 查漏：grep -oE "#[0-9a-fA-F]{3,8}\b" src/renderer/style.css | sort -u
+ * —— 除了这份 :root 和下面的主题块，别处不该再出现颜色值。
  */
 
 :root {
-  /* —— 色板：渐变淡蓝 —— */
+  /* —— 渐变（顶栏 / 页面底 / 主按钮）—— */
   --topbar-gradient: linear-gradient(120deg, #8fcbff, #5aa9ff);
   --page-gradient: linear-gradient(160deg, #eaf4ff, #f7fbff 45%, #e6f1ff);
   --primary-gradient: linear-gradient(135deg, #7cc0ff, #4a9bff);
+  --page-tint: #eaf4ff;
 
+  /* —— 面（卡片、输入框、选中态）—— */
   --card-bg: #ffffff;
+  --surface: #ffffff;
+  --surface-soft: #f7fbff;
+  --surface-accent: #eef6ff;
+  --surface-accent-2: #e6f2ff;
   --card-border: #dcebff;
   --card-border-hover: #b8dbff;
+  --accent-line: #e3f0ff;
   --card-radius: 12px;
   --card-shadow: 0 2px 8px rgba(74, 155, 255, 0.08);
   --card-shadow-hover: 0 6px 18px rgba(74, 155, 255, 0.18);
+  --accent-shadow: rgba(74, 155, 255, 0.28);
+  --accent-shadow-strong: rgba(74, 155, 255, 0.32);
+  --accent-shadow-soft: rgba(74, 155, 255, 0.08);
+  --accent-ring: rgba(74, 155, 255, 0.18);
+  --accent-ring-soft: rgba(74, 155, 255, 0.12);
 
+  /* —— 强调色（按钮、选中、链接）—— */
+  --accent: #4a9bff;
+  --accent-strong: #3d86d8;
+  --accent-soft: #7cc0ff;
+
+  /* —— 状态色 —— */
   --ok: #4caf72;
+  --ok-soft: #eafaf0;
+  --ok-line: #cfefdc;
+  --ok-text: #2f8f52;
   --warn: #ffb020;
+  --warn-soft: #fff6e6;
+  --warn-text: #a8620f;
   --danger: #ff6b6b;
+  --danger-soft: #ffeeee;
+  --danger-strong: #d9736f;
+  --danger-ring: rgba(242, 109, 109, 0.28);
 
+  /* —— 字 —— */
   --text: #1f2d3d;
   --text-dim: #6b7c93;
   --text-muted: #9aaabb;
+
+  /* —— 叠层（弹窗灰底、顶栏上的高光）—— */
+  --overlay: rgba(31, 45, 61, 0.3);
+  --overlay-strong: rgba(31, 45, 61, 0.35);
+  --overlay-soft: rgba(31, 45, 61, 0.12);
+  --surface-a95: rgba(255, 255, 255, 0.95);
+  --surface-a82: rgba(255, 255, 255, 0.82);
+  --surface-a72: rgba(255, 255, 255, 0.72);
+  --surface-a55: rgba(255, 255, 255, 0.55);
+  --on-accent: #fff;
+  --on-accent-a35: rgba(255, 255, 255, 0.35);
+  --on-accent-a25: rgba(255, 255, 255, 0.25);
+  --on-accent-a22: rgba(255, 255, 255, 0.22);
+  --on-accent-a18: rgba(255, 255, 255, 0.18);
 
   --side-width: 230px;
 
   /* —— 字体 —— */
   --font: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif;
+}
+
+/* ══════════════════════════════════════════════
+   主题（M14.1）
+   每个主题只改上面那组变量——别的地方一行都不用动。
+   加新主题：复制一段、改颜色、在 app.js 的 THEMES 里加一项。
+   ══════════════════════════════════════════════ */
+
+/* 深色（学 KAMUCL 那种感觉：深底 + 亮强调色） */
+body[data-theme='dark'] {
+  --topbar-gradient: linear-gradient(120deg, #2b2f45, #232741);
+  --page-gradient: linear-gradient(160deg, #1b1e2e, #1f2335 45%, #191c2b);
+  --page-tint: #1f2335;
+  --primary-gradient: linear-gradient(135deg, #8b7bff, #6a5ae0);
+
+  --card-bg: #232741;
+  --surface: #262a45;
+  --surface-soft: #1f2338;
+  --surface-accent: #2c3252;
+  --surface-accent-2: #313861;
+  --card-border: #333a5c;
+  --card-border-hover: #4a548a;
+  --accent-line: #383f66;
+  --card-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+  --card-shadow-hover: 0 8px 22px rgba(0, 0, 0, 0.4);
+  --accent-shadow: rgba(139, 123, 255, 0.3);
+  --accent-shadow-strong: rgba(139, 123, 255, 0.34);
+  --accent-shadow-soft: rgba(139, 123, 255, 0.1);
+  --accent-ring: rgba(139, 123, 255, 0.22);
+  --accent-ring-soft: rgba(139, 123, 255, 0.14);
+
+  --accent: #8b7bff;
+  --accent-strong: #a294ff;
+  --accent-soft: #6a5ae0;
+
+  --ok: #5ec98a;
+  --ok-soft: #1f3830;
+  --ok-line: #2c4f42;
+  --ok-text: #7bd6a2;
+  --warn: #ffc247;
+  --warn-soft: #3a3220;
+  --warn-text: #ffd479;
+  --danger: #ff7676;
+  --danger-soft: #3a2429;
+  --danger-strong: #ff9a9a;
+  --danger-ring: rgba(255, 118, 118, 0.3);
+
+  --text: #e8ebf7;
+  --text-dim: #a9b0cc;
+  --text-muted: #7b83a3;
+
+  --overlay: rgba(0, 0, 0, 0.5);
+  --overlay-strong: rgba(0, 0, 0, 0.62);
+  --overlay-soft: rgba(0, 0, 0, 0.24);
+  --surface-a95: rgba(35, 39, 65, 0.96);
+  --surface-a82: rgba(35, 39, 65, 0.85);
+  --surface-a72: rgba(35, 39, 65, 0.75);
+  --surface-a55: rgba(35, 39, 65, 0.6);
+  --on-accent: #ffffff;
+}
+
+/* 抹茶绿 */
+body[data-theme='matcha'] {
+  --topbar-gradient: linear-gradient(120deg, #a8d8b9, #7bc59a);
+  --page-gradient: linear-gradient(160deg, #eef9f1, #f8fdf9 45%, #e7f5ec);
+  --page-tint: #e7f5ec;
+  --primary-gradient: linear-gradient(135deg, #8fd3a8, #56b57f);
+
+  --surface-soft: #f6fcf8;
+  --surface-accent: #eaf7ef;
+  --surface-accent-2: #ddf1e5;
+  --card-border: #d5ebdd;
+  --card-border-hover: #b0dcc1;
+  --accent-line: #ddf0e5;
+  --card-shadow: 0 2px 8px rgba(86, 181, 127, 0.1);
+  --card-shadow-hover: 0 6px 18px rgba(86, 181, 127, 0.2);
+  --accent-shadow: rgba(86, 181, 127, 0.28);
+  --accent-shadow-strong: rgba(86, 181, 127, 0.32);
+  --accent-shadow-soft: rgba(86, 181, 127, 0.1);
+  --accent-ring: rgba(86, 181, 127, 0.18);
+  --accent-ring-soft: rgba(86, 181, 127, 0.12);
+
+  --accent: #56b57f;
+  --accent-strong: #3f9968;
+  --accent-soft: #8fd3a8;
+
+  --text: #22302a;
+  --text-dim: #5f7a6b;
+  --text-muted: #93a89b;
+}
+
+/* 暖阳橙 */
+body[data-theme='sunset'] {
+  --topbar-gradient: linear-gradient(120deg, #ffca8f, #ff9f5a);
+  --page-gradient: linear-gradient(160deg, #fff5e9, #fffbf6 45%, #ffefe0);
+  --page-tint: #ffefe0;
+  --primary-gradient: linear-gradient(135deg, #ffb877, #f79140);
+
+  --surface-soft: #fffaf4;
+  --surface-accent: #fff2e2;
+  --surface-accent-2: #ffe8d1;
+  --card-border: #f6e2cc;
+  --card-border-hover: #eec9a3;
+  --accent-line: #f8e6d3;
+  --card-shadow: 0 2px 8px rgba(247, 145, 64, 0.1);
+  --card-shadow-hover: 0 6px 18px rgba(247, 145, 64, 0.2);
+  --accent-shadow: rgba(247, 145, 64, 0.28);
+  --accent-shadow-strong: rgba(247, 145, 64, 0.32);
+  --accent-shadow-soft: rgba(247, 145, 64, 0.1);
+  --accent-ring: rgba(247, 145, 64, 0.18);
+  --accent-ring-soft: rgba(247, 145, 64, 0.12);
+
+  --accent: #f79140;
+  --accent-strong: #dd7623;
+  --accent-soft: #ffb877;
+
+  --text: #35261a;
+  --text-dim: #8a6f58;
+  --text-muted: #b8a08c;
+}
+
+/* 樱花粉 */
+body[data-theme='sakura'] {
+  --topbar-gradient: linear-gradient(120deg, #ffc2d8, #ff9dc0);
+  --page-gradient: linear-gradient(160deg, #fff2f7, #fffafc 45%, #ffeaf3);
+  --page-tint: #ffeaf3;
+  --primary-gradient: linear-gradient(135deg, #ffaecb, #f97fae);
+
+  --surface-soft: #fff8fb;
+  --surface-accent: #ffeef5;
+  --surface-accent-2: #ffe1ec;
+  --card-border: #f7dbe7;
+  --card-border-hover: #efbcd1;
+  --accent-line: #f9e3ec;
+  --card-shadow: 0 2px 8px rgba(249, 127, 174, 0.1);
+  --card-shadow-hover: 0 6px 18px rgba(249, 127, 174, 0.2);
+  --accent-shadow: rgba(249, 127, 174, 0.28);
+  --accent-shadow-strong: rgba(249, 127, 174, 0.32);
+  --accent-shadow-soft: rgba(249, 127, 174, 0.1);
+  --accent-ring: rgba(249, 127, 174, 0.18);
+  --accent-ring-soft: rgba(249, 127, 174, 0.12);
+
+  --accent: #f97fae;
+  --accent-strong: #e0608f;
+  --accent-soft: #ffaecb;
+
+  --text: #37232c;
+  --text-dim: #8d6a78;
+  --text-muted: #bb9aa8;
 }
 
 * {
@@ -66,8 +259,8 @@ body {
   padding: 0 16px;
   height: 54px;
   background: var(--topbar-gradient);
-  color: #fff;
-  box-shadow: 0 2px 12px rgba(90, 169, 255, 0.35);
+  color: var(--surface);
+  box-shadow: 0 2px 12px var(--accent-shadow);
 }
 
 .topbar__logo {
@@ -100,7 +293,7 @@ body {
   padding: 7px 18px;
   font-family: var(--font);
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--surface-a82);
   background: transparent;
   border: none;
   border-radius: 999px;
@@ -109,16 +302,16 @@ body {
 }
 
 .nav__btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.18);
+  color: var(--surface);
+  background: var(--on-accent-a18);
 }
 
 .nav__btn--on,
 .nav__btn--on:hover {
-  color: #3d86d8;
-  background: #fff;
+  color: var(--accent-strong);
+  background: var(--surface);
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(31, 45, 61, 0.12);
+  box-shadow: 0 2px 8px var(--overlay-soft);
 }
 
 .nav__icon {
@@ -131,8 +324,8 @@ body {
   padding: 5px 13px;
   font-family: var(--font);
   font-size: 12.5px;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.22);
+  color: var(--surface);
+  background: var(--on-accent-a22);
   border: none;
   border-radius: 999px;
   cursor: pointer;
@@ -140,7 +333,7 @@ body {
 }
 
 .topbar__btn:hover {
-  background: rgba(255, 255, 255, 0.35);
+  background: var(--on-accent-a35);
 }
 
 .topbar__tag {
@@ -148,7 +341,7 @@ body {
   font-size: 12px;
   padding: 3px 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--on-accent-a25);
 }
 
 /* ═══════════════════════════════════════
@@ -178,8 +371,8 @@ body {
   gap: 12px;
   padding: 16px;
   overflow-y: auto;
-  background: rgba(255, 255, 255, 0.55);
-  border-right: 1px solid #e3f0ff;
+  background: var(--surface-a55);
+  border-right: 1px solid var(--accent-line);
 }
 
 .content {
@@ -209,7 +402,7 @@ body {
   gap: 4px;
   padding: 3px;
   border-radius: 999px;
-  background: #f0f7ff;
+  background: var(--surface-soft);
 }
 
 .acc__tab {
@@ -220,7 +413,7 @@ body {
 }
 
 .acc__tab--on {
-  color: #fff;
+  color: var(--surface);
   background: var(--primary-gradient);
 }
 
@@ -237,9 +430,9 @@ body {
   width: 52px;
   height: 52px;
   font-size: 24px;
-  color: #fff;
+  color: var(--surface);
   border-radius: 10px;
-  background: linear-gradient(160deg, #b9dcff, #7cc0ff);
+  background: linear-gradient(160deg, var(--accent-line), var(--accent-soft));
 }
 
 .acc__name {
@@ -294,18 +487,18 @@ body {
   /* 箭头要看得清：原来 11px 太小了，用户实测说"箭头太小" */
   font-size: 15px;
   line-height: 1;
-  color: #4a9bff;
-  background: #f2f8ff;
-  border: 1px solid #bcdcff;
+  color: var(--accent);
+  background: var(--surface-accent);
+  border: 1px solid var(--accent-line);
   border-radius: 7px;
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .pick__toggle:hover {
-  color: #2f7fe0;
-  background: #e6f2ff;
-  border-color: #7cc0ff;
+  color: var(--accent-strong);
+  background: var(--surface-accent-2);
+  border-color: var(--accent-soft);
 }
 
 .pick__list {
@@ -327,8 +520,8 @@ body {
   padding: 1px 6px;
   font-style: normal;
   font-size: 11px;
-  color: #2f6fb5;
-  background: #eef6ff;
+  color: var(--accent-strong);
+  background: var(--surface-accent);
   border-radius: 999px;
 }
 
@@ -339,7 +532,7 @@ body {
   padding: 8px 12px;
   font-size: 13px;
   color: var(--text-dim);
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--card-border);
   border-radius: 8px;
   cursor: pointer;
@@ -363,10 +556,10 @@ body {
 
 .pick__item--on,
 .pick__item--on:hover {
-  color: #3d86d8;
+  color: var(--accent-strong);
   font-weight: 600;
-  background: #eef6ff;
-  border-color: #9ccaff;
+  background: var(--surface-accent);
+  border-color: var(--accent-soft);
 }
 
 .pick__empty {
@@ -416,9 +609,9 @@ body {
 }
 
 .menu__item--on {
-  color: #3d86d8;
+  color: var(--accent-strong);
   font-weight: 600;
-  background: #e6f2ff;
+  background: var(--surface-accent-2);
 }
 
 .menu__divider {
@@ -460,9 +653,9 @@ body {
 }
 
 .btn--primary {
-  color: #fff;
+  color: var(--surface);
   background: var(--primary-gradient);
-  box-shadow: 0 3px 12px rgba(74, 155, 255, 0.32);
+  box-shadow: 0 3px 12px var(--accent-shadow-strong);
 }
 
 .btn--primary:hover:not(:disabled) {
@@ -471,7 +664,7 @@ body {
 
 .btn--ghost {
   color: var(--text-dim);
-  background: #fff;
+  background: var(--surface);
   border-color: var(--card-border);
 }
 
@@ -500,27 +693,27 @@ body {
   margin-bottom: 18px;
   font-size: 13px;
   line-height: 1.7;
-  color: #3d6b9e;
-  background: linear-gradient(135deg, #eaf4ff, #f6fbff);
-  border: 1px solid #d6e9ff;
+  color: var(--accent-strong);
+  background: linear-gradient(135deg, var(--page-tint), var(--surface-soft));
+  border: 1px solid var(--accent-line);
   border-radius: 10px;
 }
 
 .notice b {
-  color: #2b5b8c;
+  color: var(--accent-strong);
 }
 
 /* 提示条按内容换颜色：绿色=顺利，红色=出问题了 */
 .notice--ok {
-  color: #2f8f52;
-  background: linear-gradient(135deg, #eafaf0, #f6fffa);
-  border-color: #cfefdc;
+  color: var(--ok-text);
+  background: linear-gradient(135deg, var(--ok-soft), var(--ok-soft));
+  border-color: var(--ok-line);
 }
 
 .notice--error {
-  color: #b04a4a;
-  background: linear-gradient(135deg, #fff0f0, #fff8f8);
-  border-color: #ffd9d9;
+  color: var(--danger-strong);
+  background: var(--danger-soft);
+  border-color: var(--danger-soft);
   white-space: pre-wrap;
 }
 
@@ -573,8 +766,8 @@ body {
   padding: 10px 12px;
   margin-bottom: 12px;
   font-size: 12.5px;
-  background: #f7fbff;
-  border: 1px solid #e2eefc;
+  background: var(--surface-soft);
+  border: 1px solid var(--accent-line);
   border-radius: 10px;
 }
 
@@ -654,13 +847,13 @@ body {
 }
 
 .peer__tag--direct {
-  color: #2f8f52;
-  background: #eafaf0;
+  color: var(--ok-text);
+  background: var(--ok-soft);
 }
 
 .peer__tag--relay {
-  color: #a8620f;
-  background: #fff6e6;
+  color: var(--warn-text);
+  background: var(--warn-soft);
 }
 
 .log {
@@ -673,9 +866,9 @@ body {
   font-family: Consolas, "Courier New", monospace;
   font-size: 11.5px;
   line-height: 1.7;
-  color: #3c4a5a;
-  background: #f7fbff;
-  border: 1px solid #e3f0ff;
+  color: var(--text);
+  background: var(--surface-soft);
+  border: 1px solid var(--accent-line);
   border-radius: 8px;
   white-space: pre-wrap;
   word-break: break-all;
@@ -692,7 +885,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(74, 155, 255, 0.18);
+  background: var(--accent-ring);
   /* 拖拽时鼠标事件走 dataTransfer，别让这层挡住判定 */
   pointer-events: none;
 }
@@ -709,11 +902,11 @@ body {
   padding: 32px 48px;
   font-size: 15px;
   font-weight: 600;
-  color: #3d86d8;
-  background: rgba(255, 255, 255, 0.95);
-  border: 2px dashed #7cc0ff;
+  color: var(--accent-strong);
+  background: var(--surface-a95);
+  border: 2px dashed var(--accent-soft);
   border-radius: 16px;
-  box-shadow: 0 12px 40px rgba(74, 155, 255, 0.25);
+  box-shadow: 0 12px 40px var(--accent-shadow);
 }
 
 .dropzone__icon {
@@ -731,7 +924,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 28px;
-  background: rgba(31, 45, 61, 0.35);
+  background: var(--overlay-strong);
 }
 
 .modal[hidden] {
@@ -745,9 +938,9 @@ body {
   width: min(880px, 100%);
   height: min(560px, 100%);
   padding: 16px 18px;
-  background: #fff;
+  background: var(--surface);
   border-radius: var(--card-radius);
-  box-shadow: 0 18px 50px rgba(31, 45, 61, 0.3);
+  box-shadow: 0 18px 50px var(--overlay);
 }
 
 .modal__head {
@@ -855,7 +1048,7 @@ body {
 }
 
 .delbox--safe {
-  color: #2f8f52;
+  color: var(--ok-text);
 }
 
 .delbox--warn {
@@ -864,9 +1057,9 @@ body {
 
 /* 危险操作按钮（删除）：红色，让人看清楚再点 */
 .btn--danger {
-  color: #fff;
-  background: linear-gradient(135deg, #ff8f8f, #f26d6d);
-  box-shadow: 0 3px 12px rgba(242, 109, 109, 0.28);
+  color: var(--surface);
+  background: linear-gradient(135deg, var(--danger), var(--danger));
+  box-shadow: 0 3px 12px var(--danger-ring);
 }
 
 .btn--danger:hover:not(:disabled) {
@@ -878,7 +1071,7 @@ body {
   padding: 2px 6px;
   font-family: var(--font);
   font-size: 12px;
-  color: #4a9bff;
+  color: var(--accent);
   background: none;
   border: none;
   border-radius: 6px;
@@ -887,7 +1080,7 @@ body {
 }
 
 .linkbtn:hover:not(:disabled) {
-  background: #eaf4ff;
+  background: var(--page-tint);
 }
 
 .linkbtn:disabled {
@@ -897,11 +1090,11 @@ body {
 
 /* 取消类操作的字是红的，让人点之前多看一眼 */
 .linkbtn--danger {
-  color: #d9736f;
+  color: var(--danger-strong);
 }
 
 .linkbtn--danger:hover:not(:disabled) {
-  background: #ffeeee;
+  background: var(--danger-soft);
 }
 
 .install__buttons {
@@ -1029,7 +1222,7 @@ body {
 .range {
   flex: 1 1 220px;
   min-width: 160px;
-  accent-color: #4a9bff;
+  accent-color: var(--accent);
 }
 
 /* 没勾"单独设置"的时候，这些控件是灰的、不能动 */
@@ -1049,7 +1242,7 @@ body {
 .check input {
   width: 16px;
   height: 16px;
-  accent-color: #4a9bff;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
@@ -1079,6 +1272,8 @@ body {
   font-style: normal;
   font-size: 12px;
   color: var(--text-dim);
+  /* 和前面那个名字之间留点空——不留的话会粘成"联机不玩联机就藏起来"（实测） */
+  margin-left: 6px;
 }
 
 .check__size {
@@ -1096,7 +1291,7 @@ body {
 
 .menu__item[data-settings-tab]:hover:not(.menu__item--on) {
   color: var(--text);
-  background: #eef6ff;
+  background: var(--surface-accent);
 }
 
 /* 提示文字的小号版本（说明"去哪改"这类话） */
@@ -1142,7 +1337,7 @@ body {
   font-family: var(--font);
   font-size: 13px;
   color: var(--text);
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--card-border);
   border-radius: 9px;
   outline: none;
@@ -1152,8 +1347,8 @@ body {
 }
 
 .input:focus:not(:disabled) {
-  border-color: #7cc0ff;
-  box-shadow: 0 0 0 3px rgba(74, 155, 255, 0.16);
+  border-color: var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 /**
@@ -1166,18 +1361,18 @@ body {
  */
 .input--edit {
   padding: 8px 11px;
-  border: 2px solid #7cc0ff;
-  background: #f5faff;
+  border: 2px solid var(--accent-soft);
+  background: var(--surface-accent);
 }
 
 .input--edit:focus:not(:disabled) {
-  border-color: #4a9bff;
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(74, 155, 255, 0.18);
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .input:disabled {
-  background: #f6fbff;
+  background: var(--surface-soft);
   color: var(--text-muted);
   cursor: not-allowed;
 }
@@ -1203,7 +1398,7 @@ body {
   align-items: center;
   gap: 10px;
   padding: 14px 20px;
-  border-bottom: 1px solid #e8f2ff;
+  border-bottom: 1px solid var(--accent-line);
 }
 
 .verbar .input {
@@ -1223,7 +1418,7 @@ body {
   font-family: var(--font);
   font-size: 12.5px;
   color: var(--text-dim);
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--card-border);
   border-radius: 999px;
   cursor: pointer;
@@ -1231,16 +1426,16 @@ body {
 }
 
 .chip:hover {
-  color: #4a9bff;
+  color: var(--accent);
   border-color: var(--card-border-hover);
 }
 
 .chip--on,
 .chip--on:hover {
-  color: #fff;
+  color: var(--surface);
   border-color: transparent;
   background: var(--primary-gradient);
-  box-shadow: 0 2px 8px rgba(74, 155, 255, 0.28);
+  box-shadow: 0 2px 8px var(--accent-shadow);
 }
 
 .chip:active {
@@ -1306,7 +1501,7 @@ body {
 .menu__item[data-dl-tab]:hover:not(.menu__item--on),
 .menu__item[data-dl-cat]:hover:not(.menu__item--on) {
   color: var(--text);
-  background: #eef6ff;
+  background: var(--surface-accent);
 }
 
 /* 社区资源列表里的一行 */
@@ -1321,7 +1516,7 @@ body {
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  background: #eef6ff;
+  background: var(--surface-accent);
   object-fit: cover;
 }
 
@@ -1369,9 +1564,9 @@ body {
   gap: 10px;
   padding: 10px 20px;
   font-size: 12.5px;
-  color: #2f8f52;
-  background: #f2fbf6;
-  border-top: 1px solid #d9f0e3;
+  color: var(--ok-text);
+  background: var(--ok-soft);
+  border-top: 1px solid var(--ok-line);
 }
 
 .mrdone[hidden] {
@@ -1402,18 +1597,18 @@ body {
 }
 
 .ver__badge--release {
-  color: #2f8f52;
-  background: #e6f7ec;
+  color: var(--ok-text);
+  background: var(--ok-soft);
 }
 
 .ver__badge--snapshot {
-  color: #b8791a;
-  background: #fff4e0;
+  color: var(--warn-text);
+  background: var(--warn-soft);
 }
 
 .ver__badge--old {
-  color: #7a6a9b;
-  background: #f1ecfb;
+  color: var(--accent-strong);
+  background: var(--surface-accent);
 }
 
 .ver__date {
@@ -1452,9 +1647,9 @@ body {
 .install {
   flex: 0 0 auto;
   padding: 12px 20px 14px;
-  background: #fff;
-  border-top: 1px solid #e3f0ff;
-  box-shadow: 0 -4px 16px rgba(74, 155, 255, 0.12);
+  background: var(--surface);
+  border-top: 1px solid var(--accent-line);
+  box-shadow: 0 -4px 16px var(--accent-ring-soft);
 }
 
 .install[hidden] {
@@ -1493,7 +1688,7 @@ body {
   height: 8px;
   margin-top: 9px;
   border-radius: 999px;
-  background: #e8f2ff;
+  background: var(--accent-line);
   overflow: hidden;
 }
 
@@ -1517,8 +1712,8 @@ body {
   padding: 7px 20px;
   font-size: 12px;
   color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.72);
-  border-top: 1px solid #e3f0ff;
+  background: var(--surface-a72);
+  border-top: 1px solid var(--accent-line);
 }
 
 /* ═══════════════════════════════════════
@@ -1529,14 +1724,14 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cfe3ff;
+  background: var(--accent-line);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a9ccff;
+  background: var(--accent-soft);
   background-clip: content-box;
 }
 
@@ -1566,7 +1761,7 @@ body {
   content: '＋';
   display: inline-block;
   width: 18px;
-  color: #4a9bff;
+  color: var(--accent);
 }
 
 .faq[open] > summary::before {
@@ -1592,7 +1787,7 @@ body {
   height: 34px;
   font-size: 17px;
   line-height: 1;
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--card-border);
   border-radius: 8px;
   cursor: pointer;
@@ -1604,9 +1799,9 @@ body {
 }
 
 .icon-picker__item--on {
-  border-color: #7cc0ff;
-  background: #eef6ff;
-  box-shadow: 0 0 0 2px rgba(74, 155, 255, 0.16);
+  border-color: var(--accent-soft);
+  background: var(--surface-accent);
+  box-shadow: 0 0 0 2px var(--accent-ring);
 }
 
 /* 版本列表里那个"分类"小标签（比目录标签更淡，不抢眼） */
@@ -1616,7 +1811,7 @@ body {
   font-style: normal;
   font-size: 11px;
   color: var(--text-muted);
-  background: #f1f5fa;
+  background: var(--surface-soft);
   border-radius: 999px;
 }
 
@@ -1631,16 +1826,45 @@ body.has-bg {
   background-attachment: fixed;
 }
 
-/* 顶栏：纯色（不要渐变） */
-body.theme-plain .topbar {
-  background: #6fb3ff;
+/* （M13 那两个"顶栏样式"的规则已经拆掉——M14.1 起的主题系统统一管配色，
+   见文件开头的主题块。留着两套会打架。） */
+
+/* ——— 主题选择的"配色卡片"（M14.1）——— */
+.theme-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  font-family: var(--font);
+  font-size: 12.5px;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
 }
 
-/* 顶栏：深色 */
-body.theme-dark .topbar {
-  background: linear-gradient(180deg, #3a4356 0%, #2f3646 100%);
+.theme-card:hover {
+  border-color: var(--card-border-hover);
+  color: var(--text);
 }
 
-body.theme-dark .nav__btn--on {
-  color: #dbe6ff;
+.theme-card--on {
+  color: var(--text);
+  background: var(--surface-accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
+.theme-card__dots {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.theme-card__dots i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1px solid var(--overlay-soft);
 }

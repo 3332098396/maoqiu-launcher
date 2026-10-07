@@ -3006,9 +3006,11 @@ const HIDEABLE_PAGES = [
 
 /** 顶栏样式 */
 const THEMES = [
-  { key: 'blue', label: '渐变淡蓝（默认）' },
-  { key: 'plain', label: '纯色淡蓝' },
-  { key: 'dark', label: '深色' }
+  { key: 'blue', label: '渐变淡蓝（默认）', colors: ['#8fcbff', '#4a9bff', '#eef6ff'] },
+  { key: 'dark', label: '深色', colors: ['#2b2f45', '#8b7bff', '#1f2338'] },
+  { key: 'matcha', label: '抹茶绿', colors: ['#a8d8b9', '#56b57f', '#eaf7ef'] },
+  { key: 'sunset', label: '暖阳橙', colors: ['#ffca8f', '#f79140', '#fff2e2'] },
+  { key: 'sakura', label: '樱花粉', colors: ['#ffc2d8', '#f97fae', '#ffeef5'] }
 ]
 
 /**
@@ -3054,10 +3056,8 @@ function applyLook(look) {
     }
   }
 
-  // ④ 顶栏样式
-  const theme = settingsLook.theme || 'blue'
-  document.body.classList.toggle('theme-plain', theme === 'plain')
-  document.body.classList.toggle('theme-dark', theme === 'dark')
+  // ④ 主题配色（M14.1：整个界面的配色都由这个属性决定，见 style.css 开头的主题块）
+  document.body.dataset.theme = settingsLook.theme || 'blue'
 }
 
 /** 用户第一次点页面时，把没放成的背景音乐补上（浏览器的自动播放限制） */
@@ -3109,19 +3109,27 @@ function renderLookTab() {
   lookBgEl.value = look.background || ''
   lookBgmEl.value = look.bgm || ''
 
-  // 顶栏样式
+  // 主题配色：每个是一条"配色卡片"，左边三个小圆点先让人看出是什么颜色
   lookThemesEl.textContent = ''
   for (const one of THEMES) {
     const button = document.createElement('button')
     button.type = 'button'
     button.className =
-      (look.theme || 'blue') === one.key
-        ? 'icon-picker__item icon-picker__item--on'
-        : 'icon-picker__item'
-    button.style.width = 'auto'
-    button.style.padding = '4px 10px'
-    button.style.fontSize = '12.5px'
-    button.textContent = one.label
+      (look.theme || 'blue') === one.key ? 'theme-card theme-card--on' : 'theme-card'
+
+    const dots = document.createElement('span')
+    dots.className = 'theme-card__dots'
+    for (const color of one.colors || []) {
+      const dot = document.createElement('i')
+      dot.style.background = color
+      dots.appendChild(dot)
+    }
+    button.appendChild(dots)
+
+    const label = document.createElement('span')
+    label.textContent = one.label
+    button.appendChild(label)
+
     button.addEventListener('click', () => saveLook({ theme: one.key }))
     lookThemesEl.appendChild(button)
   }
