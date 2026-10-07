@@ -756,6 +756,273 @@ window.api.onLaunchState((payload) => {
 })
 
 // ═══════════════════════════════════════
+// 下载页：社区资源（M9，来自 Modrinth）
+// ═══════════════════════════════════════
+
+const dlMenuEl = document.getElementById('dl-menu')
+const dlTabs = document.querySelectorAll('.dl-tab')
+const mrSearchEl = document.getElementById('mr-search')
+const mrVersionEl = document.getElementById('mr-version')
+const mrListEl = document.getElementById('mr-list')
+const mrStatusEl = document.getElementById('mr-status')
+const mrDoneEl = document.getElementById('mr-done')
+const mrDoneTextEl = document.getElementById('mr-done-text')
+
+/** 当前在看哪个社区分类：mod / resourcepack / shader */
+let mrType = 'mod'
+/** 版本筛选：auto = 只搜当前选中的游戏版本；all = 所有版本 */
+let mrVersionMode = 'auto'
+/** 有没有在搜/在下 */
+let mrBusy = false
+/** 上一次下载的结果（「打开文件夹」要用） */
+let mrLastResult = null
+
+const MR_TYPE_NAMES = { mod: 'Mod', resourcepack: '资源包', shader: '光影包' }
+/** 内容类型 → 游戏里的文件夹（打开文件夹时用） */
+const MR_FOLDER_KEY = { mod: 'mods', resourcepack: 'resourcepacks', shader: 'shaderpacks' }
+
+/** 该把东西放到哪个版本里：启动页选中的那个 */
+function mrTargetVersion() {
+  return selectedVersion || launchInfo?.installed?.[0] || ''
+}
+
+/** 搜索时用哪个游戏版本筛 */
+function mrGameVersion() {
+  return mrVersionMode === 'auto' ? mrTargetVersion() : ''
+}
+
+function showDownloadTab(name) {
+  for (const item of dlMenuEl.querySelectorAll('.menu__item')) {
+    if (!item.dataset.dlTab && !item.dataset.dlCat) continue
+    const on =
+      (item.dataset.dlTab && item.dataset.dlTab === name) ||
+      (name === 'community' && item.dataset.dlCat === mrType)
+    item.classList.toggle('menu__item--on', Boolean(on))
+  }
+  for (const tab of dlTabs) tab.hidden = tab.dataset.dlTab !== name
+}
+
+dlMenuEl.addEventListener('click', (event) => {
+  const item = event.target.closest('.menu__item')
+  if (!item) return
+
+  if (item.dataset.dlCat) {
+    mrType = item.dataset.dlCat
+    showDownloadTab('community')
+    runMrSearch()
+  } else if (item.dataset.dlTab === 'vanilla') {
+    showDownloadTab('vanilla')
+  }
+})
+
+/** 下载量：太长的数字换成人话（2.38 亿） */
+function formatCount(n) {
+  if (n >= 100000000) return `${(n / 100000000).toFixed(2)} 亿`
+  if (n >= 10000) return `${(n / 10000).toFixed(1)} 万`
+  return String(n)
+}
+
+function formatUpdated(iso) {
+  if (!iso) return ''
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
+  if (days <= 0) return '今天更新'
+  if (days < 30) return `${days} 天前更新`
+  if (days < 365) return `${Math.floor(days / 30)} 个月前更新`
+  return `${Math.floor(days / 365)} 年前更新`
+}
+
+function renderMrList(hits) {
+  mrListEl.textContent = ''
+
+  if (hits.length === 0) {
+    const li = document.createElement('li')
+    li.className = 'ver'
+    li.style.justifyContent = 'center'
+    li.style.color = 'var(--text-muted)'
+    li.textContent = '没搜到东西，换个词、或者把筛选换成「所有版本」'
+    mrListEl.appendChild(li)
+    return
+  }
+
+  const frag = document.createDocumentFragment()
+
+  for (const hit of hits) {
+    const li = document.createElement('li')
+    li.className = 'ver mr'
+
+    const main = document.createElement('div')
+    main.className = 'mr__main'
+
+    const title = document.createElement('div')
+    title.className = 'mr__title'
+    // 认得出来的显示成「钠（Sodium）」——中文名在前、英文原名保留，
+    // 认不出来的就照原样显示英文名，不瞎编翻译；
+    // 中文名和英文名一样（Fabric API 这种）就只显示一遍
+    title.textContent =
+      hit.nameZh && hit.nameZh !== hit.title ? `${hit.nameZh}（${hit.title}）` : hit.title
+    main.appendChild(title)
+
+    const desc = document.createElement('div')
+    desc.className = 'mr__desc'
+    desc.textContent = hit.description
+    main.appendChild(desc)
+
+    const meta = document.createElement('div')
+    meta.className = 'mr__meta'
+    const parts = [`${formatCount(hit.downloads)}次下载`]
+    if (hit.categories.length > 0) parts.push(hit.categories.slice(0, 4).join(' / '))
+    const updated = formatUpdated(hit.updated)
+    if (updated) parts.push(updated)
+    meta.textContent = parts.join(' · ')
+    main.appendChild(meta)
+
+    li.appendChild(main)
+
+    const button = document.createElement('button')
+    button.className = 'btn btn--primary btn--sm'
+    button.type = 'button'
+    button.dataset.mrInstall = hit.id
+    button.dataset.mrTitle = hit.title
+    button.dataset.mrNameZh = hit.nameZh || ''
+    button.textContent = '下载'
+    li.appendChild(button)
+
+    frag.appendChild(li)
+  }
+
+  mrListEl.appendChild(frag)
+}
+
+async function runMrSearch() {
+  if (mrBusy) return
+  mrBusy = true
+  mrDoneEl.hidden = true
+  mrListEl.textContent = ''
+
+  const gameVersion = mrGameVersion()
+  mrStatusEl.textContent = `正在搜索${MR_TYPE_NAMES[mrType] || ''}…`
+
+  let result
+  try {
+    result = await window.api.searchModrinth({
+      type: mrType,
+      query: mrSearchEl.value.trim(),
+      gameVersion
+    })
+  } catch (error) {
+    result = { ok: false, error: String(error?.message ?? error) }
+  }
+  mrBusy = false
+
+  if (!result.ok) {
+    mrStatusEl.textContent = `搜索失败：${result.error}`
+    return
+  }
+
+  renderMrList(result.hits)
+
+  const scope = gameVersion ? `只显示支持 ${gameVersion} 的` : '所有版本'
+  let status = `共 ${result.total} 个结果 · ${scope}`
+  if (mrType === 'mod') {
+    status += ' · Mod 要装了加载器才能用（下一步就做），现在可以先下好放着'
+  }
+  mrStatusEl.textContent = status
+}
+
+/** 点某一行的「下载」：自动挑文件 → 下载 → 放到该放的地方 */
+async function installMrProject(button) {
+  if (mrBusy) return
+
+  const projectId = button.dataset.mrInstall
+  const nameZh = button.dataset.mrNameZh
+  const title = nameZh ? `${nameZh}（${button.dataset.mrTitle}）` : button.dataset.mrTitle
+  const versionId = mrTargetVersion()
+
+  if (!versionId) {
+    mrStatusEl.textContent = '还没有装过游戏版本——先到「原版游戏」里装一个，才知道该放到哪'
+    return
+  }
+
+  mrBusy = true
+  installEl.hidden = false
+  installTitleEl.textContent = `正在下载 ${title}`
+  setStage('正在挑合适的文件…')
+  setFill(0)
+  setDetail('—')
+  // 社区资源一般都很小，不给取消按钮（避免和"取消装版本"混在一起）
+  installCancelEl.disabled = true
+  mrDoneEl.hidden = true
+
+  let result
+  try {
+    result = await window.api.installModrinth({ projectId, type: mrType, versionId })
+  } catch (error) {
+    result = { ok: false, error: String(error?.message ?? error) }
+  }
+  mrBusy = false
+
+  if (!result.ok) {
+    installTitleEl.textContent = `${title} 下载失败`
+    setStage('')
+    setFill(0)
+    setDetail(result.error)
+    return
+  }
+
+  setFill(100)
+  installTitleEl.textContent = `${title} 下载完成`
+  setStage('')
+  const folderName = result.dir.split(/[\\/]/).pop()
+  setDetail(`已放到 ${folderName} 文件夹：${result.filename}`)
+
+  mrLastResult = { versionId, type: mrType }
+  mrDoneTextEl.textContent = `${title}（${result.versionName}）已经放到 ${folderName} 文件夹`
+  mrDoneEl.hidden = false
+}
+
+// 列表里点「下载」
+mrListEl.addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-mr-install]')
+  if (button) installMrProject(button)
+})
+
+document.getElementById('mr-do-search').addEventListener('click', runMrSearch)
+
+// 搜索框里回车 = 搜索
+mrSearchEl.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') runMrSearch()
+})
+
+// 版本筛选
+mrVersionEl.addEventListener('click', (event) => {
+  const chip = event.target.closest('.chip')
+  if (!chip) return
+  mrVersionMode = chip.dataset.mrVersion
+  for (const item of mrVersionEl.children) item.classList.toggle('chip--on', item === chip)
+  runMrSearch()
+})
+
+// 下载进度（和装版本共用底部那个面板）
+window.api.onContentProgress((stats) => {
+  setStage('正在下载…')
+  setFill(stats.percent)
+  setDetail(
+    `${stats.percent}% · ${formatSize(stats.receivedBytes)}/${formatSize(stats.totalBytes)}` +
+      ` · ${formatSpeed(stats.speed)}`
+  )
+})
+
+// 打开刚下好的那个文件夹
+document.getElementById('mr-open-folder').addEventListener('click', async () => {
+  if (!mrLastResult) return
+  const result = await window.api.openVersionFolder(
+    mrLastResult.versionId,
+    MR_FOLDER_KEY[mrLastResult.type]
+  )
+  if (!result.ok) mrStatusEl.textContent = `打不开文件夹：${result.error}`
+})
+
+// ═══════════════════════════════════════
 // 版本管理（M6.1）：改名、备注、四个文件夹、删版本
 // ═══════════════════════════════════════
 

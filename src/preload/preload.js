@@ -183,5 +183,27 @@ contextBridge.exposeInMainWorld('api', {
   /** 备份进度：{ done, total, bytes, totalBytes } */
   onBackupProgress: (callback) => {
     ipcRenderer.on('backup:progress', (_event, payload) => callback(payload))
+  },
+
+  // ——— 社区资源（M9，来自 Modrinth）———
+
+  /**
+   * 搜索 Mod / 资源包 / 光影包。
+   * @param {{type: string, query?: string, gameVersion?: string, limit?: number}} options
+   * @returns {Promise<{ok: boolean, total?: number, hits?: Array, error?: string}>}
+   */
+  searchModrinth: (options) => ipcRenderer.invoke('modrinth:search', options),
+
+  /**
+   * 下载一个项目并放到该放的地方（自动挑合适的文件版本）。
+   * @param {{projectId: string, type: string, versionId: string}} options
+   * @returns {Promise<{ok: boolean, path?: string, dir?: string, versionName?: string,
+   *                    filename?: string, skipped?: boolean, error?: string}>}
+   */
+  installModrinth: (options) => ipcRenderer.invoke('modrinth:install', options),
+
+  /** 下载进度（和安装版本共用一套字段） */
+  onContentProgress: (callback) => {
+    ipcRenderer.on('content:progress', (_event, stats) => callback(stats))
   }
 })

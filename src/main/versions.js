@@ -182,6 +182,11 @@ function folderFor(id, which) {
       return isolated ? path.join(versionDir, 'mods') : paths.modsDir()
     case 'screenshots':
       return isolated ? path.join(versionDir, 'screenshots') : paths.screenshotsDir()
+    // 下面两类是 M9 加的：社区资源下好之后就放这儿
+    case 'resourcepacks':
+      return isolated ? path.join(versionDir, 'resourcepacks') : paths.resourcepacksDir()
+    case 'shaderpacks':
+      return isolated ? path.join(versionDir, 'shaderpacks') : paths.shaderpacksDir()
     default:
       return null
   }

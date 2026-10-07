@@ -105,6 +105,14 @@ function screenshotsDir() {
   return path.join(gameDir(), 'screenshots')
 }
 
+function resourcepacksDir() {
+  return path.join(gameDir(), 'resourcepacks')
+}
+
+function shaderpacksDir() {
+  return path.join(gameDir(), 'shaderpacks')
+}
+
 // ——— 单个版本 ———
 
 function versionDir(id) {
@@ -195,6 +203,8 @@ module.exports = {
   savesDir,
   modsDir,
   screenshotsDir,
+  resourcepacksDir,
+  shaderpacksDir,
   ensureDir,
   isVersionInstalled,
   listInstalledVersions

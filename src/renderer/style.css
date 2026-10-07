@@ -1070,6 +1070,92 @@ body {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* ═══════════════════════════════════════
+   下载页：原版游戏 / 社区资源 两个页签（M9）
+   ═══════════════════════════════════════ */
+.dl-tab {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dl-tab[hidden] {
+  display: none;
+}
+
+/* 左栏里能点的项 */
+.menu__item[data-dl-tab],
+.menu__item[data-dl-cat] {
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.menu__item[data-dl-tab]:hover:not(.menu__item--on),
+.menu__item[data-dl-cat]:hover:not(.menu__item--on) {
+  color: var(--text);
+  background: #eef6ff;
+}
+
+/* 社区资源列表里的一行 */
+.mr {
+  align-items: flex-start;
+  padding: 12px 14px;
+}
+
+.mr__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mr__title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  user-select: text;
+}
+
+.mr__desc {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  /* 最多两行，多了省略号——列表才整齐 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mr__meta {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.mr .btn {
+  flex: 0 0 auto;
+}
+
+/* 下完之后那条绿色提示 */
+.mrdone {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 20px;
+  font-size: 12.5px;
+  color: #2f8f52;
+  background: #f2fbf6;
+  border-top: 1px solid #d9f0e3;
+}
+
+.mrdone[hidden] {
+  display: none;
+}
+
 .ver:hover {
   border-color: var(--card-border-hover);
   box-shadow: var(--card-shadow);

@@ -25,6 +25,8 @@ const javaUtil = require('./java')
 const launch = require('./launch')
 const versions = require('./versions')
 const backup = require('./backup')
+const modrinth = require('./modrinth')
+const content = require('./content')
 
 // 软件名。它会决定数据存放目录：%APPDATA%\毛球\
 app.setName('毛球')
@@ -103,6 +105,9 @@ let installCancelMode = 'keep'
 
 /** 有没有备份正在跑（同时只允许一个） */
 let backupRunning = false
+
+/** 有没有"下载社区资源"在跑（同时只允许一个） */
+let contentRunning = false
 
 function registerIpcHandlers() {
   /** 本机已装了哪些版本 */
@@ -462,6 +467,75 @@ function registerIpcHandlers() {
       return { ok: false, error: `存不下来：${error.message}` }
     }
     return { ok: true }
+  })
+
+  // ——— 社区资源（M9，来自 Modrinth）———
+
+  /** 搜索 Mod / 资源包 / 光影包 */
+  ipcMain.handle('modrinth:search', async (_event, options) => {
+    try {
+      const result = await modrinth.search({
+        type: options.type,
+        query: options.query || '',
+        gameVersion: options.gameVersion || '',
+        limit: options.limit || 20
+      })
+      return { ok: true, ...result }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /**
+   * 下载一个项目，放到该放的地方。
+   * 自动挑一个合适的文件：优先正式版、优先支持这个游戏版本的。
+   */
+  ipcMain.handle('modrinth:install', async (event, options) => {
+    if (contentRunning) return { ok: false, error: '已经有一个下载在跑了，等它完成' }
+
+    contentRunning = true
+    try {
+      const { projectId, type, versionId } = options
+
+      const list = await modrinth.getVersions(projectId, {
+        gameVersion: versionId || '',
+        loader: modrinth.loaderFor(type)
+      })
+      const best = modrinth.pickBest(list)
+
+      if (!best) {
+        return {
+          ok: false,
+          error: versionId
+            ? `这个项目没有支持 ${versionId} 的文件——把筛选换成「所有版本」再看看`
+            : '这个项目没有可下载的文件'
+        }
+      }
+
+      const result = await content.installFile({
+        versionId,
+        type,
+        file: best.file,
+        onProgress: (stats) => {
+          if (!event.sender.isDestroyed()) event.sender.send('content:progress', stats)
+        }
+      })
+
+      if (!result.ok) return result
+
+      return {
+        ok: true,
+        path: result.path,
+        dir: result.dir,
+        skipped: result.skipped,
+        versionName: best.name,
+        filename: path.basename(result.path)
+      }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    } finally {
+      contentRunning = false
+    }
   })
 }
 

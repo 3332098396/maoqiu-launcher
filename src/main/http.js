@@ -14,8 +14,11 @@ const https = require('node:https')
 const http = require('node:http')
 const { URL } = require('node:url')
 
-/** 有些服务器会因为缺少 User-Agent 而拒绝请求，统一带一个 */
-const USER_AGENT = 'MCLauncher/0.1 (local)'
+/**
+ * 有些服务器会因为缺少 User-Agent 而拒绝请求，统一带一个。
+ * Modrinth 的接口文档明确要求带一个能认出是谁的标识，别用浏览器默认的。
+ */
+const USER_AGENT = 'MaoqiuLauncher/0.1.0 (local Minecraft launcher)'
 
 /** 跳转最多跟几次，防止陷入循环 */
 const MAX_REDIRECTS = 5

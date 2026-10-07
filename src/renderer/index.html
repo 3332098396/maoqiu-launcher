@@ -163,41 +163,73 @@
       <!-- ═══════════ 下载页 ═══════════ -->
       <section class="page" data-page="download" hidden>
         <aside class="side">
-          <nav class="menu">
-            <span class="menu__item menu__item--on">原版游戏</span>
-            <span class="menu__divider">社区资源</span>
-            <span class="menu__item menu__item--off">Mod</span>
-            <span class="menu__item menu__item--off">整合包</span>
-            <span class="menu__item menu__item--off">数据包</span>
-            <span class="menu__item menu__item--off">资源包</span>
-            <span class="menu__item menu__item--off">光影包</span>
+          <nav class="menu" id="dl-menu">
+            <span class="menu__item menu__item--on" data-dl-tab="vanilla">原版游戏</span>
+            <span class="menu__divider">社区资源（来自 Modrinth）</span>
+            <span class="menu__item" data-dl-cat="mod">Mod</span>
+            <span class="menu__item menu__item--off" title="下一步就做">整合包</span>
+            <span class="menu__item menu__item--off" title="下一步就做">数据包</span>
+            <span class="menu__item" data-dl-cat="resourcepack">资源包</span>
+            <span class="menu__item" data-dl-cat="shader">光影包</span>
           </nav>
-          <div class="side__note">灰色的以后再做</div>
+          <div class="side__note">灰色的下一步再做</div>
         </aside>
 
         <div class="content content--flush">
-          <div class="verbar">
-            <input
-              class="input"
-              id="ver-search"
-              type="text"
-              placeholder="搜索版本号，例如 1.21"
-              autocomplete="off"
-            />
-            <div class="chips" id="ver-filter">
-              <button class="chip chip--on" type="button" data-filter="all">全部</button>
-              <button class="chip" type="button" data-filter="release">正式版</button>
-              <button class="chip" type="button" data-filter="snapshot">快照</button>
-              <button class="chip" type="button" data-filter="old">远古版</button>
+          <!-- ——— 原版游戏 ——— -->
+          <div class="dl-tab" data-dl-tab="vanilla">
+            <div class="verbar">
+              <input
+                class="input"
+                id="ver-search"
+                type="text"
+                placeholder="搜索版本号，例如 1.21"
+                autocomplete="new-password"
+              />
+              <div class="chips" id="ver-filter">
+                <button class="chip chip--on" type="button" data-filter="all">全部</button>
+                <button class="chip" type="button" data-filter="release">正式版</button>
+                <button class="chip" type="button" data-filter="snapshot">快照</button>
+                <button class="chip" type="button" data-filter="old">远古版</button>
+              </div>
+              <button class="btn btn--ghost" type="button" id="ver-refresh">刷新</button>
             </div>
-            <button class="btn btn--ghost" type="button" id="ver-refresh">刷新</button>
+
+            <div class="verstatus" id="ver-status">正在读取版本清单…</div>
+
+            <ul class="verlist" id="ver-list"></ul>
           </div>
 
-          <div class="verstatus" id="ver-status">正在读取版本清单…</div>
+          <!-- ——— 社区资源（M9）——— -->
+          <div class="dl-tab" data-dl-tab="community" hidden>
+            <div class="verbar">
+              <input
+                class="input"
+                id="mr-search"
+                type="text"
+                placeholder="搜索，比如 sodium、光影名…"
+                autocomplete="new-password"
+              />
+              <div class="chips" id="mr-version">
+                <button class="chip chip--on" type="button" data-mr-version="auto">
+                  只搜当前版本
+                </button>
+                <button class="chip" type="button" data-mr-version="all">所有版本</button>
+              </div>
+              <button class="btn btn--ghost" type="button" id="mr-do-search">搜索</button>
+            </div>
 
-          <ul class="verlist" id="ver-list"></ul>
+            <div class="verstatus" id="mr-status">选一个分类，然后搜索</div>
 
-          <!-- 安装进度面板。开始安装时从底部滑出来 -->
+            <ul class="verlist" id="mr-list"></ul>
+
+            <div class="mrdone" id="mr-done" hidden>
+              <span id="mr-done-text"></span>
+              <button class="linkbtn" type="button" id="mr-open-folder">打开文件夹</button>
+            </div>
+          </div>
+
+          <!-- 进度面板（装版本 / 下社区资源共用），从底部滑出来 -->
           <div class="install" id="install" hidden>
             <div class="install__row">
               <span class="install__title" id="install-title">正在安装</span>
