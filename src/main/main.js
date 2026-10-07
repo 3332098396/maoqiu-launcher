@@ -73,10 +73,11 @@ let mainWindow = null
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1000,
-    height: 660,
-    minWidth: 860,
-    minHeight: 560,
+    // 左边现在有个导航栏（M14.2），窗口宽一点内容才不挤
+    width: 1180,
+    height: 740,
+    minWidth: 900,
+    minHeight: 600,
     title: '毛球',
     icon: path.join(__dirname, '..', '..', 'assets', 'app-256.png'),
     backgroundColor: '#F2F8FF',

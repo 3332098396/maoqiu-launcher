@@ -1888,3 +1888,200 @@ body.has-bg {
   border-radius: 50%;
   border: 1px solid var(--overlay-soft);
 }
+
+/* ══════════════════════════════════════════════
+   左侧导航（M14.2）
+   原来导航在顶栏横着排，现在挪到左边竖着排——
+   学 KAMUCL 的做法：横向能省出一大块给内容。
+   ══════════════════════════════════════════════ */
+
+.shell {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+.rail {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  width: 84px;
+  padding: 10px 8px;
+  background: var(--surface-a72);
+  border-right: 1px solid var(--card-border);
+}
+
+.rail__logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  margin-bottom: 6px;
+  font-size: 22px;
+  border-radius: 12px;
+  background: var(--primary-gradient);
+  color: var(--on-accent);
+  box-shadow: var(--card-shadow);
+}
+
+.rail__btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 9px 2px;
+  font-family: var(--font);
+  font-size: 11.5px;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.rail__btn:hover {
+  color: var(--text);
+  background: var(--surface-accent);
+}
+
+.rail__btn--on,
+.rail__btn--on:hover {
+  color: var(--accent-strong);
+  background: var(--surface-accent);
+  font-weight: 600;
+}
+
+.rail__icon {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.rail__gap {
+  flex: 1 1 auto;
+}
+
+/* 「日志」那个按钮：颜色淡一点，不跟页面按钮抢注意力 */
+.rail__btn--soft {
+  color: var(--text-muted);
+}
+
+.shell__body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ══════════════════════════════════════════════
+   启动页的"大启动卡"（M14.2）
+   学 KAMUCL：一进来先看见一张大卡，版本名 + 一个大按钮，
+   不用在一堆小字里找"我该点哪儿"。
+   ══════════════════════════════════════════════ */
+
+.content--wide {
+  /* 启动页现在整宽，不再要左边那一列 */
+  max-width: none;
+}
+
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 22px 26px;
+  margin-bottom: 12px;
+  border-radius: 16px;
+  background: var(--primary-gradient);
+  box-shadow: var(--card-shadow-hover);
+  color: var(--on-accent);
+}
+
+.hero__label {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.hero__name {
+  margin: 4px 0 6px;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  word-break: break-all;
+}
+
+.hero__meta {
+  font-size: 12.5px;
+  opacity: 0.9;
+}
+
+.hero__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+/* 大按钮：白底 + 主色字，在渐变卡上最显眼 */
+.btn--hero {
+  padding: 14px 34px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent-strong);
+  background: var(--pill-bg);
+  border: none;
+  border-radius: 999px;
+  box-shadow: 0 4px 14px var(--overlay-soft);
+}
+
+.btn--hero:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px var(--overlay);
+}
+
+.btn--hero:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.hero .btn--ghost {
+  color: var(--on-accent);
+  border-color: var(--on-accent-a35);
+  background: var(--on-accent-a18);
+}
+
+.hero .btn--ghost:hover:not(:disabled) {
+  color: var(--on-accent);
+  background: var(--on-accent-a25);
+}
+
+/* 下面两栏：左边账号 + 选版本，右边版本详情 */
+.launch-cols {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.launch-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* 窗口窄的时候（比如用户把窗口拉小了）改成上下排 */
+@media (max-width: 900px) {
+  .launch-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* 设置页顶上的搜索框（M14.2） */
+.setsearch {
+  margin-bottom: 4px;
+}

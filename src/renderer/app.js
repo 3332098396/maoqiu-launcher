@@ -9,12 +9,12 @@
 // 页面切换
 // ═══════════════════════════════════════
 
-const navButtons = document.querySelectorAll('.nav__btn')
+const navButtons = document.querySelectorAll('.rail__btn[data-page]')
 const pages = document.querySelectorAll('.page')
 
 function showPage(name) {
   for (const button of navButtons) {
-    button.classList.toggle('nav__btn--on', button.dataset.page === name)
+    button.classList.toggle('rail__btn--on', button.dataset.page === name)
   }
   for (const page of pages) {
     page.hidden = page.dataset.page !== name
@@ -441,6 +441,8 @@ const curNameEl = document.getElementById('cur-name')
 const curNoteEl = document.getElementById('cur-note')
 const curHintEl = document.getElementById('cur-hint')
 const factVersionEl = document.getElementById('fact-version')
+const heroNameEl = document.getElementById('hero-name')
+const heroMetaEl = document.getElementById('hero-meta')
 const factJavaEl = document.getElementById('fact-java')
 const factMemoryEl = document.getElementById('fact-memory')
 const factDirEl = document.getElementById('fact-dir')
@@ -525,6 +527,19 @@ function selectedKey() {
 /** 当前选中项（没有就是 null） */
 function selectedItem() {
   return findVersion(selectedVersion, selectedDir)
+}
+
+/**
+ * 大启动卡上那行小字：正式版 · Forge · 默认目录。
+ * 版本是快照、装了加载器、在别的目录——这些一眼能看到，省得点进版本设置去查。
+ */
+function heroMetaOf(one) {
+  const parts = []
+  if (one.type) parts.push(VERSION_TYPE_LABELS[one.type] || one.type)
+  if (one.loader) parts.push(one.loader)
+  if (one.category) parts.push(one.category)
+  parts.push(one.isDefault ? '默认目录' : dirTail(one.dir))
+  return parts.join(' · ')
 }
 
 /**
@@ -646,6 +661,13 @@ function refreshLaunchUi() {
   launchTipEl.hidden = tip === ''
 
   factVersionEl.textContent = selectedVersion || '—'
+
+  // ——— 大启动卡上那两行（M14.2）———
+  {
+    const one = picked
+    heroNameEl.textContent = one ? one.name || one.id : '还没有装版本'
+    heroMetaEl.textContent = one ? heroMetaOf(one) : '先去「下载」页装一个'
+  }
 
   if (launchInfo) {
     // 内存和游戏目录都要按"这个版本实际用的"显示——
@@ -2305,7 +2327,10 @@ let backupInfo = null
 /** 有没有备份在跑 */
 let backupBusy = false
 
+let currentSettingsTab = 'launch'
+
 function showSettingsTab(name) {
+  currentSettingsTab = name
   for (const item of settingsMenuEl.children) {
     if (item.dataset && item.dataset.settingsTab) {
       item.classList.toggle('menu__item--on', item.dataset.settingsTab === name)
@@ -3165,3 +3190,57 @@ document.getElementById('look-bgm-pick').addEventListener('click', async () => {
 })
 
 document.getElementById('look-bgm-clear').addEventListener('click', () => saveLook({ bgm: '' }))
+
+// ——— 设置搜索（M14.2）———
+
+const setSearchEl = document.getElementById('set-search')
+const setSearchHintEl = document.getElementById('set-search-hint')
+
+/**
+ * 按关键字过滤设置。
+ *
+ * 【怎么过滤的】搜索时把**所有栏**都露出来，只留下"文字里含这个关键字"的块——
+ * 这样用户搜"内存"就能直接看到它属于哪一栏、在哪儿，不用自己一栏一栏翻。
+ * 清空搜索框就恢复成正常的一栏一栏。
+ */
+function doSettingsSearch() {
+  const keyword = setSearchEl.value.trim().toLowerCase()
+
+  if (!keyword) {
+    setSearchHintEl.textContent = ''
+    // 恢复：每块都显示，然后回到当前那一栏
+    for (const tab of settingsTabEls) {
+      for (const block of tab.children) block.hidden = false
+    }
+    showSettingsTab(currentSettingsTab)
+    return
+  }
+
+  let hits = 0
+  for (const tab of settingsTabEls) {
+    tab.hidden = false // 先都露出来
+    const tabName =
+      (settingsMenuEl.querySelector(`[data-settings-tab="${tab.dataset.settingsTab}"]`) || {})
+        .textContent || ''
+
+    for (const block of tab.children) {
+      // 搜索框自己不算
+      if (block.classList.contains('setsearch')) continue
+
+      const match = block.textContent.toLowerCase().includes(keyword)
+      block.hidden = !match
+      if (match) hits++
+    }
+
+    // 这一栏一条都没命中，就把它整栏收起来（栏里光剩个空壳更难看）
+    const anyVisible = [...tab.children].some((one) => !one.hidden && !one.classList.contains('setsearch'))
+    if (!anyVisible) tab.hidden = true
+    else tab.dataset.foundIn = tabName.trim()
+  }
+
+  setSearchHintEl.textContent = hits
+    ? `找到 ${hits} 处，都在上面了（清空搜索框就恢复）`
+    : `没找到「${setSearchEl.value.trim()}」——换个词试试，比如"内存""Java""下载"`
+}
+
+setSearchEl.addEventListener('input', doSettingsSearch)

@@ -13,93 +13,75 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <!-- ——— 顶栏：三个页面在这里切换 ——— -->
-    <header class="topbar">
-      <span class="topbar__logo">⛏</span>
-      <span class="topbar__title">毛球</span>
+    <div class="shell">
+      <!-- ——— 左侧导航（M14.2：原来在顶栏，挪到左边了，学 KAMUCL 的做法）——— -->
+      <nav class="rail" id="nav">
+        <div class="rail__logo" title="毛球">⛏</div>
 
-      <nav class="nav" id="nav">
-        <button class="nav__btn" type="button" data-page="launch">
-          <span class="nav__icon">▶</span>启动
+        <button class="rail__btn" type="button" data-page="launch">
+          <span class="rail__icon">▶</span>
+          <span class="rail__label">启动</span>
         </button>
-        <button class="nav__btn" type="button" data-page="online">
-          <span class="nav__icon">👥</span>联机
+        <button class="rail__btn" type="button" data-page="online">
+          <span class="rail__icon">👥</span>
+          <span class="rail__label">联机</span>
         </button>
-        <button class="nav__btn" type="button" data-page="download">
-          <span class="nav__icon">⬇</span>下载
+        <button class="rail__btn" type="button" data-page="download">
+          <span class="rail__icon">⬇</span>
+          <span class="rail__label">下载</span>
         </button>
-        <button class="nav__btn" type="button" data-page="settings">
-          <span class="nav__icon">⚙</span>设置
+        <button class="rail__btn" type="button" data-page="settings">
+          <span class="rail__icon">⚙</span>
+          <span class="rail__label">设置</span>
         </button>
-        <button class="nav__btn" type="button" data-page="help">
-          <span class="nav__icon">?</span>帮助
+        <button class="rail__btn" type="button" data-page="help">
+          <span class="rail__icon">?</span>
+          <span class="rail__label">帮助</span>
+        </button>
+
+        <div class="rail__gap"></div>
+
+        <button class="rail__btn rail__btn--soft" type="button" id="log-btn">
+          <span class="rail__icon">📄</span>
+          <span class="rail__label">日志</span>
         </button>
       </nav>
 
-      <button class="topbar__btn" type="button" id="log-btn">📄 日志</button>
-    </header>
+      <div class="shell__body">
+        <header class="topbar">
+          <span class="topbar__logo">⛏</span>
+          <span class="topbar__title" id="topbar-title">毛球</span>
+        </header>
 
-    <main class="main">
-      <!-- ═══════════ 启动页 ═══════════ -->
+        <main class="main">
+      <!-- ═══════════ 启动页（M14.2 改成"大启动卡"布局）═══════════ -->
       <section class="page" data-page="launch">
-        <aside class="side">
-          <div class="acc">
-            <div class="acc__tabs">
-              <span class="acc__tab acc__tab--off" title="正版登录要等 Mojang 审批，先不做">正版</span>
-              <span class="acc__tab acc__tab--on">离线</span>
+        <div class="content content--wide">
+          <!-- ① 大启动卡：版本名 + 一个大按钮 -->
+          <section class="hero">
+            <div class="hero__info">
+              <div class="hero__label">当前版本</div>
+              <div class="hero__name" id="hero-name">还没有装版本</div>
+              <div class="hero__meta" id="hero-meta">先去「下载」页装一个</div>
             </div>
-            <div class="acc__avatar" id="acc-avatar">⛏</div>
-            <div class="acc__name" id="acc-name">还没有账号</div>
-            <!-- autocomplete 写 new-password 而不是 off：普通文本框浏览器常常
-                 不认 off，照样弹它自己的自动填充框。
-                 （注意：实测打字时弹的那个"词建议"框是 Windows 系统的文本建议，
-                 不是浏览器的，压不掉也不用压——见 CLAUDE.md 排查小抄） -->
-            <input
-              class="input"
-              id="acc-input"
-              type="text"
-              maxlength="16"
-              placeholder="输入游戏名字"
-              autocomplete="new-password"
-              spellcheck="false"
-            />
-            <div class="acc__hint" id="acc-hint">
-              3～16 个字符，只能用字母、数字、下划线
-            </div>
-          </div>
-
-          <div class="pick">
-            <div class="pick__title">
-              <span>选择版本</span>
-              <!-- 版本多了列表会很长，默认收起、点这个箭头展开（R5.6）。
-                   aria-expanded 是给读屏软件看的，跟着一起改 -->
-              <button class="pick__toggle" type="button" id="pick-toggle" aria-expanded="false">
-                <span id="pick-toggle-icon">▾</span>
+            <div class="hero__actions">
+              <button class="btn btn--primary btn--hero" type="button" id="launch-btn" disabled>
+                开始游戏
+              </button>
+              <button class="btn btn--ghost btn--sm" type="button" id="ver-settings-btn" disabled>
+                版本设置
               </button>
             </div>
-            <ul class="pick__list" id="pick-list"></ul>
-            <div class="pick__empty" id="pick-empty" hidden>
-              这里空空的——还没装过版本。去「下载」页挑一个，装好就能玩了。
-            </div>
-          </div>
+          </section>
 
-          <button class="btn btn--primary btn--block" type="button" id="launch-btn" disabled>
-            开始游戏
-          </button>
           <div class="side__tip" id="launch-tip" hidden></div>
 
-          <div class="side__row">
-            <button class="btn btn--ghost btn--block" type="button" id="ver-settings-btn" disabled>
-              版本设置
-            </button>
-          </div>
-        </aside>
-
-        <div class="content">
+          <!-- ② 那行会变的提示（"填个名字就能点了"之类） -->
           <div class="notice" id="launch-notice">
-            在左边填一个游戏名字、选一个版本，就可以点「开始游戏」了。
+            先在左边填一个游戏名字、选一个版本，就可以开始游戏了。
           </div>
 
+          <!-- ③ 三格状态：Java / 内存 / 游戏目录 -->
           <div class="launch-facts">
             <div class="fact">
               <span class="fact__k">当前版本</span>
@@ -119,11 +101,58 @@
             </div>
           </div>
 
-          <section class="panel panel--full" id="current-version-panel" hidden>
-            <h3 class="panel__title" id="cur-name">—</h3>
-            <p class="panel__desc" id="cur-note"></p>
-            <p class="panel__desc panel__desc--small" id="cur-hint"></p>
-          </section>
+          <!-- ④ 下面两栏：左边账号 + 选版本，右边这个版本的详情 -->
+          <div class="launch-cols">
+            <div class="launch-col">
+              <div class="acc">
+                <div class="acc__tabs">
+                  <span class="acc__tab acc__tab--off" title="正版登录要等 Mojang 审批，先不做">正版</span>
+                  <span class="acc__tab acc__tab--on">离线</span>
+                </div>
+                <div class="acc__avatar" id="acc-avatar">⛏</div>
+                <div class="acc__name" id="acc-name">还没有账号</div>
+                <!-- autocomplete 写 new-password 而不是 off：普通文本框浏览器常常
+                     不认 off，照样弹它自己的自动填充框。
+                     （注意：实测打字时弹的那个"词建议"框是 Windows 系统的文本建议，
+                     不是浏览器的，压不掉也不用压——见 CLAUDE.md 排查小抄） -->
+                <input
+                  class="input"
+                  id="acc-input"
+                  type="text"
+                  maxlength="16"
+                  placeholder="输入游戏名字"
+                  autocomplete="new-password"
+                  spellcheck="false"
+                />
+                <div class="acc__hint" id="acc-hint">
+                  3～16 个字符，只能用字母、数字、下划线
+                </div>
+              </div>
+
+              <div class="pick">
+                <div class="pick__title">
+                  <span>选择版本</span>
+                  <!-- 版本多了列表会很长，默认收起、点这个箭头展开（R5.6）。
+                       aria-expanded 是给读屏软件看的，跟着一起改 -->
+                  <button class="pick__toggle" type="button" id="pick-toggle" aria-expanded="false">
+                    <span id="pick-toggle-icon">▾</span>
+                  </button>
+                </div>
+                <ul class="pick__list" id="pick-list"></ul>
+                <div class="pick__empty" id="pick-empty" hidden>
+                  这里空空的——还没装过版本。去「下载」页挑一个，装好就能玩了。
+                </div>
+              </div>
+            </div>
+
+            <div class="launch-col">
+              <section class="panel" id="current-version-panel" hidden>
+                <h3 class="panel__title" id="cur-name">—</h3>
+                <p class="panel__desc" id="cur-note"></p>
+                <p class="panel__desc panel__desc--small" id="cur-hint"></p>
+              </section>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -313,6 +342,17 @@
         </aside>
 
         <div class="content">
+          <!-- 设置搜索（M14.2）：设置项一多，这个立刻变成刚需 -->
+          <input
+            class="input input--edit setsearch"
+            id="set-search"
+            type="text"
+            placeholder="搜索设置：内存、Java、下载、主题…"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <p class="delbox" id="set-search-hint"></p>
+
           <div class="settings-tab" data-settings-tab="launch">
           <div class="notice" id="settings-notice">
             这里改完马上生效，下次启动游戏就按这里的来。
@@ -670,15 +710,17 @@
           </section>
         </div>
       </section>
-    </main>
+        </main>
+
+        <footer class="statusbar">
+          <span id="stat-left">版本 0.1.0</span>
+          <span id="stat-right">Minecraft Java 版启动器</span>
+        </footer>
+      </div>
+    </div>
 
     <!-- 背景音乐（个性化里选的，默认没有） -->
     <audio id="bgm" loop preload="none"></audio>
-
-    <footer class="statusbar">
-      <span id="stat-left">版本 0.1.0</span>
-      <span id="stat-right">Minecraft Java 版启动器</span>
-    </footer>
 
     <!-- 顶栏「日志」按钮点开的窗口 -->
     <div class="modal" id="log-modal" hidden>
