@@ -47,5 +47,43 @@ contextBridge.exposeInMainWorld('api', {
   /** 下载进度（百分比、速度、剩余时间、失败数） */
   onInstallProgress: (callback) => {
     ipcRenderer.on('install:progress', (_event, stats) => callback(stats))
+  },
+
+  // ——— 账号与启动（M5）———
+
+  /**
+   * 启动页要的全部信息。
+   * @returns {Promise<{installed: string[], account: object|null, lastVersion: string,
+   *                    memoryMB: number, memoryAuto: boolean, totalMemoryMB: number,
+   *                    gameDir: string, java: object}>}
+   */
+  getLaunchInfo: () => ipcRenderer.invoke('launch:info'),
+
+  /**
+   * 保存离线账号（名字 + 算出来的 UUID）。
+   * @returns {Promise<{ok: boolean, account?: object, error?: string}>}
+   */
+  setAccount: (name) => ipcRenderer.invoke('account:set', name),
+
+  /**
+   * 启动游戏。检查不通过马上返回 { ok:false, error }；
+   * 起来了返回 { ok:true, java, memoryMB }，之后靠下面两个事件推消息。
+   * @returns {Promise<{ok: boolean, error?: string, java?: object, memoryMB?: number}>}
+   */
+  startLaunch: (versionId) => ipcRenderer.invoke('launch:start', versionId),
+
+  /** 游戏输出的日志（一批几行地推过来） */
+  onLaunchLog: (callback) => {
+    ipcRenderer.on('launch:log', (_event, lines) => callback(lines))
+  },
+
+  /**
+   * 启动状态变化。state 有三种：
+   *   'running' 游戏进程起来了
+   *   'exited'  游戏退出了，带 ok / title / hint（中文说明）
+   *   'error'   进程压根没起来
+   */
+  onLaunchState: (callback) => {
+    ipcRenderer.on('launch:state', (_event, payload) => callback(payload))
   }
 })

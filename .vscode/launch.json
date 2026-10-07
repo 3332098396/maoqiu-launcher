@@ -1,0 +1,19 @@
+{
+  // 在 VS Code 里按 F5 就能启动本软件。
+  //
+  // 原理：等于在终端里替你敲了一句 npm start。
+  // 走的是项目自己的 scripts\start.js（它会清掉一个会导致 Electron
+  // 起不来的环境变量 ELECTRON_RUN_AS_NODE，详见 CLAUDE.md 排查小抄）。
+  //
+  // 不想按 F5 也行：在 VS Code 里按 Ctrl+`（反引号）打开终端，
+  // 敲 npm start 回车，效果一模一样。
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "启动 MC启动器",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm start"
+    }
+  ]
+}

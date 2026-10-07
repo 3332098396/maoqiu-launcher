@@ -4,20 +4,25 @@
 // 界面（renderer）只负责显示和上报点击，不直接碰系统能力，
 // 两者通过 preload 里的安全桥通信。
 //
-// 当前进度：M0（骨架）。本文件目前只做一件事——把窗口开出来。
+// 当前进度：M5（启动游戏）。
 //
-// 后续里程碑会往这里加：
+// 已经接好的模块：
 //   M2 版本清单    → src/main/mojang.js
 //   M3 下载引擎    → src/main/downloader.js
-//   M4 安装版本    → src/main/install.js + java.js
-//   M5 启动游戏    → src/main/launch.js + accounts.js
-//   M6 版本管理    → src/main/paths.js + settings.js
+//   M4 安装版本    → src/main/install.js + zip.js
+//   M5 启动游戏    → src/main/launch.js + accounts.js + java.js + settings.js
+//   M6 版本管理    → settings.js 的界面部分
 
 const { app, BrowserWindow, ipcMain } = require('electron')
+const fs = require('node:fs')
 const path = require('node:path')
 const mojang = require('./mojang')
 const install = require('./install')
 const paths = require('./paths')
+const settings = require('./settings')
+const accounts = require('./accounts')
+const javaUtil = require('./java')
+const launch = require('./launch')
 
 // 软件名。它会决定数据存放目录：%APPDATA%\MC启动器\
 app.setName('MC启动器')
@@ -113,6 +118,85 @@ function registerIpcHandlers() {
     } catch (error) {
       return { ok: false, error: String(error?.message ?? error) }
     }
+  })
+
+  // ——— 账号与启动（M5）———
+
+  /**
+   * 启动页要的全部信息：已装版本、账号、内存、游戏目录、Java 情况。
+   * Java 要实际跑一下才知道版本号，所以这里稍微花点时间（约 0.2 秒）。
+   */
+  ipcMain.handle('launch:info', async () => {
+    const installed = paths.listInstalledVersions()
+    const config = settings.readConfig()
+
+    let javaInfo = { found: false, path: '', version: '', source: '', error: '' }
+    if (installed.length > 0) {
+      try {
+        // 用上次启动的版本（或第一个已装版本）去看 Java 在不在
+        const pick =
+          config.launch.lastVersion && installed.includes(config.launch.lastVersion)
+            ? config.launch.lastVersion
+            : installed[0]
+        const versionJson = JSON.parse(fs.readFileSync(paths.versionJsonFile(pick), 'utf8'))
+        const candidate = javaUtil.findJava(versionJson)
+        if (candidate) {
+          const probe = javaUtil.probeJava(candidate.path)
+          javaInfo = {
+            found: probe.ok,
+            path: candidate.path,
+            version: probe.ok ? probe.version : '',
+            source: candidate.source,
+            error: probe.ok ? '' : probe.error
+          }
+        }
+      } catch {
+        // 读不出来就当没找到，界面会显示提示
+      }
+    }
+
+    return {
+      installed,
+      account: accounts.getAccount(),
+      lastVersion: config.launch.lastVersion || '',
+      memoryMB: settings.currentMemoryMB(),
+      memoryAuto: !(Number(config.launch.memoryMB) > 0),
+      totalMemoryMB: settings.totalMemoryMB(),
+      gameDir: paths.gameDir(),
+      java: javaInfo
+    }
+  })
+
+  /** 保存离线账号（名字 + 算出来的 UUID） */
+  ipcMain.handle('account:set', (_event, name) => accounts.setAccount(name))
+
+  /**
+   * 启动游戏。
+   * 检查不通过会马上返回 { ok:false, error }（中文）；
+   * 起来了就返回 { ok:true }，之后日志和退出消息通过 launch:log / launch:state 推给界面。
+   */
+  ipcMain.handle('launch:start', async (event, versionId) => {
+    if (launch.isRunning()) return { ok: false, error: '游戏已经在运行了' }
+
+    const send = (channel, payload) => {
+      if (!event.sender.isDestroyed()) event.sender.send(channel, payload)
+    }
+
+    const result = await launch.launch(versionId, {
+      onLog: (lines) => send('launch:log', lines),
+      onState: (payload) => send('launch:state', payload)
+    })
+
+    // 启动成功就记住这个版本，下次打开软件默认选它
+    if (result.ok) {
+      try {
+        settings.writeConfig({ launch: { lastVersion: versionId } })
+      } catch {
+        // 记不住不影响玩
+      }
+    }
+
+    return result
   })
 }
 

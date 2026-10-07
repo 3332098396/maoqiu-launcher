@@ -30,7 +30,7 @@
         </button>
       </nav>
 
-      <span class="topbar__tag" id="stage-tag">M1 · 界面骨架</span>
+      <span class="topbar__tag" id="stage-tag">M5 · 启动游戏</span>
     </header>
 
     <main class="main">
@@ -39,37 +39,73 @@
         <aside class="side">
           <div class="acc">
             <div class="acc__tabs">
-              <span class="acc__tab acc__tab--on">正版</span>
-              <span class="acc__tab">离线</span>
+              <span class="acc__tab acc__tab--off" title="正版登录要等 Mojang 审批，先不做">正版</span>
+              <span class="acc__tab acc__tab--on">离线</span>
             </div>
-            <div class="acc__avatar">⛏</div>
-            <div class="acc__name">还没有账号</div>
+            <div class="acc__avatar" id="acc-avatar">⛏</div>
+            <div class="acc__name" id="acc-name">还没有账号</div>
+            <input
+              class="input"
+              id="acc-input"
+              type="text"
+              maxlength="16"
+              placeholder="输入游戏名字"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <div class="acc__hint" id="acc-hint">
+              3～16 个字符，只能用字母、数字、下划线
+            </div>
           </div>
 
-          <button class="btn btn--primary btn--block" type="button" disabled>
+          <div class="pick">
+            <div class="pick__title">选择版本</div>
+            <ul class="pick__list" id="pick-list"></ul>
+            <div class="pick__empty" id="pick-empty" hidden>
+              还没有装过版本。到「下载」页挑一个装上，就能玩了。
+            </div>
+          </div>
+
+          <button class="btn btn--primary btn--block" type="button" id="launch-btn" disabled>
             开始游戏
           </button>
 
           <div class="side__row">
-            <button class="btn btn--ghost btn--block" type="button" disabled>版本选择</button>
             <button class="btn btn--ghost btn--block" type="button" disabled>版本设置</button>
           </div>
         </aside>
 
         <div class="content">
-          <div class="notice">
-            <b>这是布局预览。</b>颜色和排版已经定下来了，功能会从 M2 开始一步步填进来。
+          <div class="notice" id="launch-notice">
+            在左边填一个游戏名字、选一个版本，就可以点「开始游戏」了。
           </div>
 
-          <div class="preview">
-            <div class="preview__label">这一页以后会有</div>
-            <ul class="preview__list">
-              <li><b>账号</b><span>登录、切换账号、离线名字</span></li>
-              <li><b>开始游戏</b><span>点一下就启动选中的版本</span></li>
-              <li><b>启动进度</b><span>下载、校验、启动的实时状态</span></li>
-              <li><b>版本信息</b><span>当前选中版本的图标、名称、加载器</span></li>
-            </ul>
+          <div class="launch-facts">
+            <div class="fact">
+              <span class="fact__k">当前版本</span>
+              <span class="fact__v" id="fact-version">—</span>
+            </div>
+            <div class="fact">
+              <span class="fact__k">Java</span>
+              <span class="fact__v" id="fact-java">—</span>
+            </div>
+            <div class="fact">
+              <span class="fact__k">内存分配</span>
+              <span class="fact__v" id="fact-memory">—</span>
+            </div>
+            <div class="fact">
+              <span class="fact__k">游戏目录</span>
+              <span class="fact__v fact__v--path" id="fact-dir">—</span>
+            </div>
           </div>
+
+          <section class="panel panel--full log-panel">
+            <div class="log-panel__head">
+              <h3 class="panel__title">游戏日志</h3>
+              <button class="linkbtn" type="button" id="log-clear">清空</button>
+            </div>
+            <pre class="log" id="launch-log">还没有启动过游戏。启动后这里会显示游戏的运行输出，出错时先看这里。</pre>
+          </section>
         </div>
       </section>
 
@@ -205,7 +241,7 @@
 
     <footer class="statusbar">
       <span id="stat-left">版本 0.1.0</span>
-      <span id="stat-right">M1 · 界面骨架</span>
+      <span id="stat-right">M5 · 启动游戏</span>
     </footer>
 
     <script src="app.js"></script>

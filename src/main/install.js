@@ -56,6 +56,16 @@ function currentOsVersion() {
   return os.release()
 }
 
+/** 当前环境（给规则判断用）。装版本和启动游戏都要，做成一个函数避免两处不一致 */
+function buildContext() {
+  return {
+    osName: currentOsName(),
+    arch: currentArch(),
+    osVersion: currentOsVersion(),
+    features: {}
+  }
+}
+
 // ——————————————————————————————————————————————
 // 版本 JSON 里的 rules 怎么读
 // ——————————————————————————————————————————————
@@ -113,12 +123,7 @@ function rulesAllow(rules, ctx) {
  * @returns {Promise<{files: Array, natives: Array, javaComponent: string|null, needsNatives: string[]}>}
  */
 async function buildFileList(versionId, versionJson, { onStage }) {
-  const ctx = {
-    osName: currentOsName(),
-    arch: currentArch(),
-    osVersion: currentOsVersion(),
-    features: {}
-  }
+  const ctx = buildContext()
 
   const files = []
   const natives = []
@@ -152,23 +157,7 @@ async function buildFileList(versionId, versionJson, { onStage }) {
     }
 
     // 老版本才有：natives 是压缩包，要单独解压
-    const classifiers = lib.downloads && lib.downloads.classifiers
-    if (classifiers) {
-      // 不同架构对应不同的包名，按当前架构挑
-      const wanted = [`natives-${ctx.osName}`, `natives-${ctx.osName}-${ctx.arch}`]
-      for (const key of wanted) {
-        const entry = classifiers[key]
-        if (!entry) continue
-        natives.push({
-          name: `${lib.name}-${key}.jar`,
-          url: entry.url,
-          saveTo: path.join(paths.librariesDir(), entry.path),
-          sha1: entry.sha1,
-          size: entry.size
-        })
-        break
-      }
-    }
+    natives.push(...nativesFromLibrary(lib, ctx))
   }
 
   // ——— ③ assets ———
@@ -223,6 +212,44 @@ async function buildFileList(versionId, versionJson, { onStage }) {
   }
 
   return { files, natives, javaComponent }
+}
+
+/**
+ * 老版本（1.19 以前）的动态库：挂在库文件的 classifiers 里，是单独的压缩包，
+ * 下载完还要解压到版本目录。不同系统、不同架构的包名不一样，按当前环境挑一个。
+ *
+ * 新版本不用这套——动态库直接作为普通库文件进了 classpath，
+ * 游戏自己在运行时把它们解压到 natives 目录（见 launch.js）。
+ */
+function nativesFromLibrary(lib, ctx) {
+  const classifiers = lib.downloads && lib.downloads.classifiers
+  if (!classifiers) return []
+
+  const wanted = [`natives-${ctx.osName}`, `natives-${ctx.osName}-${ctx.arch}`]
+  for (const key of wanted) {
+    const entry = classifiers[key]
+    if (!entry) continue
+    return [
+      {
+        name: `${lib.name}-${key}.jar`,
+        url: entry.url,
+        saveTo: path.join(paths.librariesDir(), entry.path),
+        sha1: entry.sha1,
+        size: entry.size
+      }
+    ]
+  }
+  return []
+}
+
+/** 把版本 JSON 里所有老式 natives 压缩包挑出来（启动时补解压要用） */
+function collectClassifierNatives(versionJson, ctx) {
+  const list = []
+  for (const lib of versionJson.libraries || []) {
+    if (!rulesAllow(lib.rules, ctx)) continue
+    list.push(...nativesFromLibrary(lib, ctx))
+  }
+  return list
 }
 
 /** Java 运行时要下的文件 */
@@ -360,4 +387,11 @@ async function installVersion(versionId, options = {}) {
   }
 }
 
-module.exports = { installVersion, buildFileList, rulesAllow }
+module.exports = {
+  installVersion,
+  buildFileList,
+  rulesAllow,
+  buildContext,
+  collectClassifierNatives,
+  extractNatives
+}

@@ -29,6 +29,16 @@ function manifestCacheFile() {
   return path.join(cacheDir(), 'version_manifest_v2.json')
 }
 
+/** 配置文件（账号、启动设置都在这） */
+function settingsFile() {
+  return path.join(configDir(), 'config.json')
+}
+
+/** 启动器自己的日志目录。每次启动游戏的完整输出存一份，方便排查 */
+function logsDir() {
+  return path.join(configDir(), 'logs')
+}
+
 // ——————————————————————————————————————————————
 // 游戏目录
 // ——————————————————————————————————————————————
@@ -84,6 +94,15 @@ function versionNativesDir(id) {
   return path.join(versionDir(id), 'natives')
 }
 
+/**
+ * log4j 的日志配置文件。
+ * 位置是游戏规定的（assets\log_configs\），版本 JSON 里的
+ * logging.client 指向它，游戏启动时要求这个文件在。
+ */
+function logConfigFile(id) {
+  return path.join(assetsDir(), 'log_configs', id)
+}
+
 // ——————————————————————————————————————————————
 // 工具
 // ——————————————————————————————————————————————
@@ -115,6 +134,8 @@ module.exports = {
   configDir,
   cacheDir,
   manifestCacheFile,
+  settingsFile,
+  logsDir,
   gameDir,
   versionsDir,
   librariesDir,
@@ -124,6 +145,7 @@ module.exports = {
   versionJsonFile,
   versionJarFile,
   versionNativesDir,
+  logConfigFile,
   ensureDir,
   isVersionInstalled,
   listInstalledVersions

@@ -3,7 +3,7 @@
  * 设计基调：简洁、直观、渐变淡蓝。
  * 所有颜色都写成变量，以后想换配色只改这一块即可。
  *
- * 当前进度：M1（界面骨架）。三个页面的布局和配色定下来了，功能还是空的。
+ * 当前进度：M5（启动游戏）。启动页的账号、版本选择、日志面板都在这一版。
  */
 
 :root {
@@ -206,6 +206,12 @@ body {
   background: var(--primary-gradient);
 }
 
+/* 还没做的那个标签（正版登录）：灰掉，鼠标也变回普通箭头 */
+.acc__tab--off {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .acc__avatar {
   display: flex;
   align-items: center;
@@ -221,6 +227,80 @@ body {
 .acc__name {
   font-size: 13px;
   color: var(--text-muted);
+}
+
+.acc__hint {
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.acc__hint--error {
+  color: var(--danger);
+}
+
+/* ═══════════════════════════════════════
+   启动页左栏：版本选择
+   ═══════════════════════════════════════ */
+.pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pick__title {
+  padding: 0 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.pick__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pick__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-dim);
+  background: #fff;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  cursor: pointer;
+  /* 版本号用等宽字体，1 和 l 不会看错 */
+  font-family: Consolas, "Courier New", monospace;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.pick__item:hover {
+  border-color: var(--card-border-hover);
+  color: var(--text);
+}
+
+.pick__item--on,
+.pick__item--on:hover {
+  color: #3d86d8;
+  font-weight: 600;
+  background: #eef6ff;
+  border-color: #9ccaff;
+}
+
+.pick__empty {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+.pick__empty[hidden] {
+  display: none;
 }
 
 .side__row {
@@ -339,6 +419,107 @@ body {
 
 .notice b {
   color: #2b5b8c;
+}
+
+/* 提示条按内容换颜色：绿色=顺利，红色=出问题了 */
+.notice--ok {
+  color: #2f8f52;
+  background: linear-gradient(135deg, #eafaf0, #f6fffa);
+  border-color: #cfefdc;
+}
+
+.notice--error {
+  color: #b04a4a;
+  background: linear-gradient(135deg, #fff0f0, #fff8f8);
+  border-color: #ffd9d9;
+  white-space: pre-wrap;
+}
+
+/* ═══════════════════════════════════════
+   启动页内容区：信息卡 + 日志
+   ═══════════════════════════════════════ */
+.launch-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.fact {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+}
+
+.fact__k {
+  flex: 0 0 60px;
+  color: var(--text-muted);
+}
+
+.fact__v {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  user-select: text;
+}
+
+.fact__v--path {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.log-panel {
+  gap: 10px;
+}
+
+.log-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.log {
+  flex: 1 1 auto;
+  min-height: 160px;
+  max-height: 340px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: #3c4a5a;
+  background: #f7fbff;
+  border: 1px solid #e3f0ff;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
+}
+
+/* 文字按钮：看着像链接，点着是按钮（「收起」「重装」「清空」都用它） */
+.linkbtn {
+  padding: 2px 6px;
+  font-family: var(--font);
+  font-size: 12px;
+  color: #4a9bff;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.linkbtn:hover {
+  background: #eaf4ff;
 }
 
 .preview {
@@ -606,10 +787,14 @@ body {
   color: var(--text-muted);
 }
 
-/* 版本行右侧：未安装给按钮，已安装显示一个绿字 */
+/* 版本行右侧：未安装给「安装」按钮，已安装给「已安装 + 重装」 */
 .ver__action {
   flex: 0 0 auto;
-  width: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 62px;
   text-align: right;
 }
 
