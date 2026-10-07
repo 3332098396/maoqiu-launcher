@@ -628,7 +628,7 @@ function refreshLaunchNotice() {
 
   const installed = (launchInfo && launchInfo.installed) || []
   if (installed.length === 0) {
-    setNotice('还没有装过版本。先到「下载」页挑一个装上，回来就能开始游戏了。')
+    setNotice('这里还空着——去「下载」页挑个版本装上，回来就能开玩了。')
   } else {
     setNotice('在左边填一个游戏名字、选一个版本，就可以点「开始游戏」了。')
   }
@@ -1144,8 +1144,8 @@ async function openPackDialog(filePath) {
 
   packInstallEl.textContent = '开始安装'
   packCancelEl.hidden = false
-  packTitleEl.textContent = '发现一个整合包'
-  packSummaryEl.textContent = '正在看这个压缩包里有什么…'
+  packTitleEl.textContent = '捡到一个整合包'
+  packSummaryEl.textContent = '正在翻这个压缩包，看看里面有什么…'
   packWarnEl.textContent = ''
   packProgressEl.textContent = ''
   packNameRowEl.hidden = true
@@ -1290,10 +1290,10 @@ packInstallEl.addEventListener('click', async () => {
   packNameRowEl.hidden = true
 
   packProgressEl.textContent = result.versionId
-    ? `装好了：多了个新版本「${result.versionId}」——回启动页选它就能玩。` +
+    ? `装好啦！版本列表里多了个「${result.versionId}」——回启动页选它就能玩。` +
       `这次 ${packFileSummary(result)}` +
       (result.overrides ? `，另有 ${result.overrides} 个作者的配置文件` : '')
-    : `装好了：${result.written} 个文件已经解到 ${result.dest}`
+    : `装好啦！${result.written} 个文件已经解到 ${result.dest}`
 
   // 版本列表刷新，并把新版本选上
   await refreshLaunchFacts()
@@ -1656,8 +1656,8 @@ async function installLoader(type) {
   }
 
   verLoaderHintEl.textContent = result.already
-    ? `${result.versionId} 之前就装好了`
-    : `装好了：${result.versionId}——回启动页选它就能用 Mod 了`
+    ? `${result.versionId} 之前就装好啦，不用再来一遍`
+    : `装好啦：${result.versionId}——回启动页选它就能用 Mod 了`
 
   // 版本列表刷新，并把新装好的那个选上（省得用户自己找）
   await refreshLaunchFacts()

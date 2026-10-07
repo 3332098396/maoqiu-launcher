@@ -1008,6 +1008,26 @@ body {
   box-shadow: 0 0 0 3px rgba(74, 155, 255, 0.16);
 }
 
+/**
+ * "这儿能打字"——给那些容易被误会成"只是一段文字"的输入框用。
+ *
+ * 【为什么要有它】整合包对话框里"起个名字"那个框，默认的 1px 淡灰边框
+ * 跟旁边的正文长得差不多，用户以为改不了（2026-10-08 实测反馈）。
+ * 加上这个类：边框加粗成蓝色、底色带一点点蓝——一眼就知道能改。
+ * 内边距各减 1px，整体高度和普通输入框一样，不会把版面撑歪。
+ */
+.input--edit {
+  padding: 8px 11px;
+  border: 2px solid #7cc0ff;
+  background: #f5faff;
+}
+
+.input--edit:focus:not(:disabled) {
+  border-color: #4a9bff;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(74, 155, 255, 0.18);
+}
+
 .input:disabled {
   background: #f6fbff;
   color: var(--text-muted);
