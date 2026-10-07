@@ -303,6 +303,14 @@ body {
   color: var(--text);
 }
 
+/* 名字太长就省略号，不撑破侧栏 */
+.pick__item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .pick__item--on,
 .pick__item--on:hover {
   color: #3d86d8;
@@ -593,6 +601,94 @@ body {
   flex: 1 1 auto;
   min-height: 0;
   max-height: none;
+}
+
+/* 表单类弹窗：高度按内容来，不硬撑 */
+.modal__box--form {
+  height: auto;
+  max-height: 100%;
+  overflow-y: auto;
+  gap: 14px;
+}
+
+.modal__actions--end {
+  justify-content: flex-end;
+}
+
+/* 删除确认那层要盖在版本设置上面 */
+.modal--top {
+  z-index: 30;
+}
+
+/* 表单里的一栏：标签在上，控件在下 */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field__label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.field__hint {
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  word-break: break-all;
+}
+
+.folders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.verform__foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.verform__hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--ok);
+}
+
+.verform__hint--bad {
+  color: var(--danger);
+}
+
+/* 删除确认里的三行说明 */
+.delbox {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.delbox--safe {
+  color: #2f8f52;
+}
+
+.delbox--warn {
+  color: var(--danger);
+}
+
+/* 危险操作按钮（删除）：红色，让人看清楚再点 */
+.btn--danger {
+  color: #fff;
+  background: linear-gradient(135deg, #ff8f8f, #f26d6d);
+  box-shadow: 0 3px 12px rgba(242, 109, 109, 0.28);
+}
+
+.btn--danger:hover:not(:disabled) {
+  opacity: 0.92;
 }
 
 /* 文字按钮：看着像链接，点着是按钮（「收起」「重装」「清空」都用它） */

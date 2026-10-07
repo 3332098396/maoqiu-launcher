@@ -96,5 +96,31 @@ contextBridge.exposeInMainWorld('api', {
   getLatestLog: () => ipcRenderer.invoke('log:latest'),
 
   /** 在文件资源管理器里打开日志文件夹 */
-  openLogFolder: () => ipcRenderer.invoke('log:openFolder')
+  openLogFolder: () => ipcRenderer.invoke('log:openFolder'),
+
+  // ——— 版本管理（M6.1）———
+
+  /**
+   * 改某个版本的显示名/备注。两个都留空 = 恢复成默认（显示版本号）。
+   * @returns {Promise<{ok: boolean, version?: object, error?: string}>}
+   */
+  updateVersion: (id, info) => ipcRenderer.invoke('versions:update', id, info),
+
+  /**
+   * 打开某个版本的文件夹。which 取 'version' | 'saves' | 'mods' | 'screenshots'
+   * @returns {Promise<{ok: boolean, dir?: string, error?: string}>}
+   */
+  openVersionFolder: (id, which) => ipcRenderer.invoke('versions:openFolder', id, which),
+
+  /**
+   * 这个版本文件夹占多大、有没有开版本隔离（删除确认时给用户看）。
+   * @returns {Promise<{bytes: number, isolated: boolean}>}
+   */
+  getVersionSize: (id) => ipcRenderer.invoke('versions:size', id),
+
+  /**
+   * 删除一个版本（界面必须先二次确认；主进程还会再挡一道路径检查）。
+   * @returns {Promise<{ok: boolean, sizeBytes?: number, error?: string}>}
+   */
+  deleteVersion: (id) => ipcRenderer.invoke('versions:delete', id)
 })

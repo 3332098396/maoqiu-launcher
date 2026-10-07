@@ -20,6 +20,12 @@ const paths = require('./paths')
 const DEFAULTS = {
   /** 账号。第一期只有离线：{ type: 'offline', name: '玩家名', uuid: '...' } */
   account: null,
+  /**
+   * 每个版本的自定义信息（显示名、备注），按版本号存：
+   * { "26.3": { name: "我的生存", note: "装了 XX" } }
+   * 只存用户真填过的，留空的版本不会出现在这里。
+   */
+  versions: {},
   launch: {
     /** 给游戏多少内存（MB）。0 = 自动（本机内存的 1/4，上限 8 GB） */
     memoryMB: 0,

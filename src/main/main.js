@@ -23,6 +23,7 @@ const settings = require('./settings')
 const accounts = require('./accounts')
 const javaUtil = require('./java')
 const launch = require('./launch')
+const versions = require('./versions')
 
 // 软件名。它会决定数据存放目录：%APPDATA%\MC启动器\
 app.setName('MC启动器')
@@ -157,6 +158,7 @@ function registerIpcHandlers() {
 
     return {
       installed,
+      versionInfo: versions.versionInfoMap(),
       account: accounts.getAccount(),
       lastVersion: config.launch.lastVersion || '',
       memoryMB: settings.currentMemoryMB(),
@@ -252,6 +254,28 @@ function registerIpcHandlers() {
     } catch (error) {
       return { ok: false, error: String(error?.message ?? error) }
     }
+  })
+
+  // ——— 版本管理（M6.1）———
+
+  /** 改某个版本的显示名/备注 */
+  ipcMain.handle('versions:update', (_event, id, info) => versions.updateVersion(id, info))
+
+  /** 在资源管理器里打开某个版本的某一类文件夹（version / saves / mods / screenshots） */
+  ipcMain.handle('versions:openFolder', (_event, id, which) => versions.openFolder(id, which))
+
+  /** 某个版本文件夹有多大、有没有开隔离（删除确认时给用户看的） */
+  ipcMain.handle('versions:size', (_event, id) => ({
+    bytes: versions.versionSize(id),
+    isolated: versions.isIsolated()
+  }))
+
+  /** 删一个版本。游戏在跑的时候不许删——文件正被用着呢 */
+  ipcMain.handle('versions:delete', (_event, id) => {
+    if (launch.isRunning()) {
+      return { ok: false, error: '游戏正在运行，先关掉游戏再删' }
+    }
+    return versions.deleteVersion(id)
   })
 }
 

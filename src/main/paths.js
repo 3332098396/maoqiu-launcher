@@ -83,6 +83,20 @@ function gameOptionsFile() {
   return path.join(gameDir(), 'options.txt')
 }
 
+// ——— 玩家自己的东西（没开版本隔离时，所有版本共用这几个目录）———
+
+function savesDir() {
+  return path.join(gameDir(), 'saves')
+}
+
+function modsDir() {
+  return path.join(gameDir(), 'mods')
+}
+
+function screenshotsDir() {
+  return path.join(gameDir(), 'screenshots')
+}
+
 // ——— 单个版本 ———
 
 function versionDir(id) {
@@ -155,6 +169,9 @@ module.exports = {
   versionNativesDir,
   logConfigFile,
   gameOptionsFile,
+  savesDir,
+  modsDir,
+  screenshotsDir,
   ensureDir,
   isVersionInstalled,
   listInstalledVersions

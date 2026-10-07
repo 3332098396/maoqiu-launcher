@@ -438,7 +438,15 @@ function renderPickList() {
     const li = document.createElement('li')
     li.className = id === selectedVersion ? 'pick__item pick__item--on' : 'pick__item'
     li.dataset.version = id
-    li.textContent = id
+
+    // 用户起过名字就显示名字（后面带上版本号，免得对不上）；
+    // 没起过就显示版本号本身。
+    // 外面套一层 span：名字太长时好做省略号，不撑破侧栏
+    const label = document.createElement('span')
+    const name = launchInfo?.versionInfo?.[id]?.name
+    label.textContent = name ? `${name}（${id}）` : id
+    li.appendChild(label)
+
     frag.appendChild(li)
   }
   pickListEl.appendChild(frag)
@@ -449,6 +457,9 @@ function refreshLaunchUi() {
   const problem = nameProblem(accInputEl.value)
   launchBtnEl.disabled = launching || !selectedVersion || Boolean(problem)
   launchBtnEl.textContent = launching ? '游戏运行中…' : '开始游戏'
+
+  // 没选版本就没得设置
+  verSettingsBtnEl.disabled = !selectedVersion
 
   // 按钮点不了的时候，直接把"缺什么"写在旁边——
   // 光把按钮变灰，用户只能自己猜（实测时用户就问过"为什么点不了"）
@@ -666,6 +677,160 @@ window.api.onLaunchState((payload) => {
 })
 
 // ═══════════════════════════════════════
+// 版本管理（M6.1）：改名、备注、四个文件夹、删版本
+// ═══════════════════════════════════════
+
+const verSettingsBtnEl = document.getElementById('ver-settings-btn')
+const verModalEl = document.getElementById('ver-modal')
+const verTitleEl = document.getElementById('ver-title')
+const verNameEl = document.getElementById('ver-name')
+const verNoteEl = document.getElementById('ver-note')
+const verHintEl = document.getElementById('ver-hint')
+const verFolderHintEl = document.getElementById('ver-folder-hint')
+const delModalEl = document.getElementById('del-modal')
+const delTitleEl = document.getElementById('del-title')
+const delWhatEl = document.getElementById('del-what')
+const delSafeEl = document.getElementById('del-safe')
+
+/** 版本设置弹窗正在设置哪个版本 */
+let editingVersion = ''
+/** 删除确认弹窗正在确认哪个版本 */
+let deletingVersion = ''
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 MB'
+  const mb = bytes / 1024 / 1024
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`
+  return `${mb.toFixed(1)} MB`
+}
+
+function openVersionSettings() {
+  if (!selectedVersion) return
+  editingVersion = selectedVersion
+
+  const info = launchInfo?.versionInfo?.[editingVersion] ?? { name: '', note: '' }
+  verTitleEl.textContent = `版本设置 — ${editingVersion}`
+  verNameEl.value = info.name
+  verNoteEl.value = info.note
+  verHintEl.textContent = ''
+  verHintEl.classList.remove('verform__hint--bad')
+  verFolderHintEl.textContent = ''
+  verModalEl.hidden = false
+  verNameEl.focus()
+}
+
+function closeVersionSettings() {
+  verModalEl.hidden = true
+  editingVersion = ''
+}
+
+async function saveVersionSettings() {
+  if (!editingVersion) return
+
+  const result = await window.api.updateVersion(editingVersion, {
+    name: verNameEl.value,
+    note: verNoteEl.value
+  })
+
+  if (!result.ok) {
+    verHintEl.textContent = result.error
+    verHintEl.classList.add('verform__hint--bad')
+    return
+  }
+
+  if (launchInfo) launchInfo.versionInfo[editingVersion] = result.version
+  verHintEl.classList.remove('verform__hint--bad')
+  verHintEl.textContent = '已保存'
+  renderPickList()
+
+  const shownFor = editingVersion
+  setTimeout(() => {
+    if (editingVersion === shownFor && verHintEl.textContent === '已保存') {
+      verHintEl.textContent = ''
+    }
+  }, 2000)
+}
+
+// ——— 删除（两步：先弹确认说清楚删什么，再真删）———
+
+async function askDeleteVersion() {
+  if (!editingVersion) return
+  deletingVersion = editingVersion
+
+  delTitleEl.textContent = `要删除版本「${deletingVersion}」吗？`
+  delWhatEl.textContent = '正在算这个版本占多大…'
+  delSafeEl.textContent = ''
+  delModalEl.hidden = false
+
+  const size = await window.api.getVersionSize(deletingVersion)
+
+  // 算大小的这点时间里，用户可能已经把弹窗关了
+  if (delModalEl.hidden || !deletingVersion) return
+
+  delWhatEl.textContent =
+    `会删掉：versions\\${deletingVersion}\\ 这个文件夹` +
+    `（版本文件本体${size.bytes ? `，约 ${formatBytes(size.bytes)}` : ''}）`
+
+  delSafeEl.textContent = size.isolated
+    ? '⚠ 这个版本开着版本隔离，它的存档、Mod 就在这个文件夹里，会一起被删掉！'
+    : '不会动：共享的库文件、资源文件，其他版本，还有你的存档、Mod、截图' +
+      '（它们在游戏目录里，不在这个文件夹里）'
+}
+
+async function confirmDeleteVersion() {
+  if (!deletingVersion) return
+  const id = deletingVersion
+
+  const result = await window.api.deleteVersion(id)
+
+  delModalEl.hidden = true
+  deletingVersion = ''
+
+  if (!result.ok) {
+    verHintEl.textContent = result.error
+    verHintEl.classList.add('verform__hint--bad')
+    return
+  }
+
+  closeVersionSettings()
+  if (selectedVersion === id) selectedVersion = ''
+
+  // 两个列表都要跟着变：启动页的版本列表 + 下载页的「已安装」
+  await loadLaunchPage()
+  loadInstalled()
+  setNotice(`版本 ${id} 已删除。`, 'ok')
+}
+
+verSettingsBtnEl.addEventListener('click', openVersionSettings)
+document.getElementById('ver-close').addEventListener('click', closeVersionSettings)
+document.getElementById('ver-save').addEventListener('click', saveVersionSettings)
+document.getElementById('ver-delete').addEventListener('click', askDeleteVersion)
+document.getElementById('del-ok').addEventListener('click', confirmDeleteVersion)
+document.getElementById('del-cancel').addEventListener('click', () => {
+  delModalEl.hidden = true
+  deletingVersion = ''
+})
+
+verModalEl.addEventListener('click', async (event) => {
+  // 四个文件夹按钮
+  const which = event.target.dataset?.folder
+  if (which) {
+    const result = await window.api.openVersionFolder(editingVersion, which)
+    verFolderHintEl.textContent = result.ok ? `已打开：${result.dir}` : `打不开：${result.error}`
+    return
+  }
+  // 点灰底关掉
+  if (event.target === verModalEl) closeVersionSettings()
+})
+
+delModalEl.addEventListener('click', (event) => {
+  if (event.target === delModalEl) {
+    delModalEl.hidden = true
+    deletingVersion = ''
+  }
+})
+
+// ═══════════════════════════════════════
 // 日志弹窗（顶栏「日志」按钮，M5 追加）
 // ═══════════════════════════════════════
 
@@ -729,8 +894,20 @@ logModalEl.addEventListener('click', (event) => {
   if (event.target === logModalEl) closeLogModal()
 })
 
+// Esc 关弹窗：从最上面那层开始关（删除确认盖在版本设置上面）
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && !logModalEl.hidden) closeLogModal()
+  if (event.key !== 'Escape') return
+
+  if (!delModalEl.hidden) {
+    delModalEl.hidden = true
+    deletingVersion = ''
+    return
+  }
+  if (!verModalEl.hidden) {
+    closeVersionSettings()
+    return
+  }
+  if (!logModalEl.hidden) closeLogModal()
 })
 
 document.getElementById('log-folder').addEventListener('click', async () => {

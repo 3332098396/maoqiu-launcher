@@ -73,7 +73,9 @@
           <div class="side__tip" id="launch-tip" hidden></div>
 
           <div class="side__row">
-            <button class="btn btn--ghost btn--block" type="button" disabled>版本设置</button>
+            <button class="btn btn--ghost btn--block" type="button" id="ver-settings-btn" disabled>
+              版本设置
+            </button>
           </div>
         </aside>
 
@@ -259,6 +261,87 @@
           </div>
         </div>
         <pre class="log log--modal" id="log-modal-text"></pre>
+      </div>
+    </div>
+
+    <!-- 「版本设置」按钮点开的窗口 -->
+    <div class="modal" id="ver-modal" hidden>
+      <div class="modal__box modal__box--form">
+        <div class="modal__head">
+          <span class="modal__title" id="ver-title">版本设置</span>
+          <div class="modal__actions">
+            <button class="btn btn--ghost btn--sm" type="button" id="ver-close">关闭</button>
+          </div>
+        </div>
+
+        <label class="field">
+          <span class="field__label">显示名称</span>
+          <input
+            class="input"
+            id="ver-name"
+            type="text"
+            maxlength="40"
+            placeholder="不填就显示版本号，比如 26.3"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </label>
+
+        <label class="field">
+          <span class="field__label">备注</span>
+          <input
+            class="input"
+            id="ver-note"
+            type="text"
+            maxlength="200"
+            placeholder="随便写点什么都行，比如装了什么 Mod"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </label>
+
+        <div class="field">
+          <span class="field__label">快捷打开</span>
+          <div class="folders">
+            <button class="btn btn--ghost btn--sm" type="button" data-folder="version">
+              版本文件夹
+            </button>
+            <button class="btn btn--ghost btn--sm" type="button" data-folder="saves">
+              存档文件夹
+            </button>
+            <button class="btn btn--ghost btn--sm" type="button" data-folder="mods">
+              Mod 文件夹
+            </button>
+            <button class="btn btn--ghost btn--sm" type="button" data-folder="screenshots">
+              截图文件夹
+            </button>
+          </div>
+          <span class="field__hint" id="ver-folder-hint"></span>
+        </div>
+
+        <div class="verform__foot">
+          <button class="btn btn--primary btn--sm" type="button" id="ver-save">保存</button>
+          <span class="verform__hint" id="ver-hint"></span>
+          <button class="btn btn--danger btn--sm" type="button" id="ver-delete">
+            删除这个版本
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 删除版本的二次确认（盖在版本设置上面） -->
+    <div class="modal modal--top" id="del-modal" hidden>
+      <div class="modal__box modal__box--form">
+        <div class="modal__head">
+          <span class="modal__title" id="del-title">要删除这个版本吗？</span>
+        </div>
+        <p class="delbox" id="del-what"></p>
+        <p class="delbox delbox--safe" id="del-safe"></p>
+        <p class="delbox delbox--warn">删了就不能恢复。</p>
+        <div class="modal__actions modal__actions--end">
+          <button class="btn btn--ghost" type="button" id="del-cancel">取消</button>
+          <button class="btn btn--danger" type="button" id="del-ok">确认删除</button>
+        </div>
       </div>
     </div>
 
