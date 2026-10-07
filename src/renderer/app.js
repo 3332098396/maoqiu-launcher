@@ -3397,6 +3397,8 @@ const HIDEABLE_PAGES = [
 const THEMES = [
   { key: 'blue', label: '渐变淡蓝（默认）', colors: ['#8fcbff', '#4a9bff', '#eef6ff'] },
   { key: 'dark', label: '深色', colors: ['#2b2f45', '#8b7bff', '#1f2338'] },
+  // M17.1：按委托人做的设计稿加的一套（深底 + 紫→青品牌渐变）
+  { key: 'neon', label: '霓虹紫青', colors: ['#9a5cf7', '#2fd4e8', '#141a2e'] },
   { key: 'matcha', label: '抹茶绿', colors: ['#a8d8b9', '#56b57f', '#eaf7ef'] },
   { key: 'sunset', label: '暖阳橙', colors: ['#ffca8f', '#f79140', '#fff2e2'] },
   { key: 'sakura', label: '樱花粉', colors: ['#ffc2d8', '#f97fae', '#ffeef5'] }

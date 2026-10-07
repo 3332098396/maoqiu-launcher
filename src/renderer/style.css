@@ -150,6 +150,69 @@ body[data-theme='dark'] {
   --pill-text: #d6cfff;
 }
 
+/* 霓虹紫青（M17.1）——按委托人做的设计稿：深底 + 紫→青品牌渐变
+ *
+ * 【色值是照着图挑的，不是设计稿给的】设计稿上那些色块写着 `#11116`、`#2A2?2`
+ * 这种缺位的值（图被放大弄花了），所以这几个数是我对着图调的。
+ * 等用户拿到**文本规范**（准确色值）之后，改这一段就行——别处一行都不用动。
+ */
+body[data-theme='neon'] {
+  --topbar-gradient: linear-gradient(120deg, #1b2036, #151a2d);
+  --page-gradient: linear-gradient(160deg, #0f1220, #141a2e 45%, #0d101c);
+  --page-tint: #141a2e;
+  --primary-gradient: linear-gradient(135deg, #9a5cf7, #2fd4e8);
+
+  --card-bg: #181d30;
+  --surface: #1c2238;
+  --surface-soft: #141930;
+  --surface-accent: #232b4a;
+  --surface-accent-2: #2a3357;
+  --card-border: #2a3150;
+  --card-border-hover: #3f4877;
+  --accent-line: #2b3355;
+  --card-shadow: 0 2px 12px rgba(0, 0, 0, 0.34);
+  --card-shadow-hover: 0 8px 26px rgba(0, 0, 0, 0.46);
+  --accent-shadow: rgba(154, 92, 247, 0.34);
+  --accent-shadow-strong: rgba(154, 92, 247, 0.38);
+  --accent-shadow-soft: rgba(154, 92, 247, 0.12);
+  --accent-ring: rgba(154, 92, 247, 0.24);
+  --accent-ring-soft: rgba(154, 92, 247, 0.15);
+
+  --accent: #a06bff;
+  --accent-strong: #b98cff;
+  --accent-soft: #7b4fd6;
+
+  --ok: #4fdc9b;
+  --ok-soft: #17332a;
+  --ok-line: #235041;
+  --ok-text: #7de8b4;
+  --warn: #ffc861;
+  --warn-soft: #362c17;
+  --warn-text: #ffd98a;
+  --danger: #ff6f8b;
+  --danger-soft: #3a1f2c;
+  --danger-strong: #ff9db3;
+  --danger-ring: rgba(255, 111, 139, 0.3);
+
+  --text: #eaeefb;
+  --text-dim: #c4ccdf;
+  --text-muted: #98a2c0;
+
+  --overlay: rgba(0, 0, 0, 0.55);
+  --overlay-strong: rgba(0, 0, 0, 0.68);
+  --overlay-soft: rgba(0, 0, 0, 0.28);
+  --surface-a95: rgba(24, 29, 48, 0.96);
+  --surface-a82: rgba(24, 29, 48, 0.85);
+  --surface-a72: rgba(24, 29, 48, 0.75);
+  --surface-a55: rgba(24, 29, 48, 0.6);
+  --on-accent: #ffffff;
+  --on-topbar: #ffffff;
+  --on-topbar-dim: rgba(255, 255, 255, 0.7);
+  --on-topbar-hover: rgba(255, 255, 255, 0.14);
+  --pill-bg: #2b3155;
+  --pill-text: #d9ccff;
+}
+
 /* 抹茶绿 */
 body[data-theme='matcha'] {
   --topbar-gradient: linear-gradient(120deg, #3d8a5c, #2f7048);
