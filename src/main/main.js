@@ -512,6 +512,9 @@ function registerIpcHandlers() {
     return { ok: true, filePath: result.filePaths[0] }
   })
 
+  /** 用户给版本起的名字行不行（界面上一边打字一边问，规矩只留在主进程这一份） */
+  ipcMain.handle('pack:check-name', (_event, name) => pack.checkVersionName(name))
+
   /** 装这个整合包 */
   ipcMain.handle('pack:install', async (event, options) => {
     if (packRunning) return { ok: false, error: '已经有一个整合包在装了，等它完成' }
@@ -524,6 +527,7 @@ function registerIpcHandlers() {
 
       return await pack.installPack(options.filePath, {
         targetVersionId: options.targetVersionId,
+        versionName: options.versionName,
         onStage: (text) => send('pack:stage', text),
         onProgress: (stats) => send('pack:progress', stats),
         onTask: (task) => {

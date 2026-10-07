@@ -1076,6 +1076,9 @@ const packTargetRowEl = document.getElementById('pack-target-row')
 const packTargetEl = document.getElementById('pack-target')
 const packInstallEl = document.getElementById('pack-install')
 const packCancelEl = document.getElementById('pack-cancel')
+const packNameRowEl = document.getElementById('pack-name-row')
+const packNameEl = document.getElementById('pack-name')
+const packNameHintEl = document.getElementById('pack-name-hint')
 
 /** 这次拖进来的是哪个文件 */
 let packFilePath = ''
@@ -1145,6 +1148,9 @@ async function openPackDialog(filePath) {
   packSummaryEl.textContent = '正在看这个压缩包里有什么…'
   packWarnEl.textContent = ''
   packProgressEl.textContent = ''
+  packNameRowEl.hidden = true
+  packNameEl.value = ''
+  packNameHintEl.textContent = ''
   packTargetRowEl.hidden = true
   packInstallEl.disabled = true
   packModalEl.hidden = false
@@ -1203,8 +1209,41 @@ async function openPackDialog(filePath) {
       packWarnEl.textContent = '本机还没装游戏版本——先到「下载」页装一个，再拖这个包'
       packInstallEl.disabled = true
     }
+    return
+  }
+
+  // ——— 起名字：这个包装完会变成"一个新的版本"，那就让用户给它起个名 ———
+  // （包里自带的那个名字写在括号里当默认值，不想改就直接装）
+  if (info.suggestedName) {
+    packNameRowEl.hidden = false
+    packNameEl.value = info.suggestedName
+    await checkPackName()
   }
 }
+
+/**
+ * 用户敲的版本名行不行。
+ *
+ * 名字要变成 `versions\<名字>\` 这个文件夹，能不能用（Windows 的符号规矩、
+ * 是不是已经有同名版本）由主进程说了算——规矩只有那一份，
+ * 这里只负责把结果写在框下面、顺便决定「开始安装」能不能点。
+ */
+async function checkPackName() {
+  if (packNameRowEl.hidden) return true
+
+  const result = await window.api.checkPackName(packNameEl.value)
+
+  packNameHintEl.textContent = result.ok ? result.warning || '' : result.error
+  packNameHintEl.className = result.ok ? 'delbox' : 'delbox delbox--warn'
+  packInstallEl.disabled = !result.ok
+
+  return result.ok
+}
+
+// 一边打字一边看名字行不行
+packNameEl.addEventListener('input', () => {
+  checkPackName()
+})
 
 packInstallEl.addEventListener('click', async () => {
   // 装完了这次按钮是「完成」——再点就是关掉对话框，不是再装一遍
@@ -1218,6 +1257,10 @@ packInstallEl.addEventListener('click', async () => {
   const targetVersionId =
     packInfo.kind === 'files' && packInfo.layout === 'instance' ? packTargetEl.value : ''
 
+  // 名字再验一遍（界面上虽然一边打字一边在验，但"点下去那一刻"才是准的）
+  if (!packNameRowEl.hidden && !(await checkPackName())) return
+  const versionName = packNameRowEl.hidden ? '' : packNameEl.value.trim()
+
   packInstalling = true
   packInstallEl.disabled = true
   packWarnEl.textContent = ''
@@ -1225,7 +1268,7 @@ packInstallEl.addEventListener('click', async () => {
 
   let result
   try {
-    result = await window.api.installPack({ filePath: packFilePath, targetVersionId })
+    result = await window.api.installPack({ filePath: packFilePath, targetVersionId, versionName })
   } catch (error) {
     result = { ok: false, error: String(error?.message ?? error) }
   }
@@ -1244,6 +1287,7 @@ packInstallEl.addEventListener('click', async () => {
   packInstallEl.textContent = '完成'
   packCancelEl.hidden = true
   packTargetRowEl.hidden = true
+  packNameRowEl.hidden = true
 
   packProgressEl.textContent = result.versionId
     ? `装好了：多了个新版本「${result.versionId}」——回启动页选它就能玩。` +

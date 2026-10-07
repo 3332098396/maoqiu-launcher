@@ -105,6 +105,8 @@ function inspect(filePath) {
         ok: true,
         kind: 'modrinth',
         name: data.name || path.basename(filePath, path.extname(filePath)),
+        // 界面上"这个版本叫什么"那个框预填它（用户想改就改）
+        suggestedName: safePackName(data.name, data.versionId),
         gameVersion: deps.minecraft || '',
         loader: loaderName,
         loaderVersion,
@@ -160,6 +162,8 @@ function inspect(filePath) {
       ok: true,
       kind: 'files',
       name: path.basename(filePath, path.extname(filePath)),
+      // 带着版本文件夹的那种包，才能给它起名字（另一种是解到已有版本里，没名字可起）
+      suggestedName: gamedirLike ? packVersionOf(archive.entries, detectWrapper(archive.entries)) : '',
       layout: gamedirLike ? 'gamedir' : 'instance',
       topFolders: tops.slice(0, 8),
       fileCount: names.filter((n) => !n.endsWith('/')).length,
@@ -200,6 +204,80 @@ function inspect(filePath) {
 }
 
 /**
+ * 版本名（我们建的那个版本文件夹叫什么）能不能用。
+ *
+ * 【为什么得挑一遍】这个名字直接就是 `versions\<名字>\` 这个文件夹名，
+ * 所以 Windows 不认的符号、系统保留名都不能进——不然安装会以一句
+ * 用户看不懂的系统错误收场。
+ *
+ * 另外还会查一句"是不是已经有同名版本了"：**那不算错**（重装同一个包很常见），
+ * 但要提前告诉用户会发生什么。
+ *
+ * 【和界面的关系】界面那边每敲一个字就问一次这个函数（走 pack:check-name），
+ * 这样"名字行不行"的规矩只有这一份，不会两边写得不一样。
+ *
+ * @returns {{ok: boolean, name?: string, error?: string, warning?: string}}
+ */
+function checkVersionName(rawName) {
+  const name = String(rawName || '').trim()
+
+  if (!name) return { ok: false, error: '给它起个名字' }
+  if (name.length > 64) return { ok: false, error: '名字太长了（64 个字以内）' }
+  if (name === '.' || name === '..') return { ok: false, error: '这个名字不能用' }
+  if (/[\\/:*?"<>|]/.test(name)) {
+    return { ok: false, error: '名字里不能有 \\ / : * ? " < > | 这些符号' }
+  }
+  if (/[. ]$/.test(name)) {
+    return { ok: false, error: '名字最后别用空格或点号（Windows 存不下这样的文件夹）' }
+  }
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(name)) {
+    return { ok: false, error: `「${name}」是 Windows 自己留着的名字，换一个` }
+  }
+
+  // 已经有同名的了：不是错，但要说清楚
+  if (fs.existsSync(paths.versionDir(name))) {
+    return {
+      ok: true,
+      name,
+      warning:
+        `本机已经有个版本叫「${name}」——装进去会把包里带的文件覆盖上去。` +
+        '你自己的存档、后加的 Mod 不会被删。'
+    }
+  }
+
+  return { ok: true, name }
+}
+
+/**
+ * 定这个整合包的版本叫什么：用户起了名就用用户的，没起就用包里自带的。
+ * 名字不合法就抛错（界面也会拦，但这里必须再拦一道——不能只信界面）。
+ */
+function resolvePackVersionName(suggested, userWanted) {
+  if (!userWanted) return suggested
+
+  const checked = checkVersionName(userWanted)
+  if (!checked.ok) throw new Error(checked.error)
+  return checked.name
+}
+
+/**
+ * 包里带着哪个版本？（找 `versions/<名字>/<某文件>.json`）
+ * 有的包会同时带着原版和加载器版，那就挑带加载器名的那个——那才是要玩的。
+ */
+function packVersionOf(entries, wrapper) {
+  const pattern = new RegExp(`^${escapeRegExp(wrapper)}versions/([^/]+)/[^/]+\\.json$`)
+  const ids = new Set()
+
+  for (const entry of entries) {
+    const match = entry.name.match(pattern)
+    if (match) ids.add(match[1])
+  }
+
+  const preferred = [...ids].find((id) => /forge|fabric|neoforge/i.test(id))
+  return preferred || [...ids][0] || ''
+}
+
+/**
  * 装一个 Modrinth 整合包。
  *
  * 步骤：① 把需要的基础版本备齐（原版 + 加载器）
@@ -207,7 +285,7 @@ function inspect(filePath) {
  *      ③ 按清单把文件下进这个版本的文件夹
  *      ④ 把 overrides/ 解开盖上去
  */
-async function installModrinthPack(filePath, data, { onStage, onProgress, onTask } = {}) {
+async function installModrinthPack(filePath, data, { onStage, onProgress, onTask, versionName } = {}) {
   const stage = (text) => {
     if (onStage) onStage(text)
   }
@@ -261,7 +339,7 @@ async function installModrinthPack(filePath, data, { onStage, onProgress, onTask
   }
 
   // ——— ② 整合包自己的版本（继承上面那个） ———
-  const packId = safePackName(data.name, data.versionId)
+  const packId = resolvePackVersionName(safePackName(data.name, data.versionId), versionName)
   stage(`正在建「${packId}」这个版本…`)
 
   const packJson = {
@@ -347,7 +425,7 @@ async function installModrinthPack(filePath, data, { onStage, onProgress, onTask
  * layout='instance' → 解到选中的那个版本的文件夹
  * layout='gamedir'  → 解到游戏目录（里面带着版本文件的情况）
  */
-async function installPlainPack(filePath, layout, targetVersionId, { onStage, onProgress } = {}) {
+async function installPlainPack(filePath, layout, targetVersionId, { onStage, onProgress, versionName } = {}) {
   const buffer = fs.readFileSync(filePath)
   const entries = zip.listEntries(buffer)
 
@@ -362,7 +440,7 @@ async function installPlainPack(filePath, layout, targetVersionId, { onStage, on
   // 所以照搬就行：versions / assets / libraries 原样放，
   // 其余的游戏文件归到版本文件夹里，PCL 自己的东西丢掉。
   if (layout === 'gamedir') {
-    return installGameDirPack(buffer, entries, { onStage, onProgress })
+    return installGameDirPack(buffer, entries, { onStage, onProgress, versionName })
   }
 
   let dest = null
@@ -477,7 +555,7 @@ async function installPack(filePath, options = {}) {
  * 装一个"整个游戏目录快照"的整合包（里面是 .minecraft/ 那种）。
  * 见 installPlainPack 里那段说明：我们的布局和 PCL 的一样，照搬即可。
  */
-async function installGameDirPack(buffer, entries, { onStage, onProgress } = {}) {
+async function installGameDirPack(buffer, entries, { onStage, onProgress, versionName } = {}) {
   const stage = (text) => {
     if (onStage) onStage(text)
   }
@@ -485,19 +563,12 @@ async function installGameDirPack(buffer, entries, { onStage, onProgress } = {})
   // 剥掉外面套的那层（.minecraft/ 或者别的单个文件夹）
   const wrapper = detectWrapper(entries)
 
-  // 包里带着哪个版本？（versions/<名字>/<名字>.json）
-  const versionIds = new Set()
-  const pattern = new RegExp(`^${escapeRegExp(wrapper)}versions/([^/]+)/[^/]+\\.json$`)
+  // 包里带着哪个版本？
+  const packVersion = packVersionOf(entries, wrapper)
 
-  for (const entry of entries) {
-    const match = entry.name.match(pattern)
-    if (match) versionIds.add(match[1])
-  }
-
-  let packVersion = [...versionIds][0] || ''
-  // 带加载器名的那个更像"要玩的版本"（有的包会同时带着原版和加载器版）
-  const preferred = [...versionIds].find((id) => /forge|fabric|neoforge/i.test(id))
-  if (preferred) packVersion = preferred
+  // 用户给这个包起了名字，就用他的（起名字 = 这个版本的文件夹叫什么）
+  const targetVersion = resolvePackVersionName(packVersion, versionName)
+  const renaming = Boolean(packVersion && targetVersion && targetVersion !== packVersion)
 
   const SHARED = ['versions/', 'assets/', 'libraries/', 'runtime/']
 
@@ -506,17 +577,33 @@ async function installGameDirPack(buffer, entries, { onStage, onProgress } = {})
   )
 
   const gameRoot = path.resolve(paths.gameDir())
-  const versionRoot = packVersion ? path.resolve(paths.versionDir(packVersion)) : gameRoot
+  const versionRoot = targetVersion ? path.resolve(paths.versionDir(targetVersion)) : gameRoot
 
   let written = 0
   let skipped = 0
 
   for (const entry of pending) {
-    const rel = entry.name.slice(wrapper.length)
+    let rel = entry.name.slice(wrapper.length)
 
     // PCL 自己的东西（启动器本体、它的配置）——对我们没用
     if (rel === 'PCL.ini' || rel === 'launcher_profiles.json') continue
     if (/^pcl\//i.test(rel) || /plain craft launcher/i.test(rel)) continue
+
+    // ——— 改名字：versions\<包里的名字>\… → versions\<用户起的名字>\… ———
+    //
+    // 【为什么连文件名都要改】游戏是按 **版本名** 找东西的：
+    // 版本文件必须叫 `versions\<名字>\<名字>.json`，客户端 jar 也得叫 `<名字>.jar`
+    // （启动参数里的 `-DignoreList=…,${version_name}.jar` 就指着它）。
+    // 只改文件夹名不改文件名，游戏会找不到版本。
+    const oldPrefix = `versions/${packVersion}/`
+    let newName = ''
+    if (renaming && rel.startsWith(oldPrefix)) {
+      const rest = rel.slice(oldPrefix.length)
+      // 版本文件夹"门口"那几个文件（json、jar）的文件名要跟着改；里面的一层层目录不动
+      newName = rest.includes('/') ? rest : rest.replace(packVersion, targetVersion)
+      // 注意是 versions/<新名字>/…，不是把新名字接到旧文件夹后面（这里第一版写错过）
+      rel = `versions/${targetVersion}/${newName}`
+    }
 
     const shared = SHARED.some((prefix) => rel.startsWith(prefix))
     const root = shared ? gameRoot : versionRoot
@@ -538,7 +625,20 @@ async function installGameDirPack(buffer, entries, { onStage, onProgress } = {})
       // 不存在就往下走
     }
 
-    fs.writeFileSync(dest, zip.readEntry(buffer, entry))
+    let data = zip.readEntry(buffer, entry)
+
+    // 版本 JSON 里写着 `"id": "老名字"`，也得改成新名字——游戏认的是这个
+    if (renaming && newName === `${targetVersion}.json`) {
+      try {
+        const parsed = JSON.parse(data.toString('utf8'))
+        parsed.id = targetVersion
+        data = Buffer.from(JSON.stringify(parsed, null, 2), 'utf8')
+      } catch {
+        // 不是 JSON 就原样写下去
+      }
+    }
+
+    fs.writeFileSync(dest, data)
     written++
 
     if (onProgress && written % 100 === 0) {
@@ -551,7 +651,7 @@ async function installGameDirPack(buffer, entries, { onStage, onProgress } = {})
   }
 
   stage('整合包安装完成')
-  return { ok: true, written, skipped, versionId: packVersion, dest: paths.gameDir() }
+  return { ok: true, written, skipped, versionId: targetVersion, dest: paths.gameDir() }
 }
 
 /** 找出"外面套的那层"目录（.minecraft/ 或者单个文件夹）；没有就返回空 */
@@ -576,6 +676,7 @@ function escapeRegExp(text) {
 
 module.exports = {
   inspect,
+  checkVersionName,
   installPack,
   installModrinthPack,
   installPlainPack,

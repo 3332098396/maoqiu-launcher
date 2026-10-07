@@ -240,8 +240,14 @@ contextBridge.exposeInMainWorld('api', {
   inspectPack: (filePath) => ipcRenderer.invoke('pack:inspect', filePath),
 
   /**
+   * 用户给版本起的那个名字行不行（名字会变成 versions\<名字>\ 这个文件夹）。
+   * @returns {Promise<{ok: boolean, name?: string, error?: string, warning?: string}>}
+   */
+  checkPackName: (name) => ipcRenderer.invoke('pack:check-name', name),
+
+  /**
    * 装这个整合包。
-   * @param {{filePath: string, targetVersionId?: string}} options
+   * @param {{filePath: string, targetVersionId?: string, versionName?: string}} options
    */
   installPack: (options) => ipcRenderer.invoke('pack:install', options),
 
