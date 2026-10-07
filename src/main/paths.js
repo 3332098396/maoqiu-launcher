@@ -49,35 +49,67 @@ function backupsDir() {
 // ——————————————————————————————————————————————
 
 /**
- * 游戏装在哪。
+ * 默认游戏目录：%APPDATA%\.minecraft——Minecraft 的标准位置，官方启动器也用这儿。
  *
- * 默认是 %APPDATA%\.minecraft——这是 Minecraft 的标准位置，官方启动器也用这儿。
+ * 【为什么单独有这么个"常量"】它是**永不漂移的锚点**：
+ * 配置里那些老数据（版本显示名、备注、单独设置）都是按"默认目录里的版本"记的
+ * （见 settings.versionKey 的说明）。要是这个锚点会变，老数据就会被错认成
+ * 别的目录里的同名版本。
  *
- * **必须用英文路径**：老版本的 Java 和部分 Mod 对中文路径处理不好，
- * 会报一些莫名其妙的错。所以就算软件自己装在中文目录下，
- * 游戏文件也放这儿。
- *
- * （M6 会做成可以在设置里改。）
+ * 另外它不能从配置里读——paths.js 去 require settings.js 会成环
+ * （settings.js 已经 require 了 paths.js）。好在它本来就该是固定的。
  */
-function gameDir() {
+function defaultGameDir() {
   return path.join(app.getPath('appData'), '.minecraft')
 }
 
-function versionsDir() {
-  return path.join(gameDir(), 'versions')
+/**
+ * 游戏装在哪。
+ *
+ * **必须用英文路径**：老版本的 Java 和部分 Mod 对中文路径处理不好，
+ * 会报一些莫名其妙的错。
+ *
+ * @param {string} [dir] 指定一个别的游戏目录（M11.4 起支持"整合包装到 D 盘"这种事）。
+ *   **不传 = 默认目录**。
+ *
+ * 【为什么"不传就用默认目录"，而不是"不传就用上次选的目录"】
+ * 忘传参数时，两种做法后果差很远：
+ *   · 用默认目录 → 最坏是"这个版本不在"、删除被拒——**错得看得见**（fail-closed）
+ *   · 用"当前目录" → 悄悄跑到另一个目录上干活，装了半天发现装歪了，甚至写坏数据
+ * 而且安装/下载是异步长跑，中途要是那个"当前目录"被改了，写到一半就换地方了。
+ * 所以：**每个调用点自己负责把 dir 传对**，不搞全局可变状态。
+ */
+function gameDir(dir) {
+  return dir || defaultGameDir()
 }
 
-function librariesDir() {
-  return path.join(gameDir(), 'libraries')
+/** 两个路径是不是同一个目录（大小写、多余的斜杠、.. 都算过） */
+function sameDir(a, b) {
+  if (!a || !b) return false
+  return path.resolve(String(a)).toLowerCase() === path.resolve(String(b)).toLowerCase()
 }
 
-function assetsDir() {
-  return path.join(gameDir(), 'assets')
+function versionsDir(dir) {
+  return path.join(gameDir(dir), 'versions')
 }
 
-/** Java 运行时。放在这儿可以和使用同一个游戏目录的其他启动器共用 */
+function librariesDir(dir) {
+  return path.join(gameDir(dir), 'libraries')
+}
+
+function assetsDir(dir) {
+  return path.join(gameDir(dir), 'assets')
+}
+
+/**
+ * Java 运行时。
+ *
+ * 【注意：这个不跟游戏目录走，永远在默认目录里】Java 是"启动器级"的东西，
+ * 跟游戏装在哪没关系。要是每个游戏目录都备一份，用户每换个目录就白下 180 MB。
+ * 所以 dir 参数照样收（保持调用姿势一致），但内部固定用默认目录。
+ */
 function runtimeDir() {
-  return path.join(gameDir(), 'runtime')
+  return path.join(defaultGameDir(), 'runtime')
 }
 
 /**
@@ -93,43 +125,43 @@ function gameOptionsFile(forGameDir) {
 
 // ——— 玩家自己的东西（没开版本隔离时，所有版本共用这几个目录）———
 
-function savesDir() {
-  return path.join(gameDir(), 'saves')
+function savesDir(dir) {
+  return path.join(gameDir(dir), 'saves')
 }
 
-function modsDir() {
-  return path.join(gameDir(), 'mods')
+function modsDir(dir) {
+  return path.join(gameDir(dir), 'mods')
 }
 
-function screenshotsDir() {
-  return path.join(gameDir(), 'screenshots')
+function screenshotsDir(dir) {
+  return path.join(gameDir(dir), 'screenshots')
 }
 
-function resourcepacksDir() {
-  return path.join(gameDir(), 'resourcepacks')
+function resourcepacksDir(dir) {
+  return path.join(gameDir(dir), 'resourcepacks')
 }
 
-function shaderpacksDir() {
-  return path.join(gameDir(), 'shaderpacks')
+function shaderpacksDir(dir) {
+  return path.join(gameDir(dir), 'shaderpacks')
 }
 
 // ——— 单个版本 ———
 
-function versionDir(id) {
-  return path.join(versionsDir(), id)
+function versionDir(id, dir) {
+  return path.join(versionsDir(dir), id)
 }
 
-function versionJsonFile(id) {
-  return path.join(versionDir(id), `${id}.json`)
+function versionJsonFile(id, dir) {
+  return path.join(versionDir(id, dir), `${id}.json`)
 }
 
-function versionJarFile(id) {
-  return path.join(versionDir(id), `${id}.jar`)
+function versionJarFile(id, dir) {
+  return path.join(versionDir(id, dir), `${id}.jar`)
 }
 
 /** 老版本要把 natives 压缩包解到这儿 */
-function versionNativesDir(id) {
-  return path.join(versionDir(id), 'natives')
+function versionNativesDir(id, dir) {
+  return path.join(versionDir(id, dir), 'natives')
 }
 
 /**
@@ -140,8 +172,8 @@ function versionNativesDir(id) {
  * 还差一大截，启动起来会缺音效缺贴图。有标记文件的版本一律**不算装好**，
  * 界面上显示成"安装"而不是"已安装"，重新装一次会把剩下的补齐。
  */
-function versionIncompleteMarker(id) {
-  return path.join(versionDir(id), '.incomplete')
+function versionIncompleteMarker(id, dir) {
+  return path.join(versionDir(id, dir), '.incomplete')
 }
 
 /**
@@ -149,8 +181,8 @@ function versionIncompleteMarker(id) {
  * 位置是游戏规定的（assets\log_configs\），版本 JSON 里的
  * logging.client 指向它，游戏启动时要求这个文件在。
  */
-function logConfigFile(id) {
-  return path.join(assetsDir(), 'log_configs', id)
+function logConfigFile(id, dir) {
+  return path.join(assetsDir(dir), 'log_configs', id)
 }
 
 // ——————————————————————————————————————————————
@@ -173,17 +205,17 @@ function ensureDir(dir) {
  * （M10 实测发现：一开始只认"有自己的 jar"，结果 Fabric 版本装完了
  *   却不出现在版本列表里——因为它本来就不该有自己的 jar）
  */
-function isVersionInstalled(id) {
+function isVersionInstalled(id, dir) {
   let current = String(id)
 
   for (let depth = 0; depth < 5; depth++) {
-    if (fs.existsSync(versionIncompleteMarker(current))) return false
+    if (fs.existsSync(versionIncompleteMarker(current, dir))) return false
 
-    const jsonFile = versionJsonFile(current)
+    const jsonFile = versionJsonFile(current, dir)
     if (!fs.existsSync(jsonFile)) return false
 
     // 自己有 jar → 这层就是本体，装好了
-    if (fs.existsSync(versionJarFile(current))) return true
+    if (fs.existsSync(versionJarFile(current, dir))) return true
 
     let json
     try {
@@ -201,17 +233,47 @@ function isVersionInstalled(id) {
   return false
 }
 
-/** 列出本机已装的所有版本（按目录名） */
-function listInstalledVersions() {
+/**
+ * 列出**某一个**游戏目录里已装的所有版本（按目录名）。
+ * @param {string} [dir] 不传 = 默认目录
+ */
+function listInstalledVersions(dir) {
   try {
     return fs
-      .readdirSync(versionsDir(), { withFileTypes: true })
+      .readdirSync(versionsDir(dir), { withFileTypes: true })
       .filter((d) => d.isDirectory())
       .map((d) => d.name)
-      .filter((id) => isVersionInstalled(id))
+      .filter((id) => isVersionInstalled(id, dir))
   } catch {
     return []
   }
+}
+
+/**
+ * 列出**所有**已知游戏目录里的版本，每项带上它在哪个目录。
+ *
+ * 启动页那个版本列表用它——几个目录的版本混在一起显示，各标各的目录。
+ *
+ * @param {string[]} dirs 目录清单（默认目录放第一个）；空/不传 = 只算默认目录
+ * @returns {Array<{id: string, dir: string, isDefault: boolean}>}
+ */
+function listAllInstalledVersions(dirs) {
+  const list = Array.isArray(dirs) && dirs.length > 0 ? dirs : [defaultGameDir()]
+  const out = []
+  const seen = []
+
+  for (const raw of list) {
+    const dir = gameDir(raw)
+    // 同一个目录写了两遍（大小写不同之类）只算一次
+    if (seen.some((one) => sameDir(one, dir))) continue
+    seen.push(dir)
+
+    for (const id of listInstalledVersions(dir)) {
+      out.push({ id, dir, isDefault: sameDir(dir, defaultGameDir()) })
+    }
+  }
+
+  return out
 }
 
 module.exports = {
@@ -221,6 +283,9 @@ module.exports = {
   settingsFile,
   logsDir,
   backupsDir,
+  defaultGameDir,
+  sameDir,
+  listAllInstalledVersions,
   gameDir,
   versionsDir,
   librariesDir,
