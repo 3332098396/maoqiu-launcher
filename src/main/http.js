@@ -1,8 +1,8 @@
 // MC启动器 — 简单的 HTTP 请求
 //
 // 【为什么不用第三方库（axios / node-fetch 之类）】
-// 我们只需要"给我一个网址，把内容拿回来"这一件事，外加超时和跳转跟随。
-// Node 自带的模块几十行就能写完，没必要为此引入一个依赖——
+// 我们只需要两件事：① 拿回一小段内容（JSON）② 把一个大文件流式写到硬盘。
+// Node 自带的模块几十行就能写完，没必要为此引入依赖——
 // 依赖越少，这个非程序员维护的项目坏掉的概率越小。
 //
 // 【为什么必须自己处理跳转】
@@ -12,24 +12,24 @@
 
 const https = require('node:https')
 const http = require('node:http')
+const { URL } = require('node:url')
 
 /** 有些服务器会因为缺少 User-Agent 而拒绝请求，统一带一个 */
 const USER_AGENT = 'MCLauncher/0.1 (local)'
 
+/** 跳转最多跟几次，防止陷入循环 */
+const MAX_REDIRECTS = 5
+
 /**
- * 下载一个地址，返回它的全部内容。
+ * 打开一个下载流。拿到响应后由调用方决定是"全部读进内存"还是"写进文件"。
  *
  * @param {string} url
- * @param {{timeout?: number, onProgress?: (received: number, total: number) => void}} options
- * @returns {Promise<Buffer>}
+ * @param {{timeout?: number, signal?: AbortSignal, redirectsLeft?: number}} options
+ * @returns {Promise<{stream: import('node:stream').Readable, total: number}>}
+ *          total 是服务器声明的内容长度；服务器没给就是 0
  */
-function fetchBuffer(url, options = {}) {
-  const { timeout = 30000, onProgress } = options
-  return request(url, { timeout, onProgress, redirectsLeft: 5 })
-}
-
-function request(url, options) {
-  const { timeout, onProgress, redirectsLeft } = options
+function openStream(url, options = {}) {
+  const { timeout = 30000, signal, redirectsLeft = MAX_REDIRECTS } = options
 
   return new Promise((resolve, reject) => {
     let parsed
@@ -44,7 +44,7 @@ function request(url, options) {
 
     const req = client.get(
       parsed,
-      { headers: { 'User-Agent': USER_AGENT, Accept: '*/*' } },
+      { headers: { 'User-Agent': USER_AGENT, Accept: '*/*' }, signal },
       (res) => {
         // —— 跳转：跟过去 ——
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
@@ -56,43 +56,79 @@ function request(url, options) {
           }
 
           // location 可能是相对路径，用 new URL(..., 当前地址) 解析成绝对地址
-          const next = new URL(res.headers.location, url).toString()
-          resolve(request(next, { ...options, redirectsLeft: redirectsLeft - 1 }))
+          let next
+          try {
+            next = new URL(res.headers.location, url).toString()
+          } catch {
+            reject(new Error('服务器给了个看不懂的跳转地址'))
+            return
+          }
+
+          resolve(openStream(next, { ...options, redirectsLeft: redirectsLeft - 1 }))
           return
         }
 
         if (res.statusCode !== 200) {
           res.resume()
-          reject(new Error(`服务器返回 ${res.statusCode}`))
+          reject(new HttpError(res.statusCode))
           return
         }
 
-        const total = Number(res.headers['content-length']) || 0
-        const chunks = []
-        let received = 0
-
-        res.on('data', (chunk) => {
-          chunks.push(chunk)
-          received += chunk.length
-          if (onProgress) onProgress(received, total)
+        resolve({
+          stream: res,
+          total: Number(res.headers['content-length']) || 0
         })
-
-        res.on('end', () => resolve(Buffer.concat(chunks)))
-        res.on('error', reject)
       }
     )
 
-    req.on('error', (error) => reject(new Error(`连不上服务器：${error.message}`)))
+    req.on('error', (error) => {
+      // 主动取消不算"连不上"，要说清楚，否则用户看到的是莫名其妙的报错
+      if (error.name === 'AbortError') {
+        reject(new Error('已取消'))
+        return
+      }
+      reject(new Error(`连不上服务器：${error.message}`))
+    })
+
     req.setTimeout(timeout, () => {
       req.destroy(new Error('等太久了，连接超时'))
     })
   })
 }
 
+/** 带 HTTP 状态码的错误，方便调用方判断"是 404 还是网络问题" */
+class HttpError extends Error {
+  constructor(statusCode) {
+    super(`服务器返回 ${statusCode}`)
+    this.statusCode = statusCode
+  }
+}
+
+/**
+ * 下载一个地址，把内容全部读进内存返回。
+ * 只适合小文件（JSON、图标之类）——大文件请用 openStream 流式写盘。
+ */
+async function fetchBuffer(url, options = {}) {
+  const { onProgress } = options
+  const { stream, total } = await openStream(url, options)
+
+  return new Promise((resolve, reject) => {
+    const chunks = []
+    let received = 0
+
+    stream.on('data', (chunk) => {
+      chunks.push(chunk)
+      received += chunk.length
+      if (onProgress) onProgress(received, total)
+    })
+    stream.on('end', () => resolve(Buffer.concat(chunks)))
+    stream.on('error', reject)
+  })
+}
+
 /** 下载一个地址，当作 UTF-8 文本返回 */
 async function fetchText(url, options) {
-  const buffer = await fetchBuffer(url, options)
-  return buffer.toString('utf8')
+  return (await fetchBuffer(url, options)).toString('utf8')
 }
 
 /** 下载一个地址，当作 JSON 解析后返回 */
@@ -105,4 +141,4 @@ async function fetchJson(url, options) {
   }
 }
 
-module.exports = { fetchBuffer, fetchText, fetchJson }
+module.exports = { openStream, fetchBuffer, fetchText, fetchJson, HttpError, USER_AGENT }
