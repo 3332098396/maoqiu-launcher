@@ -1,9 +1,9 @@
 /* MC启动器 — 界面样式
  *
- * 设计基调：简洁、直观、渐变淡蓝（用户明确要求）。
+ * 设计基调：简洁、直观、渐变淡蓝。
  * 所有颜色都写成变量，以后想换配色只改这一块即可。
  *
- * 当前进度：M0（骨架，只有一张占位卡片）。
+ * 当前进度：M1（界面骨架）。三个页面的布局和配色定下来了，功能还是空的。
  */
 
 :root {
@@ -26,6 +26,8 @@
   --text: #1f2d3d;
   --text-dim: #6b7c93;
   --text-muted: #9aaabb;
+
+  --side-width: 230px;
 
   /* —— 字体 —— */
   --font: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif;
@@ -53,27 +55,74 @@ body {
   cursor: default;
 }
 
-/* ——— 顶栏 ——— */
+/* ═══════════════════════════════════════
+   顶栏
+   ═══════════════════════════════════════ */
 .topbar {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 20px;
+  padding: 0 16px;
+  height: 54px;
   background: var(--topbar-gradient);
   color: #fff;
   box-shadow: 0 2px 12px rgba(90, 169, 255, 0.35);
-  flex: 0 0 auto;
 }
 
 .topbar__logo {
-  font-size: 18px;
+  font-size: 19px;
 }
 
 .topbar__title {
-  margin: 0;
   font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.5px;
+}
+
+/* 三个页面按钮，居中摆放 */
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 auto;
+  /* 用绝对定位把它拉到正中间：左右两边的宽度不一样，
+     只靠 auto margin 会让按钮偏离中心 */
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.nav__btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 18px;
+  font-family: var(--font);
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.82);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.nav__btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.nav__btn--on,
+.nav__btn--on:hover {
+  color: #3d86d8;
+  background: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(31, 45, 61, 0.12);
+}
+
+.nav__icon {
+  font-size: 12px;
 }
 
 .topbar__tag {
@@ -84,103 +133,262 @@ body {
   background: rgba(255, 255, 255, 0.25);
 }
 
-/* ——— 中间内容区 ——— */
-.stage {
+/* ═══════════════════════════════════════
+   主体：左侧栏 + 内容区
+   ═══════════════════════════════════════ */
+.main {
   flex: 1 1 auto;
-  overflow-y: auto;
-  padding: 24px;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  min-height: 0; /* 不加这句，内部滚动条出不来 */
+  position: relative;
 }
 
-.card {
-  width: 100%;
-  max-width: 620px;
-  padding: 24px;
+.page {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+/* hidden 属性要显式写成 display:none，否则会被上面的 display:flex 盖掉 */
+.page[hidden] {
+  display: none;
+}
+
+.side {
+  flex: 0 0 var(--side-width);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.55);
+  border-right: 1px solid #e3f0ff;
+}
+
+.content {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 20px 24px;
+  overflow-y: auto;
+}
+
+/* ═══════════════════════════════════════
+   账号卡片（启动页左栏）
+   ═══════════════════════════════════════ */
+.acc {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 12px;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: var(--card-radius);
   box-shadow: var(--card-shadow);
-  transition: box-shadow 0.18s ease, border-color 0.18s ease;
 }
 
-.card:hover {
-  border-color: var(--card-border-hover);
-  box-shadow: var(--card-shadow-hover);
+.acc__tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  background: #f0f7ff;
 }
 
-.card__title {
-  margin: 0 0 10px;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.card__desc {
-  margin: 0 0 18px;
-  font-size: 13px;
-  line-height: 1.8;
+.acc__tab {
+  padding: 3px 14px;
+  font-size: 12px;
   color: var(--text-dim);
+  border-radius: 999px;
 }
 
-.card__desc b {
+.acc__tab--on {
+  color: #fff;
+  background: var(--primary-gradient);
+}
+
+.acc__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  font-size: 24px;
+  color: #fff;
+  border-radius: 10px;
+  background: linear-gradient(160deg, #b9dcff, #7cc0ff);
+}
+
+.acc__name {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.side__row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto; /* 两个按钮推到底部，和 PCL 一样 */
+}
+
+/* ═══════════════════════════════════════
+   左侧菜单（下载页 / 设置页）
+   ═══════════════════════════════════════ */
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menu__item {
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--text-dim);
+  border-radius: 8px;
+}
+
+.menu__item--on {
+  color: #3d86d8;
+  font-weight: 600;
+  background: #e6f2ff;
+}
+
+.menu__divider {
+  margin: 10px 0 4px;
+  padding: 0 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════
+   按钮
+   ═══════════════════════════════════════ */
+.btn {
+  padding: 9px 16px;
+  font-family: var(--font);
+  font-size: 13px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: opacity 0.15s ease, border-color 0.15s ease, color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.btn--block {
+  width: 100%;
+}
+
+.btn--primary {
+  color: #fff;
+  background: var(--primary-gradient);
+  box-shadow: 0 3px 12px rgba(74, 155, 255, 0.32);
+}
+
+.btn--primary:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+.btn--ghost {
+  color: var(--text-dim);
+  background: #fff;
+  border-color: var(--card-border);
+}
+
+.btn--ghost:hover:not(:disabled) {
   color: var(--text);
+  border-color: var(--card-border-hover);
 }
 
-.card__subtitle {
-  margin: 18px 0 10px;
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* 禁用状态要一眼看出来——现在大部分按钮都是灰的，
+   因为功能还没做。别让用户点半天没反应还以为坏了 */
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ═══════════════════════════════════════
+   内容区：提示条 + 预览清单
+   ═══════════════════════════════════════ */
+.notice {
+  padding: 12px 16px;
+  margin-bottom: 18px;
   font-size: 13px;
-  font-weight: 600;
-  color: var(--text-dim);
+  line-height: 1.7;
+  color: #3d6b9e;
+  background: linear-gradient(135deg, #eaf4ff, #f6fbff);
+  border: 1px solid #d6e9ff;
+  border-radius: 10px;
 }
 
-.steps {
+.notice b {
+  color: #2b5b8c;
+}
+
+.preview {
+  padding: 18px 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
+}
+
+.preview__label {
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.preview__list {
   margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 9px;
 }
 
-.steps__item {
+.preview__list li {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
+  align-items: baseline;
+  gap: 12px;
   font-size: 13px;
-  color: var(--text-dim);
-  border-radius: 8px;
-  background: #f6fbff;
+  line-height: 1.6;
 }
 
-.steps__item b {
-  flex: 0 0 auto;
-  min-width: 34px;
-  font-size: 11px;
+.preview__list b {
+  flex: 0 0 128px;
+  color: var(--text);
   font-weight: 600;
-  text-align: center;
-  padding: 2px 6px;
-  border-radius: 6px;
-  color: #fff;
-  background: var(--primary-gradient);
 }
 
-/* ——— 状态栏 ——— */
+.preview__list span {
+  flex: 1 1 auto;
+  color: var(--text-dim);
+}
+
+/* ═══════════════════════════════════════
+   状态栏
+   ═══════════════════════════════════════ */
 .statusbar {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 8px 20px;
+  padding: 7px 20px;
   font-size: 12px;
   color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.72);
   border-top: 1px solid #e3f0ff;
 }
 
-/* ——— 滚动条 ——— */
+/* ═══════════════════════════════════════
+   滚动条
+   ═══════════════════════════════════════ */
 ::-webkit-scrollbar {
   width: 10px;
 }

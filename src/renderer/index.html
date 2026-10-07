@@ -10,40 +10,131 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <!-- ——— 顶栏：三个页面在这里切换 ——— -->
     <header class="topbar">
       <span class="topbar__logo">⛏</span>
-      <h1 class="topbar__title">MC启动器</h1>
-      <span class="topbar__tag">M0 · 骨架</span>
+      <span class="topbar__title">MC启动器</span>
+
+      <nav class="nav" id="nav">
+        <button class="nav__btn" type="button" data-page="launch">
+          <span class="nav__icon">▶</span>启动
+        </button>
+        <button class="nav__btn" type="button" data-page="download">
+          <span class="nav__icon">⬇</span>下载
+        </button>
+        <button class="nav__btn" type="button" data-page="settings">
+          <span class="nav__icon">⚙</span>设置
+        </button>
+      </nav>
+
+      <span class="topbar__tag" id="stage-tag">M1 · 界面骨架</span>
     </header>
 
-    <main class="stage">
-      <section class="card">
-        <h2 class="card__title">骨架已就绪</h2>
-        <p class="card__desc">
-          项目结构和文档已经搭好了。接下来会一步一步把功能做进来，
-          每做完一步你都能直接运行看效果。
-        </p>
+    <main class="main">
+      <!-- ═══════════ 启动页 ═══════════ -->
+      <section class="page" data-page="launch">
+        <aside class="side">
+          <div class="acc">
+            <div class="acc__tabs">
+              <span class="acc__tab acc__tab--on">正版</span>
+              <span class="acc__tab">离线</span>
+            </div>
+            <div class="acc__avatar">⛏</div>
+            <div class="acc__name">还没有账号</div>
+          </div>
 
-        <h3 class="card__subtitle">第一版的目标</h3>
-        <p class="card__desc">
-          能下载原版游戏 → 离线登录 → <b>启动进游戏</b> → 基础的版本设置。
-        </p>
+          <button class="btn btn--primary btn--block" type="button" disabled>
+            开始游戏
+          </button>
 
-        <h3 class="card__subtitle">接下来的步骤</h3>
-        <ul class="steps">
-          <li class="steps__item"><b>M1</b><span>界面骨架：三个页面能切换</span></li>
-          <li class="steps__item"><b>M2</b><span>版本清单：列出所有可下载的原版版本</span></li>
-          <li class="steps__item"><b>M3</b><span>下载引擎：并发、重试、校验、镜像切换</span></li>
-          <li class="steps__item"><b>M4</b><span>安装一个版本</span></li>
-          <li class="steps__item"><b>M5</b><span>启动游戏（真的能玩上）</span></li>
-          <li class="steps__item"><b>M6</b><span>版本管理：改名、内存、窗口大小、开文件夹</span></li>
-        </ul>
+          <div class="side__row">
+            <button class="btn btn--ghost btn--block" type="button" disabled>版本选择</button>
+            <button class="btn btn--ghost btn--block" type="button" disabled>版本设置</button>
+          </div>
+        </aside>
+
+        <div class="content">
+          <div class="notice">
+            <b>这是布局预览。</b>颜色和排版已经定下来了，功能会从 M2 开始一步步填进来。
+          </div>
+
+          <div class="preview">
+            <div class="preview__label">这一页以后会有</div>
+            <ul class="preview__list">
+              <li><b>账号</b><span>登录、切换账号、离线名字</span></li>
+              <li><b>开始游戏</b><span>点一下就启动选中的版本</span></li>
+              <li><b>启动进度</b><span>下载、校验、启动的实时状态</span></li>
+              <li><b>版本信息</b><span>当前选中版本的图标、名称、加载器</span></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════ 下载页 ═══════════ -->
+      <section class="page" data-page="download" hidden>
+        <aside class="side">
+          <nav class="menu">
+            <span class="menu__item menu__item--on">原版游戏</span>
+            <span class="menu__divider">社区资源</span>
+            <span class="menu__item">Mod</span>
+            <span class="menu__item">整合包</span>
+            <span class="menu__item">数据包</span>
+            <span class="menu__item">资源包</span>
+            <span class="menu__item">光影包</span>
+          </nav>
+        </aside>
+
+        <div class="content">
+          <div class="notice">
+            <b>这是布局预览。</b>下载功能从 <b>M2</b> 开始做：先列出所有原版版本，
+            再做下载引擎。
+          </div>
+
+          <div class="preview">
+            <div class="preview__label">这一页以后会有</div>
+            <ul class="preview__list">
+              <li><b>原版游戏</b><span>900 多个版本，能筛选正式版 / 快照 / 远古版</span></li>
+              <li><b>Mod</b><span>从 Modrinth 搜和下载（第二期）</span></li>
+              <li><b>整合包</b><span>一键安装别人做好的整合包（第二期）</span></li>
+              <li><b>数据包 / 资源包 / 光影包</b><span>同上（第二期）</span></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════ 设置页 ═══════════ -->
+      <section class="page" data-page="settings" hidden>
+        <aside class="side">
+          <nav class="menu">
+            <span class="menu__item menu__item--on">启动选项</span>
+            <span class="menu__item">个性化</span>
+            <span class="menu__item">其他</span>
+          </nav>
+        </aside>
+
+        <div class="content">
+          <div class="notice">
+            <b>这是布局预览。</b>设置项从 <b>M6</b> 开始做。
+          </div>
+
+          <div class="preview">
+            <div class="preview__label">这一页以后会有</div>
+            <ul class="preview__list">
+              <li><b>游戏目录</b><span>游戏装在哪，默认是「我的文档」旁边那个标准位置</span></li>
+              <li><b>内存分配</b><span>给游戏多少内存，会显示本机有多少、给建议值</span></li>
+              <li><b>窗口大小</b><span>游戏窗口多大，或者全屏</span></li>
+              <li><b>版本隔离</b><span>每个版本的存档和 Mod 互不干扰</span></li>
+              <li><b>进程优先级</b><span>低 / 中 / 高</span></li>
+              <li><b>下载源</b><span>官方源太慢时自动换国内镜像</span></li>
+            </ul>
+          </div>
+        </div>
       </section>
     </main>
 
     <footer class="statusbar">
-      <span>版本 <span id="version">—</span></span>
-      <span>M0 · 项目骨架</span>
+      <span id="stat-left">版本 0.1.0</span>
+      <span id="stat-right">M1 · 界面骨架</span>
     </footer>
 
     <script src="app.js"></script>
