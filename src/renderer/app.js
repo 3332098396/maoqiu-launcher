@@ -555,6 +555,15 @@ function appendLog(lines) {
     launchLogEl.scrollTop + launchLogEl.clientHeight >= launchLogEl.scrollHeight - 30
   launchLogEl.textContent = logLines.join('\n')
   if (atBottom) launchLogEl.scrollTop = launchLogEl.scrollHeight
+
+  // 日志弹窗开着的话，让它跟着实时刷新
+  if (!logModalEl.hidden) {
+    if (logModalMode !== 'live') {
+      logModalMode = 'live'
+      logTitleEl.textContent = '游戏日志（本次的实时记录）'
+    }
+    renderLogModal()
+  }
 }
 
 accInputEl.addEventListener('input', refreshLaunchUi)
@@ -642,6 +651,79 @@ window.api.onLaunchState((payload) => {
     refreshLaunchUi()
     setNotice(payload.error, 'error')
   }
+})
+
+// ═══════════════════════════════════════
+// 日志弹窗（顶栏「日志」按钮，M5 追加）
+// ═══════════════════════════════════════
+
+const logModalEl = document.getElementById('log-modal')
+const logModalTextEl = document.getElementById('log-modal-text')
+const logTitleEl = document.getElementById('log-title')
+
+/** 弹窗里现在显示的是哪种日志：'live' = 本次打开软件后的实时记录，'file' = 上次存下来的 */
+let logModalMode = ''
+
+function renderLogModal() {
+  logModalTextEl.textContent = logLines.join('\n') || '（还没有内容）'
+  logModalTextEl.scrollTop = logModalTextEl.scrollHeight
+}
+
+async function openLogModal() {
+  logModalEl.hidden = false
+
+  // 本次打开软件后启动过游戏——直接看实时的那份
+  if (logLines.length > 0) {
+    logModalMode = 'live'
+    logTitleEl.textContent = '游戏日志（本次的实时记录）'
+    renderLogModal()
+    return
+  }
+
+  // 没有实时记录，就去读上次启动存下来的日志文件
+  logModalMode = 'file'
+  logTitleEl.textContent = '正在读取日志…'
+  logModalTextEl.textContent = ''
+
+  const result = await window.api.getLatestLog()
+
+  // 读的过程中弹窗可能被关了（或者已经切到实时模式），那就别管了
+  if (logModalEl.hidden || logModalMode !== 'file') return
+
+  if (!result.ok) {
+    logTitleEl.textContent = '游戏日志'
+    logModalTextEl.textContent = result.error
+    return
+  }
+
+  const lines = []
+  for (const raw of result.text.split('\n')) lines.push(...prettifyLogLine(raw))
+
+  logTitleEl.textContent =
+    `上次启动的日志：${result.name}${result.truncated ? '（太长，只显示最后一段）' : ''}`
+  logModalTextEl.textContent = lines.slice(-MAX_UI_LOG_LINES).join('\n') || '（日志是空的）'
+  logModalTextEl.scrollTop = logModalTextEl.scrollHeight
+}
+
+function closeLogModal() {
+  logModalEl.hidden = true
+}
+
+document.getElementById('log-btn').addEventListener('click', openLogModal)
+document.getElementById('log-close').addEventListener('click', closeLogModal)
+
+// 点弹窗外面（灰底）也能关
+logModalEl.addEventListener('click', (event) => {
+  if (event.target === logModalEl) closeLogModal()
+})
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !logModalEl.hidden) closeLogModal()
+})
+
+document.getElementById('log-folder').addEventListener('click', async () => {
+  const result = await window.api.openLogFolder()
+  if (!result.ok) logTitleEl.textContent = `打不开文件夹：${result.error}`
 })
 
 // ═══════════════════════════════════════

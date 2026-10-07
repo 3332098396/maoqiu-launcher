@@ -30,6 +30,7 @@
         </button>
       </nav>
 
+      <button class="topbar__btn" type="button" id="log-btn">📄 日志</button>
       <span class="topbar__tag" id="stage-tag">M5 · 启动游戏</span>
     </header>
 
@@ -243,6 +244,22 @@
       <span id="stat-left">版本 0.1.0</span>
       <span id="stat-right">M5 · 启动游戏</span>
     </footer>
+
+    <!-- 顶栏「日志」按钮点开的窗口 -->
+    <div class="modal" id="log-modal" hidden>
+      <div class="modal__box">
+        <div class="modal__head">
+          <span class="modal__title" id="log-title">游戏日志</span>
+          <div class="modal__actions">
+            <button class="btn btn--ghost btn--sm" type="button" id="log-folder">
+              打开日志文件夹
+            </button>
+            <button class="btn btn--ghost btn--sm" type="button" id="log-close">关闭</button>
+          </div>
+        </div>
+        <pre class="log log--modal" id="log-modal-text"></pre>
+      </div>
+    </div>
 
     <script src="app.js"></script>
   </body>

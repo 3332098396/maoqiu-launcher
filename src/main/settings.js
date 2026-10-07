@@ -26,7 +26,12 @@ const DEFAULTS = {
     /** 手动指定的 Java 路径。空 = 自动找 */
     javaPath: '',
     /** 上次启动的版本，下次打开软件默认选它 */
-    lastVersion: ''
+    lastVersion: '',
+    /**
+     * 有没有帮用户把游戏语言设成过中文。
+     * 只做一次——之后用户自己在游戏里改了就永远不再干预（见 launch.js）
+     */
+    languageApplied: false
   }
 }
 

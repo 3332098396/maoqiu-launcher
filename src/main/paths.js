@@ -75,6 +75,14 @@ function runtimeDir() {
   return path.join(gameDir(), 'runtime')
 }
 
+/**
+ * 游戏的设置文件（语言、音量、视距这些都在这）。
+ * 位置由游戏自己定，我们只在"首次启动帮设中文"时动一行，别的不碰。
+ */
+function gameOptionsFile() {
+  return path.join(gameDir(), 'options.txt')
+}
+
 // ——— 单个版本 ———
 
 function versionDir(id) {
@@ -146,6 +154,7 @@ module.exports = {
   versionJarFile,
   versionNativesDir,
   logConfigFile,
+  gameOptionsFile,
   ensureDir,
   isVersionInstalled,
   listInstalledVersions

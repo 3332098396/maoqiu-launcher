@@ -13,7 +13,7 @@
 //   M5 启动游戏    → src/main/launch.js + accounts.js + java.js + settings.js
 //   M6 版本管理    → settings.js 的界面部分
 
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, shell } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
 const mojang = require('./mojang')
@@ -197,6 +197,61 @@ function registerIpcHandlers() {
     }
 
     return result
+  })
+
+  // ——— 日志（M5 追加：界面上的「日志」按钮）———
+
+  /**
+   * 取最近一次启动的日志内容。
+   * 日志可能很大，只返回最后 300 KB——看日志是看"最后出什么事了"，
+   * 前面的启动过程没什么用。被截断时会告诉界面。
+   */
+  ipcMain.handle('log:latest', () => {
+    try {
+      const dir = paths.logsDir()
+      if (!fs.existsSync(dir)) {
+        return { ok: false, error: '还没有日志。启动过一次游戏之后，这里就有东西看了。' }
+      }
+
+      const files = fs.readdirSync(dir).filter((name) => name.endsWith('.log')).sort()
+      if (files.length === 0) {
+        return { ok: false, error: '还没有日志。启动过一次游戏之后，这里就有东西看了。' }
+      }
+
+      const name = files[files.length - 1]
+      const file = path.join(dir, name)
+      const size = fs.statSync(file).size
+      const LIMIT = 300 * 1024
+
+      if (size <= LIMIT) {
+        return { ok: true, name, text: fs.readFileSync(file, 'utf8'), truncated: false }
+      }
+
+      // 从中间截断会把一个多字节的字劈成两半，所以掐掉开头那半行
+      const fd = fs.openSync(file, 'r')
+      const buffer = Buffer.alloc(LIMIT)
+      fs.readSync(fd, buffer, 0, LIMIT, size - LIMIT)
+      fs.closeSync(fd)
+
+      let text = buffer.toString('utf8')
+      const firstBreak = text.indexOf('\n')
+      if (firstBreak >= 0) text = text.slice(firstBreak + 1)
+
+      return { ok: true, name, text, truncated: true }
+    } catch (error) {
+      return { ok: false, error: `日志读不出来：${error.message}` }
+    }
+  })
+
+  /** 在文件资源管理器里打开日志文件夹（日志要发给别人时用） */
+  ipcMain.handle('log:openFolder', async () => {
+    try {
+      paths.ensureDir(paths.logsDir())
+      const message = await shell.openPath(paths.logsDir())
+      return message ? { ok: false, error: message } : { ok: true }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
   })
 }
 

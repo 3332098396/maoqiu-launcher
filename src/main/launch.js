@@ -248,6 +248,60 @@ async function ensureLogConfig(versionJson) {
 }
 
 // ——————————————————————————————————————————————
+// 游戏语言：第一次启动时帮设成中文（R3.5）
+// ——————————————————————————————————————————————
+
+/**
+ * 第一次启动时，把游戏语言设成简体中文。
+ *
+ * 【为什么要做】游戏装好默认是英文（options.txt 里写的 lang:en_us），
+ * 对国内用户来说第一步就是一道坎。实测时用户当场就问了"英文的？"
+ *
+ * 【为什么只做一次】语言是用户的个人偏好，他完全可能特意改成英文。
+ * 所以只在"他还没表过态"的时候设一次，设完在配置里记一笔，
+ * **以后再也不碰 options.txt**——绝不和用户对着干。
+ *
+ * 【改的是哪个文件】游戏目录下的 options.txt（游戏自己的设置文件），
+ * 只动 lang: 那一行，其他设置原样保留；先写临时文件再改名，中途断电不会写坏。
+ */
+function ensureGameLanguage(log) {
+  const config = settings.readConfig()
+  if (config.launch.languageApplied) return
+
+  const file = paths.gameOptionsFile()
+
+  try {
+    const exists = fs.existsSync(file)
+    const text = exists ? fs.readFileSync(file, 'utf8') : ''
+
+    // 已经是中文了：不用改，只记一笔"这件事做过了"
+    if (/^lang:zh_cn\s*$/m.test(text)) {
+      settings.writeConfig({ launch: { languageApplied: true } })
+      return
+    }
+
+    let next
+    if (/^lang:/m.test(text)) {
+      next = text.replace(/^lang:.*$/m, 'lang:zh_cn')
+    } else {
+      // 文件不存在（游戏还没启动过），或者里面压根没有语言行 → 补一行
+      next = `${text}${text && !text.endsWith('\n') ? '\n' : ''}lang:zh_cn\n`
+    }
+
+    const temp = `${file}.tmp`
+    paths.ensureDir(paths.gameDir())
+    fs.writeFileSync(temp, next, 'utf8')
+    fs.renameSync(temp, file)
+
+    settings.writeConfig({ launch: { languageApplied: true } })
+    if (log) log.line('[启动器] 第一次启动，已把游戏语言设成简体中文（你以后自己改了，就不会再动它）')
+  } catch (error) {
+    // 设不上不该拦着玩游戏，记一笔就算了
+    if (log) log.line(`[启动器] 想把游戏语言设成中文，但没成功：${error.message}`)
+  }
+}
+
+// ——————————————————————————————————————————————
 // 抓日志
 // ——————————————————————————————————————————————
 
@@ -564,6 +618,9 @@ async function launch(versionId, options = {}) {
     log.line(`[启动器] 这些启动参数不认识，已按空值处理：${command.unknown.join('、')}`)
   }
 
+  // 第一次启动的话，把游戏语言设成中文（只做一次，见函数说明）
+  ensureGameLanguage(log)
+
   let child
   try {
     child = spawn(javaExe.path, args, {
@@ -637,4 +694,4 @@ async function launch(versionId, options = {}) {
   }
 }
 
-module.exports = { launch, isRunning, buildCommand, explainExit }
+module.exports = { launch, isRunning, buildCommand, explainExit, ensureGameLanguage }

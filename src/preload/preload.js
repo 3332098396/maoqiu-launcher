@@ -85,5 +85,16 @@ contextBridge.exposeInMainWorld('api', {
    */
   onLaunchState: (callback) => {
     ipcRenderer.on('launch:state', (_event, payload) => callback(payload))
-  }
+  },
+
+  // ——— 日志（M5 追加：「日志」按钮）———
+
+  /**
+   * 最近一次启动的日志内容（只给最后一段，太长会截断）。
+   * @returns {Promise<{ok: boolean, name?: string, text?: string, truncated?: boolean, error?: string}>}
+   */
+  getLatestLog: () => ipcRenderer.invoke('log:latest'),
+
+  /** 在文件资源管理器里打开日志文件夹 */
+  openLogFolder: () => ipcRenderer.invoke('log:openFolder')
 })
