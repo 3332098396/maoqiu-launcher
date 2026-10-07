@@ -1049,6 +1049,187 @@ document.getElementById('mr-open-folder').addEventListener('click', async () => 
 })
 
 // ═══════════════════════════════════════
+// 整合包：拖放安装（M11）
+// ═══════════════════════════════════════
+
+const dropzoneEl = document.getElementById('dropzone')
+const packModalEl = document.getElementById('pack-modal')
+const packTitleEl = document.getElementById('pack-title')
+const packSummaryEl = document.getElementById('pack-summary')
+const packWarnEl = document.getElementById('pack-warn')
+const packProgressEl = document.getElementById('pack-progress')
+const packTargetRowEl = document.getElementById('pack-target-row')
+const packTargetEl = document.getElementById('pack-target')
+const packInstallEl = document.getElementById('pack-install')
+
+/** 这次拖进来的是哪个文件 */
+let packFilePath = ''
+/** 认出来的信息 */
+let packInfo = null
+/** 有没有在装 */
+let packInstalling = false
+
+// 文件拖到窗口上时：盖一层提示（不 preventDefault 的话，浏览器会直接打开这个文件）
+document.addEventListener('dragover', (event) => {
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+  dropzoneEl.hidden = false
+})
+
+document.addEventListener('dragleave', (event) => {
+  // 在窗口内部移动也会触发 dragleave，只有真的离开窗口才收起来
+  if (event.relatedTarget === null || event.clientX <= 0 || event.clientY <= 0) {
+    dropzoneEl.hidden = true
+  }
+})
+
+document.addEventListener('drop', async (event) => {
+  event.preventDefault()
+  dropzoneEl.hidden = true
+
+  const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]
+  if (!file) return
+
+  // 新版 Electron 要这样拿文件的真实路径（见 preload 里的说明）
+  const filePath = window.api.pathForFile(file)
+  if (!filePath) {
+    setNotice('没认出这个文件是什么，拖放装不了', 'error')
+    return
+  }
+
+  await openPackDialog(filePath)
+})
+
+function closePackDialog() {
+  packModalEl.hidden = true
+  packFilePath = ''
+  packInfo = null
+}
+
+async function openPackDialog(filePath) {
+  packFilePath = filePath
+  packInfo = null
+  packInstalling = false
+
+  packTitleEl.textContent = '发现一个整合包'
+  packSummaryEl.textContent = '正在看这个压缩包里有什么…'
+  packWarnEl.textContent = ''
+  packProgressEl.textContent = ''
+  packTargetRowEl.hidden = true
+  packInstallEl.disabled = true
+  packModalEl.hidden = false
+
+  const info = await window.api.inspectPack(filePath)
+  if (packFilePath !== filePath) return // 看的时候又拖了别的，忽略这次
+
+  if (!info.ok) {
+    packSummaryEl.textContent = `这个文件认不出来：${info.error}`
+    return
+  }
+
+  packInfo = info
+  packTitleEl.textContent = info.name || '整合包'
+  packSummaryEl.textContent = info.summary
+
+  if (info.kind === 'curseforge') {
+    packWarnEl.textContent =
+      '这个装不了：CurseForge 整合包里的 Mod 只写了编号、没有下载地址。' +
+      '（官方要求带密钥下载，而且不许把密钥放进公开软件里——不是我们偷懒。）\n' +
+      '能用的办法：到 CurseForge 官网按它的清单手动下载 Mod，放进 mods 文件夹。'
+    return
+  }
+
+  if (info.kind === 'encrypted') {
+    packWarnEl.textContent = '这个压缩包打不开。带密码的压缩包要等下一步做完才能装。'
+    return
+  }
+
+  packInstallEl.disabled = false
+
+  if (info.kind === 'files' && info.layout === 'instance') {
+    // 这种是"文件直接在里面"的包，要问清楚装到哪个版本
+    packTargetRowEl.hidden = false
+    packTargetEl.textContent = ''
+
+    const installed = launchInfo?.installed || []
+    for (const id of installed) {
+      const option = document.createElement('option')
+      option.value = id
+      option.textContent = id
+      packTargetEl.appendChild(option)
+    }
+    packTargetEl.value = selectedVersion || installed[0] || ''
+
+    if (installed.length === 0) {
+      packWarnEl.textContent = '本机还没装游戏版本——先到「下载」页装一个，再拖这个包'
+      packInstallEl.disabled = true
+    }
+  }
+}
+
+packInstallEl.addEventListener('click', async () => {
+  if (!packInfo || packInstalling) return
+
+  const targetVersionId = packInfo.kind === 'files' ? packTargetEl.value : ''
+
+  packInstalling = true
+  packInstallEl.disabled = true
+  packWarnEl.textContent = ''
+  packProgressEl.textContent = '正在准备…'
+
+  let result
+  try {
+    result = await window.api.installPack({ filePath: packFilePath, targetVersionId })
+  } catch (error) {
+    result = { ok: false, error: String(error?.message ?? error) }
+  }
+
+  packInstalling = false
+  packInstallEl.disabled = false
+
+  if (!result.ok) {
+    packWarnEl.textContent = result.error
+    packProgressEl.textContent = ''
+    return
+  }
+
+  packProgressEl.textContent = result.versionId
+    ? `装好了：多了个新版本「${result.versionId}」——回启动页选它就能玩` +
+      `（${result.files || 0} 个文件${result.overrides ? `，另有 ${result.overrides} 个作者的配置文件` : ''}）`
+    : `装好了：${result.written} 个文件`
+
+  // 版本列表刷新，并把新版本选上
+  await refreshLaunchFacts()
+  if (result.versionId && launchInfo?.installed?.includes(result.versionId)) {
+    selectedVersion = result.versionId
+    refreshLaunchUi()
+  }
+})
+
+// 「安装本地整合包」按钮：不方便拖拽的时候，点它挑文件
+document.getElementById('pack-pick').addEventListener('click', async () => {
+  const picked = await window.api.pickPackFile()
+  if (picked.ok && picked.filePath) await openPackDialog(picked.filePath)
+})
+
+document.getElementById('pack-cancel').addEventListener('click', closePackDialog)
+packModalEl.addEventListener('click', (event) => {
+  if (event.target === packModalEl) closePackDialog()
+})
+
+window.api.onPackStage((text) => {
+  if (packInstalling) packProgressEl.textContent = text
+})
+
+window.api.onPackProgress((stats) => {
+  if (!packInstalling) return
+  if (stats.percent === undefined) return
+  packProgressEl.textContent =
+    `正在下载… ${stats.percent}% · ${stats.done}/${stats.total} 个` +
+    (stats.failed > 0 ? ` · 失败 ${stats.failed}` : '')
+})
+
+// ═══════════════════════════════════════
 // 版本管理（M6.1）：改名、备注、四个文件夹、删版本
 // ═══════════════════════════════════════
 

@@ -535,6 +535,44 @@ body {
 }
 
 /* ═══════════════════════════════════════
+   拖放整合包：拖进窗口时盖的那层提示（M11）
+   ═══════════════════════════════════════ */
+.dropzone {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(74, 155, 255, 0.18);
+  /* 拖拽时鼠标事件走 dataTransfer，别让这层挡住判定 */
+  pointer-events: none;
+}
+
+.dropzone[hidden] {
+  display: none;
+}
+
+.dropzone__box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 32px 48px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #3d86d8;
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px dashed #7cc0ff;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(74, 155, 255, 0.25);
+}
+
+.dropzone__icon {
+  font-size: 34px;
+}
+
+/* ═══════════════════════════════════════
    弹出窗口（顶栏「日志」按钮点开）
    ═══════════════════════════════════════ */
 .modal {
@@ -617,6 +655,11 @@ body {
   gap: 6px;
 }
 
+/* hidden 必须显式写成 display:none——上面的 display:flex 会把它盖掉 */
+.field[hidden] {
+  display: none;
+}
+
 .field__label {
   font-size: 12px;
   color: var(--text-muted);
@@ -653,13 +696,14 @@ body {
   color: var(--danger);
 }
 
-/* 删除确认里的三行说明 */
+/* 删除确认里的三行说明（整合包的介绍有好几行，要按原样换行） */
 .delbox {
   margin: 0;
   font-size: 13px;
   line-height: 1.75;
   color: var(--text);
   word-break: break-all;
+  white-space: pre-line;
 }
 
 .delbox--safe {

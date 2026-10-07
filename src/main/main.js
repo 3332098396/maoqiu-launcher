@@ -13,7 +13,7 @@
 //   M5 启动游戏    → src/main/launch.js + accounts.js + java.js + settings.js
 //   M6 版本管理    → settings.js 的界面部分
 
-const { app, BrowserWindow, ipcMain, shell, screen } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, screen, dialog } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
 const mojang = require('./mojang')
@@ -27,6 +27,7 @@ const versions = require('./versions')
 const backup = require('./backup')
 const modrinth = require('./modrinth')
 const content = require('./content')
+const pack = require('./pack')
 const loaders = require('./loaders')
 const forge = require('./forge')
 
@@ -107,6 +108,9 @@ let installCancelMode = 'keep'
 
 /** 有没有备份正在跑（同时只允许一个） */
 let backupRunning = false
+
+/** 有没有整合包在装（同时只允许一个） */
+let packRunning = false
 
 /** 有没有"下载社区资源"在跑（同时只允许一个） */
 let contentRunning = false
@@ -483,6 +487,54 @@ function registerIpcHandlers() {
       return { ok: false, error: `存不下来：${error.message}` }
     }
     return { ok: true }
+  })
+
+  // ——— 整合包（M11）———
+
+  /** 看一眼拖进来的压缩包是什么（不装，只认） */
+  ipcMain.handle('pack:inspect', (_event, filePath) => pack.inspect(filePath))
+
+  /**
+   * 让用户自己挑一个整合包文件（不方便拖拽的时候用）。
+   * @returns {Promise<{ok: boolean, filePath?: string}>} 用户点了取消就是 ok:false
+   */
+  ipcMain.handle('pack:pick', async () => {
+    const result = await dialog.showOpenDialog({
+      title: '选一个整合包',
+      properties: ['openFile'],
+      filters: [
+        { name: '整合包', extensions: ['zip', 'mrpack'] },
+        { name: '所有文件', extensions: ['*'] }
+      ]
+    })
+
+    if (result.canceled || result.filePaths.length === 0) return { ok: false }
+    return { ok: true, filePath: result.filePaths[0] }
+  })
+
+  /** 装这个整合包 */
+  ipcMain.handle('pack:install', async (event, options) => {
+    if (packRunning) return { ok: false, error: '已经有一个整合包在装了，等它完成' }
+
+    packRunning = true
+    try {
+      const send = (channel, payload) => {
+        if (!event.sender.isDestroyed()) event.sender.send(channel, payload)
+      }
+
+      return await pack.installPack(options.filePath, {
+        targetVersionId: options.targetVersionId,
+        onStage: (text) => send('pack:stage', text),
+        onProgress: (stats) => send('pack:progress', stats),
+        onTask: (task) => {
+          currentInstallTask = task
+        }
+      })
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    } finally {
+      packRunning = false
+    }
   })
 
   // ——— 社区资源（M9，来自 Modrinth）———

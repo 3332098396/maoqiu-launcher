@@ -219,6 +219,7 @@
                 </button>
                 <button class="chip" type="button" data-mr-version="all">所有版本</button>
               </div>
+              <button class="btn btn--ghost" type="button" id="pack-pick">安装本地整合包</button>
               <button class="btn btn--ghost" type="button" id="mr-do-search">搜索</button>
             </div>
 
@@ -600,6 +601,42 @@
           <button class="btn btn--ghost" type="button" id="cancel-back">继续安装</button>
           <button class="btn btn--danger" type="button" id="cancel-drop">不保留，全删掉</button>
           <button class="btn btn--primary" type="button" id="cancel-keep">保留已下好的</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 拖放整合包：文件拖进窗口时盖一层提示 -->
+    <div class="dropzone" id="dropzone" hidden>
+      <div class="dropzone__box">
+        <div class="dropzone__icon">📦</div>
+        <div>松手就开始装这个整合包</div>
+      </div>
+    </div>
+
+    <!-- 认出整合包之后的确认框 -->
+    <div class="modal modal--top" id="pack-modal" hidden>
+      <div class="modal__box modal__box--form">
+        <div class="modal__head">
+          <span class="modal__title" id="pack-title">发现一个整合包</span>
+          <div class="modal__actions">
+            <button class="btn btn--ghost btn--sm" type="button" id="pack-cancel">取消</button>
+          </div>
+        </div>
+
+        <p class="delbox" id="pack-summary">正在看这个压缩包里有什么…</p>
+
+        <div class="field" id="pack-target-row" hidden>
+          <span class="field__label">装到哪个版本里</span>
+          <select class="input" id="pack-target"></select>
+        </div>
+
+        <p class="delbox delbox--warn" id="pack-warn"></p>
+        <p class="delbox delbox--safe" id="pack-progress"></p>
+
+        <div class="modal__actions modal__actions--end">
+          <button class="btn btn--primary" type="button" id="pack-install" disabled>
+            开始安装
+          </button>
         </div>
       </div>
     </div>

@@ -7,7 +7,7 @@
 // 界面每需要一个新能力，就在这里加一条，并在主进程里写对应的 ipcMain.handle。
 // 绝不能让界面直接去碰 require / fs / https。
 
-const { contextBridge, ipcRenderer } = require('electron')
+const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 contextBridge.exposeInMainWorld('api', {
   /** 界面可以读取自己的版本号，用来显示在页脚 */
@@ -216,5 +216,40 @@ contextBridge.exposeInMainWorld('api', {
    * @returns {Promise<{ok: boolean, versionId?: string, loaderVersion?: string,
    *                    already?: boolean, error?: string}>}
    */
-  installLoader: (options) => ipcRenderer.invoke('loader:install', options)
+  installLoader: (options) => ipcRenderer.invoke('loader:install', options),
+
+  // ——— 整合包：拖放安装（M11）———
+
+  /**
+   * 拿到拖进来的文件的真实路径。
+   * 【为什么必须走这里】新版 Electron 里网页拿不到文件的真实路径了
+   * （安全考虑），要在这一层用 webUtils 换。
+   */
+  pathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file)
+    } catch {
+      return ''
+    }
+  },
+
+  /** 让用户自己挑一个整合包文件 */
+  pickPackFile: () => ipcRenderer.invoke('pack:pick'),
+
+  /** 看一眼这个压缩包是什么（不装） */
+  inspectPack: (filePath) => ipcRenderer.invoke('pack:inspect', filePath),
+
+  /**
+   * 装这个整合包。
+   * @param {{filePath: string, targetVersionId?: string}} options
+   */
+  installPack: (options) => ipcRenderer.invoke('pack:install', options),
+
+  /** 整合包的进度与阶段提示 */
+  onPackStage: (callback) => {
+    ipcRenderer.on('pack:stage', (_event, text) => callback(text))
+  },
+  onPackProgress: (callback) => {
+    ipcRenderer.on('pack:progress', (_event, stats) => callback(stats))
+  }
 })
