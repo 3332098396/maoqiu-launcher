@@ -34,7 +34,13 @@
       "include": "build/installer.nsh",
       "shortcutName": "毛球",
       "artifactName": "毛球-安装程序-${version}.${ext}",
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true
     }
   }
 }
