@@ -303,6 +303,7 @@
           <nav class="menu" id="settings-menu">
             <span class="menu__item menu__item--on" data-settings-tab="launch">启动选项</span>
             <span class="menu__item" data-settings-tab="backup">备份</span>
+            <span class="menu__item" data-settings-tab="clean">清理</span>
             <span class="menu__divider">以后再说</span>
             <span class="menu__item menu__item--off">个性化</span>
             <span class="menu__item menu__item--off">其他</span>
@@ -469,6 +470,30 @@
                 <div class="bar__fill" id="bk-bar"></div>
               </div>
               <p class="panel__desc" id="bk-status"></p>
+            </section>
+          </div>
+
+          <!-- ——— 清理游戏垃圾（M13）——— -->
+          <div class="settings-tab" data-settings-tab="clean" hidden>
+            <div class="notice" id="clean-notice">
+              「清理」只清<b>游戏自己产生的垃圾</b>——日志、崩溃报告这类，
+              删了完全不影响玩。<b>存档、Mod、配置、截图一律不碰。</b>
+            </div>
+
+            <section class="panel">
+              <h3 class="panel__title">扫出来这些</h3>
+              <p class="panel__desc" id="clean-summary">正在扫…</p>
+              <div class="checks" id="clean-list"></div>
+            </section>
+
+            <section class="panel">
+              <div class="modal__actions modal__actions--end">
+                <button class="btn btn--ghost" type="button" id="clean-rescan">重新扫一遍</button>
+                <button class="btn btn--danger" type="button" id="clean-run" disabled>
+                  清理这些
+                </button>
+              </div>
+              <p class="panel__desc" id="clean-result"></p>
             </section>
           </div>
         </div>

@@ -263,6 +263,14 @@ contextBridge.exposeInMainWorld('api', {
    */
   installPack: (options) => ipcRenderer.invoke('pack:install', options),
 
+  // ——— 清理游戏垃圾（M13）———
+
+  /** 扫一遍能清多少（不动任何文件） */
+  scanGarbage: () => ipcRenderer.invoke('cleanup:scan'),
+
+  /** 真删（界面上已经确认过才调） */
+  cleanGarbage: (keys) => ipcRenderer.invoke('cleanup:run', keys),
+
   // ——— 联机（M12）———
 
   /**

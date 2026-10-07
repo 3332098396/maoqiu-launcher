@@ -293,8 +293,11 @@ function formatSpeed(bytesPerSecond) {
 }
 
 function formatSize(bytes) {
-  if (!bytes) return '0 MB'
-  return `${(bytes / 1024 / 1024).toFixed(0)} MB`
+  const value = Number(bytes) || 0
+  // 小东西别看"0 MB"——清理那页全是日志这类小文件，写 0 MB 像出错了
+  if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} KB`
+  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(0)} MB`
+  return `${(value / 1024 / 1024 / 1024).toFixed(1)} GB`
 }
 
 function formatEta(ms) {
@@ -2254,7 +2257,123 @@ function showSettingsTab(name) {
     tab.hidden = tab.dataset.settingsTab !== name
   }
   if (name === 'backup') loadBackupTab()
+  if (name === 'clean') loadCleanTab()
 }
+
+// ——— 清理游戏垃圾（M13）———
+
+const cleanNoticeEl = document.getElementById('clean-notice')
+const cleanSummaryEl = document.getElementById('clean-summary')
+const cleanListEl = document.getElementById('clean-list')
+const cleanResultEl = document.getElementById('clean-result')
+const cleanRunEl = document.getElementById('clean-run')
+const cleanRescanEl = document.getElementById('clean-rescan')
+
+/** 上次扫出来的结果 */
+let cleanInfo = null
+
+/** 选中的要清的类别 */
+function checkedCleanKeys() {
+  return [...cleanListEl.querySelectorAll('input[type=checkbox]:checked')].map((one) => one.value)
+}
+
+async function loadCleanTab() {
+  cleanResultEl.textContent = ''
+  cleanSummaryEl.textContent = '正在扫…'
+  cleanRunEl.disabled = true
+  cleanListEl.textContent = ''
+
+  try {
+    cleanInfo = await window.api.scanGarbage()
+  } catch (error) {
+    cleanSummaryEl.textContent = `扫不了：${error.message}`
+    return
+  }
+
+  if (!cleanInfo.ok) {
+    cleanSummaryEl.textContent = `扫不了：${cleanInfo.error}`
+    return
+  }
+
+  if (cleanInfo.totalFiles === 0) {
+    cleanSummaryEl.textContent = '干干净净，没什么可清的。'
+    return
+  }
+
+  cleanSummaryEl.textContent =
+    `一共 ${cleanInfo.totalFiles} 个文件、约 ${formatSize(cleanInfo.totalBytes)}。` +
+    '勾上的才会清。'
+
+  for (const group of cleanInfo.groups) {
+    const label = document.createElement('label')
+    label.className = 'check check--block'
+
+    const input = document.createElement('input')
+    input.type = 'checkbox'
+    input.value = group.key
+    input.checked = true
+    input.addEventListener('change', () => {
+      cleanRunEl.disabled = checkedCleanKeys().length === 0
+    })
+    label.appendChild(input)
+
+    const span = document.createElement('span')
+    const title = document.createElement('b')
+    title.textContent = group.label
+    span.appendChild(title)
+
+    const help = document.createElement('em')
+    help.className = 'check__help'
+    help.textContent = group.hint
+    span.appendChild(help)
+
+    const size = document.createElement('i')
+    size.className = 'check__size'
+    size.textContent = `${group.files.length} 个 · ${formatSize(group.bytes)}`
+    span.appendChild(size)
+
+    label.appendChild(span)
+    cleanListEl.appendChild(label)
+  }
+
+  cleanRunEl.disabled = false
+}
+
+cleanRescanEl.addEventListener('click', loadCleanTab)
+
+cleanRunEl.addEventListener('click', async () => {
+  const keys = checkedCleanKeys()
+  if (keys.length === 0) return
+
+  // 删东西之前问一句——这是这个软件第二次"真删文件"（第一次是删版本）
+  const names = cleanInfo.groups
+    .filter((one) => keys.includes(one.key))
+    .map((one) => `${one.label}（${one.files.length} 个）`)
+    .join('、')
+
+  const yes = window.confirm(
+    `要清掉这些吗？\n\n${names}\n\n` +
+      '清的都是游戏日志、崩溃报告这类东西，删了不影响玩。\n' +
+      '存档、Mod、配置、截图不在这次清理范围内。'
+  )
+  if (!yes) return
+
+  cleanRunEl.disabled = true
+  cleanResultEl.textContent = '正在清…'
+
+  try {
+    const result = await window.api.cleanGarbage(keys)
+    if (!result.ok && result.errors.length > 0) {
+      cleanResultEl.textContent = `清掉 ${result.deleted} 个、腾出 ${formatSize(result.bytes)}，但有 ${result.errors.length} 个没清掉：${result.errors[0]}`
+    } else {
+      cleanResultEl.textContent = `清掉了 ${result.deleted} 个文件，腾出约 ${formatSize(result.bytes)}。`
+    }
+  } catch (error) {
+    cleanResultEl.textContent = `清理出错：${error.message}`
+  }
+
+  await loadCleanTab()
+})
 
 settingsMenuEl.addEventListener('click', (event) => {
   const item = event.target.closest('.menu__item[data-settings-tab]')

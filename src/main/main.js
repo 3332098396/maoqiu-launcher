@@ -25,6 +25,7 @@ const javaUtil = require('./java')
 const launch = require('./launch')
 const versions = require('./versions')
 const inherit = require('./inherit')
+const cleanup = require('./cleanup')
 const backup = require('./backup')
 const modrinth = require('./modrinth')
 const content = require('./content')
@@ -657,6 +658,26 @@ function registerIpcHandlers() {
       return { ok: false, error: String(error?.message ?? error) }
     } finally {
       packRunning = false
+    }
+  })
+
+  // ——— 清理游戏垃圾（M13）———
+
+  /** 扫一遍能清多少（不动任何文件） */
+  ipcMain.handle('cleanup:scan', () => {
+    try {
+      return { ok: true, ...cleanup.scan() }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 真删（界面上必须已经二次确认过） */
+  ipcMain.handle('cleanup:run', (_event, keys) => {
+    try {
+      return { ok: true, ...cleanup.clean(keys) }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
     }
   })
 
