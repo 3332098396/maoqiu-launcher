@@ -30,6 +30,7 @@ const install = require('./install')
 const downloader = require('./downloader')
 const inherit = require('./inherit')
 const authlibUtil = require('./authlib')
+const microsoft = require('./microsoft')
 
 const LAUNCHER_NAME = '毛球'
 const LAUNCHER_VERSION = '0.1.0'
@@ -149,13 +150,23 @@ function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath
   // 光传令牌还不够——还得靠下面的 -javaagent 把游戏里的验证地址指到皮肤站去，
   // 不然游戏会拿着这个令牌去问 Mojang，那当然不认。
   const isYggdrasil = account.type === 'yggdrasil'
+  const isMicrosoft = account.type === 'microsoft'
+  // 这两种都是"真账号"：有令牌、由服务器发的 UUID。取值规矩也一样
+  // （令牌用真的、UUID 去掉横杠），只有"是哪一种账号"要分开写。
+  const realAccount = isYggdrasil || isMicrosoft
+
   const values = {
     auth_player_name: account.name,
-    auth_uuid: isYggdrasil ? String(account.uuid).replace(/-/g, '') : account.uuid,
-    auth_access_token: isYggdrasil ? String(account.accessToken || '') : '0',
+    auth_uuid: realAccount ? String(account.uuid || '').replace(/-/g, '') : account.uuid,
+    auth_access_token: isYggdrasil
+      ? String(account.accessToken || '')
+      : isMicrosoft
+        ? String(account.mcAccessToken || '')
+        : '0',
     clientid: '',
-    auth_xuid: '',
-    user_type: isYggdrasil ? 'mojang' : 'legacy',
+    // Xbox 用户编号：只有正版账号有，别的填不填都行（缺了不影响进服务器）
+    auth_xuid: isMicrosoft ? String(account.xuid || '') : '',
+    user_type: isYggdrasil ? 'mojang' : isMicrosoft ? 'msa' : 'legacy',
 
     version_name: versionId,
     version_type: versionJson.type || 'release',
@@ -608,8 +619,37 @@ async function launch(versionId, options = {}) {
   if (current) return { ok: false, error: '游戏已经在运行了' }
 
   // ——— ① 账号 ———
-  const account = accounts.getAccount()
+  let account = accounts.getAccount()
   if (!account) return { ok: false, error: '先在左边填一个游戏名字，再点「开始游戏」' }
+
+  // ——— ①.5 正版账号：令牌过期就顺手续一下（M13.2）———
+  //
+  // 【为什么要续】游戏令牌只有一天有效期，但登录时存下来的 refresh_token 能长期用。
+  // 不续的话，用户第二天点「开始游戏」就会莫名其妙进不去正版服务器——
+  // 而且报错来自游戏内部，看不懂。
+  // 【为什么"续不上就别启动"】令牌已经过期又续不上，游戏拿着它去认人一定失败。
+  // 与其让用户进游戏看到一句莫名其妙的英文，不如在这儿说清楚。
+  if (account.type === 'microsoft') {
+    if (!account.mcAccessToken) {
+      return { ok: false, error: '这个正版账号缺登录信息，到「启动」页左边重新登录一次' }
+    }
+
+    // 提前一分钟续，免得"刚好在启动那一瞬间过期"
+    if ((account.mcExpiresAt || 0) < Date.now() + 60 * 1000) {
+      say('[启动器] 正版登录状态快过期了，正在续期…')
+      const renewed = await microsoft.refresh(account)
+
+      if (renewed.ok) {
+        account = renewed.account
+        accounts.saveAccount(account) // 存下来，下次不用再续
+        say('[启动器] 续期好了')
+      } else if (renewed.needLogin) {
+        return { ok: false, error: '正版登录状态过期了，到「启动」页左边重新登录一次' }
+      } else {
+        return { ok: false, error: `正版登录续期失败：${renewed.error}` }
+      }
+    }
+  }
 
   // ——— ② 版本文件 ———
   const jsonFile = paths.versionJsonFile(versionId, dir)

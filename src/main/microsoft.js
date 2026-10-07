@@ -177,7 +177,13 @@ async function xsts(xblToken) {
     { timeout: LOGIN_TIMEOUT }
   )
 
-  return { token: data.Token, uhs: data.DisplayClaims?.xui?.[0]?.uhs }
+  return {
+    token: data.Token,
+    uhs: data.DisplayClaims?.xui?.[0]?.uhs,
+    // xuid 是"Xbox 用户编号"，游戏启动参数里有一项要它。
+    // 缺了也不影响进服务器，但官方启动器会给，我们也顺手带上
+    xuid: data.DisplayClaims?.xui?.[0]?.xid
+  }
 }
 
 /** ④ XSTS 令牌 → 游戏令牌 */
@@ -227,6 +233,7 @@ async function finishChain(msAccessToken, base) {
     uuid: profile.id,
     mcAccessToken: mc.accessToken,
     mcExpiresAt: Date.now() + (mc.expiresIn - 300) * 1000,
+    xuid: xstsResult.xid || '',
     savedAt: Date.now(),
     ...base
   }
