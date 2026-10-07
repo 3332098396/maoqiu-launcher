@@ -73,6 +73,27 @@ contextBridge.exposeInMainWorld('api', {
    */
   setAccount: (name) => ipcRenderer.invoke('account:set', name),
 
+  // ——— 外置登录（M16）———
+
+  /** 界面上"服务器地址"框的默认值（比如 littleskin.cn） */
+  yggdrasilDefaultServer: () => ipcRenderer.invoke('account:yggdrasilDefault'),
+
+  /**
+   * 用外置登录服务器登录。
+   * 【密码只在这儿路过一趟】主进程拿它换令牌，换完就丢，不写盘。
+   * @returns {Promise<{ok: boolean, account?: object, error?: string, note?: string}>}
+   */
+  loginYggdrasil: (input) => ipcRenderer.invoke('account:login', input),
+
+  /** 存着哪些账号、当前是哪个 */
+  listAccounts: () => ipcRenderer.invoke('account:list'),
+
+  /** 切换当前账号 */
+  switchAccount: (key) => ipcRenderer.invoke('account:switch', key),
+
+  /** 删掉一个账号（外置账号会顺手把令牌作废） */
+  removeAccount: (key) => ipcRenderer.invoke('account:remove', key),
+
   /**
    * 启动游戏。检查不通过马上返回 { ok:false, error }；
    * 起来了返回 { ok:true, java, memoryMB }，之后靠下面两个事件推消息。

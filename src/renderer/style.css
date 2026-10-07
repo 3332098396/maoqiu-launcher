@@ -443,6 +443,78 @@ body {
   cursor: default;
 }
 
+/* 能点的标签（离线 / 外置登录）——手型光标，别让人以为是个标题 */
+button.acc__tab {
+  border: none;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button.acc__tab:hover {
+  color: var(--text-strong);
+}
+
+/* 两张表单（离线 / 外置登录）各自成一块，切换时整块换掉 */
+.acc__pane {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.acc__pane[hidden] {
+  display: none;
+}
+
+/* 长期提示（"不是正版账号"那句）。做得显眼一点——这是必须让用户看见的话 */
+.acc__warn {
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--surface-soft);
+  border-radius: 8px;
+}
+
+.acc__warn[hidden] {
+  display: none;
+}
+
+/* 登录结果那一行：没话说的时候整行收掉，不占地方 */
+.acc__hint[hidden] {
+  display: none;
+}
+
+.acc__hint--ok {
+  color: var(--ok-text);
+}
+
+.acc__login-btn {
+  width: 100%;
+}
+
+/* 退出登录：做得轻一点，别跟"开始游戏"抢注意力 */
+.acc__signout {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.acc__signout:hover {
+  color: var(--danger);
+}
+
+.acc__signout[hidden] {
+  display: none;
+}
+
 .acc__avatar {
   display: flex;
   align-items: center;

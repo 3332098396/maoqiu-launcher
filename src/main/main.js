@@ -21,6 +21,7 @@ const install = require('./install')
 const paths = require('./paths')
 const settings = require('./settings')
 const accounts = require('./accounts')
+const yggdrasil = require('./yggdrasil')
 const javaUtil = require('./java')
 const launch = require('./launch')
 const versions = require('./versions')
@@ -284,6 +285,9 @@ function registerIpcHandlers() {
       // 上次拖包装到哪儿了——整合包对话框打开时默认选它
       lastPackDir: config.gameDirs.lastPackDir || '',
       account: accounts.getAccount(),
+      // 账号在列表里的标识。界面"退出登录"要拿它删账号——
+      // 格式（类型+UUID）只在 accounts.js 里定义一次，界面别自己拼
+      accountKey: accounts.accountKey(accounts.getAccount()),
       lastVersion: config.launch.lastVersion || '',
       memoryMB: settings.currentMemoryMB(),
       memoryAuto: !(Number(config.launch.memoryMB) > 0),
@@ -296,6 +300,34 @@ function registerIpcHandlers() {
 
   /** 保存离线账号（名字 + 算出来的 UUID） */
   ipcMain.handle('account:set', (_event, name) => accounts.setAccount(name))
+
+  // ——— 外置登录（M16）———
+  //
+  // 【为什么登录要放在主进程】密码是从界面传进来的，但**只在这一趟里活着**：
+  // 主进程拿它去换令牌，换完立刻丢掉，界面上那份也不再留着。
+  // 存盘的只有令牌（见 accounts.js）。
+
+  /** 界面打开时要知道默认填哪个服务器 */
+  ipcMain.handle('account:yggdrasilDefault', () => yggdrasil.DEFAULT_SERVER)
+
+  ipcMain.handle('account:login', async (_event, input) => {
+    const result = await yggdrasil.authenticate(input)
+    if (!result.ok) return result
+
+    const saved = accounts.saveYggdrasil(result.account)
+    if (!saved.ok) return saved
+
+    return { ok: true, account: saved.account, note: result.note || '' }
+  })
+
+  ipcMain.handle('account:list', () => ({
+    accounts: accounts.listAccounts(),
+    currentKey: accounts.accountKey(accounts.getAccount())
+  }))
+
+  ipcMain.handle('account:switch', (_event, key) => accounts.setCurrent(key))
+
+  ipcMain.handle('account:remove', (_event, key) => accounts.remove(key))
 
   /**
    * 启动游戏。

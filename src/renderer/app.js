@@ -435,6 +435,18 @@ const accInputEl = document.getElementById('acc-input')
 const accNameEl = document.getElementById('acc-name')
 const accHintEl = document.getElementById('acc-hint')
 const accAvatarEl = document.getElementById('acc-avatar')
+// 外置登录（M16）
+const accTabOfflineEl = document.getElementById('acc-tab-offline')
+const accTabYggdrasilEl = document.getElementById('acc-tab-yggdrasil')
+const accPaneOfflineEl = document.getElementById('acc-pane-offline')
+const accPaneYggdrasilEl = document.getElementById('acc-pane-yggdrasil')
+const accServerEl = document.getElementById('acc-server')
+const accUserEl = document.getElementById('acc-user')
+const accPassEl = document.getElementById('acc-pass')
+const accLoginBtnEl = document.getElementById('acc-login-btn')
+const accLoginHintEl = document.getElementById('acc-login-hint')
+const accWarnEl = document.getElementById('acc-warn')
+const accSignoutEl = document.getElementById('acc-signout')
 const pickListEl = document.getElementById('pick-list')
 const pickEmptyEl = document.getElementById('pick-empty')
 const pickToggleEl = document.getElementById('pick-toggle')
@@ -502,12 +514,182 @@ function renderAccountCard() {
   accNameEl.textContent = account?.name || '还没有账号'
   accAvatarEl.textContent = account?.name ? account.name.slice(0, 1).toUpperCase() : '⛏'
 
+  // 只有外置登录的账号需要"退出登录"——离线账号就是个名字，改掉就行
+  accSignoutEl.hidden = account?.type !== 'yggdrasil'
+
   // 输入框里已经有内容但还不合法时，把原因写在提示上
   const typed = accInputEl.value
   const problem = nameProblem(typed)
   const showProblem = Boolean(typed.trim()) && Boolean(problem)
   accHintEl.textContent = showProblem ? problem : HINT_DEFAULT
   accHintEl.classList.toggle('acc__hint--error', showProblem)
+}
+
+// ═══════════════════════════════════════
+// 外置登录（M16）
+//
+// 【它是什么】用皮肤站（比如 LittleSkin）的账号登录。
+// 有真令牌、有皮肤，但**不是正版账号**，进不了正版服务器——这句话必须写在界面上，
+// 不能只写在文档里（用户不会去翻文档）。
+//
+// 【密码怎么走】界面 → 主进程 → 服务器，换完令牌**立刻丢掉**，
+// 既不写盘也不留在输入框里。界面上唯一留着的是令牌。
+// ═══════════════════════════════════════
+
+/** 当前显示的是哪张表单 */
+let accTab = 'offline'
+
+/** 开机时"跟着当前账号选一次表单"，只做一次 */
+let accTabInitialized = false
+
+/** 默认服务器地址由主进程给——只在一处定义（yggdrasil.js），界面不另写一份 */
+let yggdrasilDefaultServer = 'littleskin.cn'
+
+/** 登录中：按钮变灰防连点 */
+let loggingIn = false
+
+/**
+ * 登录结果那一行。
+ * 【没话说就整行收掉】卡片本来就高，留一行空占位会把下面的内容顶出屏幕。
+ * @param {'error'|'ok'|''} kind
+ */
+function setLoginHint(text, kind = '') {
+  accLoginHintEl.textContent = text || ''
+  accLoginHintEl.hidden = !text
+  accLoginHintEl.classList.toggle('acc__hint--error', kind === 'error')
+  accLoginHintEl.classList.toggle('acc__hint--ok', kind === 'ok')
+}
+
+/**
+ * 切换账号卡片里的表单。
+ * 【为什么跟着"点哪张"走、而不是跟着"当前账号是什么类型"】用户可能正登着外置账号，
+ * 但想换回随便一个离线名字——表单该听他点的那一下。
+ */
+function setAccTab(tab, options = {}) {
+  accTab = tab === 'yggdrasil' ? 'yggdrasil' : 'offline'
+
+  const isYgg = accTab === 'yggdrasil'
+  accPaneOfflineEl.hidden = isYgg
+  accPaneYggdrasilEl.hidden = !isYgg
+  accTabOfflineEl.classList.toggle('acc__tab--on', !isYgg)
+  accTabYggdrasilEl.classList.toggle('acc__tab--on', isYgg)
+  // "不是正版"那句只在看外置登录时才出现（离线那张表用不着这句）
+  accWarnEl.hidden = !isYgg
+
+  refreshLaunchUi()
+
+  // 开机自动选中那张表的时候别抢焦点——用户可能正在别的地方打字
+  if (options.focus === false) return
+
+  // 【为什么必须滚一下】这张表比离线的长一截，点在标签上之后「登录」按钮
+  // 很可能落在窗口外面——用户会以为"点了没反应"。
+  // block:'nearest' 是"能看见就行"，不会把页面猛拉到顶上。
+  accTabYggdrasilEl.closest('.acc')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+
+  if (isYgg) {
+    if (!accServerEl.value) accServerEl.value = yggdrasilDefaultServer
+    if (launchInfo?.account?.type === 'yggdrasil') accUserEl.value = launchInfo.account.name
+    ;(accUserEl.value ? accPassEl : accUserEl).focus()
+  } else {
+    accInputEl.focus()
+  }
+}
+
+async function doYggdrasilLogin() {
+  if (loggingIn) return
+
+  const server = accServerEl.value.trim()
+  const username = accUserEl.value.trim()
+  const password = accPassEl.value
+
+  if (!username) {
+    setLoginHint('先填账号（一般是你注册时用的邮箱）', 'error')
+    accUserEl.focus()
+    return
+  }
+  if (!password) {
+    setLoginHint('先填密码', 'error')
+    accPassEl.focus()
+    return
+  }
+
+  loggingIn = true
+  accLoginBtnEl.disabled = true
+  accLoginBtnEl.textContent = '登录中…'
+  setLoginHint('正在问服务器要令牌…', '')
+
+  try {
+    const result = await window.api.loginYggdrasil({ server, username, password })
+
+    if (!result.ok) {
+      setLoginHint(result.error, 'error')
+      return
+    }
+
+    if (launchInfo) launchInfo.account = result.account
+    if (launchInfo) launchInfo.accountKey = `${result.account.type}:${result.account.uuid}`
+    accPassEl.value = '' // 密码用完就清掉，别留在界面上
+    renderAccountCard()
+    setLoginHint(result.note || `登录成功，现在是「${result.account.name}」`, 'ok')
+    setNotice(`已登录：${result.account.name}`, 'ok')
+  } catch (error) {
+    setLoginHint(`登录时出了点意外：${error.message}`, 'error')
+  } finally {
+    loggingIn = false
+    accLoginBtnEl.disabled = false
+    accLoginBtnEl.textContent = '登录'
+    refreshLaunchUi()
+  }
+}
+
+accTabOfflineEl.addEventListener('click', () => setAccTab('offline'))
+accTabYggdrasilEl.addEventListener('click', () => setAccTab('yggdrasil'))
+accLoginBtnEl.addEventListener('click', doYggdrasilLogin)
+
+// 三个框里按回车都能登录——省得每次都去点按钮
+for (const el of [accServerEl, accUserEl, accPassEl]) {
+  el.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') doYggdrasilLogin()
+  })
+}
+
+accSignoutEl.addEventListener('click', async () => {
+  const account = launchInfo?.account
+  if (account?.type !== 'yggdrasil') return
+
+  const yes = window.confirm(
+    `要在这台电脑上退出「${account.name}」吗？\n\n` +
+      '账号和令牌会从本机删掉，下次要用得重新登录一次（密码我们本来就没存）。\n' +
+      '那个网站上的角色和皮肤不受影响。'
+  )
+  if (!yes) return
+
+  const result = await window.api.removeAccount(launchInfo.accountKey || '')
+  if (!result.ok) {
+    setNotice(result.error, 'error')
+    return
+  }
+
+  if (launchInfo) {
+    launchInfo.account = result.account
+    launchInfo.accountKey = result.account ? `${result.account.type}:${result.account.uuid}` : ''
+  }
+  accPassEl.value = ''
+  renderAccountCard()
+  setLoginHint('已经退出了。要换账号就重新填一次。', '')
+  setNotice('已退出外置账号。', 'ok')
+  refreshLaunchUi()
+})
+
+// 默认服务器地址（拿不到也不影响——输入框里有占位文字顶着）
+if (window.api.yggdrasilDefaultServer) {
+  window.api
+    .yggdrasilDefaultServer()
+    .then((value) => {
+      if (value) yggdrasilDefaultServer = value
+      if (!accServerEl.value) accServerEl.value = yggdrasilDefaultServer
+    })
+    .catch(() => {})
 }
 
 /** 版本列表（跨所有游戏目录，来自主进程） */
@@ -637,9 +819,26 @@ function renderPickList() {
   pickToggleEl.title = pickerOpen ? '收起版本列表' : `展开版本列表（一共 ${all.length} 个）`
 }
 
+/**
+ * 现在这个账号能不能用来启动？不能就返回"缺什么"（中文），能就返回空字符串。
+ *
+ * 【两种表单判断标准不一样】离线看的是名字框填没填对，
+ * 外置登录看的是"登进去没有"——名字框那边是什么内容跟外置账号没关系。
+ */
+function accountProblem() {
+  if (accTab === 'yggdrasil') {
+    if (launchInfo?.account?.type === 'yggdrasil') return ''
+    return '先在上面登录一个外置账号，按钮就能点了'
+  }
+
+  const typed = accInputEl.value.trim()
+  if (!typed) return '填一个游戏名字（上面那个框），按钮就能点了'
+  return nameProblem(typed)
+}
+
 /** 按当前状态刷新整个启动页（按钮能不能点、版本列表、信息卡） */
 function refreshLaunchUi() {
-  const problem = nameProblem(accInputEl.value)
+  const problem = accountProblem()
   const picked = selectedItem()
 
   launchBtnEl.disabled = launching || !selectedVersion || Boolean(problem)
@@ -660,7 +859,6 @@ function refreshLaunchUi() {
   let tip = ''
   if (!launching) {
     if (!selectedVersion) tip = '先到「下载」页装一个版本，才能开始游戏'
-    else if (!accInputEl.value.trim()) tip = '填一个游戏名字（上面那个框），按钮就能点了'
     else if (problem) tip = problem
   }
   launchTipEl.textContent = tip
@@ -757,8 +955,18 @@ async function loadLaunchPage() {
     selectedDir = pickOne ? pickOne.dir : ''
   }
 
-  // 只在第一次把存下来的账号填进输入框，别把用户正在敲的字冲掉
-  if (!accInputEl.value && launchInfo.account) accInputEl.value = launchInfo.account.name
+  // 只在第一次把存下来的**离线**账号填进名字框，别把用户正在敲的字冲掉。
+  // 外置账号的名字是服务器给的、不能改，填进去反而会让人以为"改了名字就能换账号"
+  if (!accInputEl.value && launchInfo.account?.type !== 'yggdrasil' && launchInfo.account) {
+    accInputEl.value = launchInfo.account.name
+  }
+
+  // 第一次进来时，账号卡片跟着"当前账号是什么"显示对应的表单；
+  // 之后就不再动它了（用户点过哪张就停在哪张）
+  if (!accTabInitialized) {
+    accTabInitialized = true
+    setAccTab(launchInfo.account?.type === 'yggdrasil' ? 'yggdrasil' : 'offline', { focus: false })
+  }
 
   refreshLaunchNotice()
   refreshLaunchUi()
@@ -881,24 +1089,38 @@ pickToggleEl.addEventListener('click', () => {
 })
 
 async function startGame() {
-  const name = accInputEl.value.trim()
-
-  const problem = nameProblem(name)
-  if (problem) {
-    setNotice(problem, 'error')
-    accInputEl.focus()
-    return
-  }
   if (!selectedVersion) return
 
-  // 先把账号存下来，再启动
-  const saved = await window.api.setAccount(name)
-  if (!saved.ok) {
-    setNotice(saved.error, 'error')
-    return
+  // ——— 账号：两种表单要的东西不一样 ———
+  if (accTab === 'yggdrasil') {
+    // 外置账号在登录那一步就存好了，这儿不用再存一遍
+    if (launchInfo?.account?.type !== 'yggdrasil') {
+      setNotice('先在上面登录一个外置账号，再点「开始游戏」', 'error')
+      accUserEl.focus()
+      return
+    }
+  } else {
+    const name = accInputEl.value.trim()
+
+    const problem = nameProblem(name)
+    if (problem) {
+      setNotice(problem, 'error')
+      accInputEl.focus()
+      return
+    }
+
+    // 先把账号存下来，再启动
+    const saved = await window.api.setAccount(name)
+    if (!saved.ok) {
+      setNotice(saved.error, 'error')
+      return
+    }
+    if (launchInfo) {
+      launchInfo.account = saved.account
+      launchInfo.accountKey = `${saved.account.type}:${saved.account.uuid}`
+    }
+    renderAccountCard()
   }
-  if (launchInfo) launchInfo.account = saved.account
-  renderAccountCard()
 
   launching = true
   refreshLaunchUi()
@@ -3372,9 +3594,9 @@ function renderInstalled() {
       selectedDir = one.dir
       refreshLaunchUi()
       showPage('launch')
-      // 名字没填的话先别启动——启动页那边会提示缺什么
-      if (!nameProblem(accInputEl.value)) startGame()
-      else setNotice('先在左边填一个游戏名字，再点开始游戏。')
+      // 账号还没弄好的话先别启动——启动页那边会提示缺什么
+      if (!accountProblem()) startGame()
+      else setNotice(accountProblem())
     })
     actions.appendChild(play)
 

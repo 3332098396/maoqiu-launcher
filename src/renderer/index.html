@@ -106,27 +106,74 @@
             <div class="launch-col">
               <div class="acc">
                 <div class="acc__tabs">
-                  <span class="acc__tab acc__tab--off" title="正版登录要等 Mojang 审批，先不做">正版</span>
-                  <span class="acc__tab acc__tab--on">离线</span>
+                  <button class="acc__tab" type="button" id="acc-tab-offline">离线</button>
+                  <button class="acc__tab" type="button" id="acc-tab-yggdrasil">外置登录</button>
+                  <span class="acc__tab acc__tab--off" title="正版登录要等 Mojang 审批，排在后面做">正版</span>
                 </div>
+
+                <!-- 这句话必须**一直在看得见的地方**：卡片往下还有三个输入框，
+                     写到最底下会被挤出屏幕（实测过）。所以放在标签正下面 -->
+                <div class="acc__warn" id="acc-warn" hidden>
+                  皮肤站账号，<b>不是正版</b>，进不了正版服务器
+                </div>
+
                 <div class="acc__avatar" id="acc-avatar">⛏</div>
                 <div class="acc__name" id="acc-name">还没有账号</div>
-                <!-- autocomplete 写 new-password 而不是 off：普通文本框浏览器常常
-                     不认 off，照样弹它自己的自动填充框。
-                     （注意：实测打字时弹的那个"词建议"框是 Windows 系统的文本建议，
-                     不是浏览器的，压不掉也不用压——见 CLAUDE.md 排查小抄） -->
-                <input
-                  class="input"
-                  id="acc-input"
-                  type="text"
-                  maxlength="16"
-                  placeholder="输入游戏名字"
-                  autocomplete="new-password"
-                  spellcheck="false"
-                />
-                <div class="acc__hint" id="acc-hint">
-                  3～16 个字符，只能用字母、数字、下划线
+
+                <!-- 离线：随便起个名字就能玩 -->
+                <div class="acc__pane" id="acc-pane-offline">
+                  <!-- autocomplete 写 new-password 而不是 off：普通文本框浏览器常常
+                       不认 off，照样弹它自己的自动填充框。
+                       （注意：实测打字时弹的那个"词建议"框是 Windows 系统的文本建议，
+                       不是浏览器的，压不掉也不用压——见 CLAUDE.md 排查小抄） -->
+                  <input
+                    class="input"
+                    id="acc-input"
+                    type="text"
+                    maxlength="16"
+                    placeholder="输入游戏名字"
+                    autocomplete="new-password"
+                    spellcheck="false"
+                  />
+                  <div class="acc__hint" id="acc-hint">
+                    3～16 个字符，只能用字母、数字、下划线
+                  </div>
                 </div>
+
+                <!-- 外置登录（M16）：用皮肤站的账号登录 -->
+                <div class="acc__pane" id="acc-pane-yggdrasil" hidden>
+                  <input
+                    class="input"
+                    id="acc-server"
+                    type="text"
+                    placeholder="验证服务器，比如 littleskin.cn"
+                    autocomplete="new-password"
+                    spellcheck="false"
+                  />
+                  <input
+                    class="input"
+                    id="acc-user"
+                    type="text"
+                    placeholder="账号（一般是邮箱）"
+                    autocomplete="new-password"
+                    spellcheck="false"
+                  />
+                  <input
+                    class="input"
+                    id="acc-pass"
+                    type="password"
+                    placeholder="密码"
+                    autocomplete="new-password"
+                  />
+                  <button class="btn btn--primary acc__login-btn" type="button" id="acc-login-btn">
+                    登录
+                  </button>
+                  <div class="acc__hint" id="acc-login-hint" hidden></div>
+                </div>
+
+                <button class="acc__signout" type="button" id="acc-signout" hidden>
+                  退出登录
+                </button>
               </div>
 
               <div class="pick">

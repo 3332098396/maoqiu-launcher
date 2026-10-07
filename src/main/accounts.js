@@ -1,7 +1,12 @@
 // 毛球 — 账号
 //
-// 第一期只有离线账号：用户随便起个名字就能玩单机。
-// 正版登录卡在 Mojang 审批上（见 docs/01），等批了再补。
+// 三种账号，存哪儿都在这一个文件里：
+//   offline    离线：随便起个名字就能玩单机（第一期）
+//   yggdrasil  外置登录：皮肤站那种账号，有真令牌、有皮肤（M16）
+//   正版（微软）排在 M16 后面，卡在 Mojang 审批上，见 docs/01
+//
+// 【存的是什么】离线账号只有名字和算出来的 UUID；
+// 外置登录存**令牌**（accessToken / clientToken），**绝不存密码**。
 //
 // 【离线 UUID 是怎么算的】
 // 游戏里每个玩家有一个 UUID（一串唯一编号），正版是服务器发的。
@@ -79,13 +84,109 @@ function setAccount(name) {
 
   const account = { type: 'offline', name: trimmed, uuid: offlineUuid(trimmed) }
 
-  try {
-    settings.writeConfig({ account })
-  } catch (error) {
-    return { ok: false, error: `账号存不下来：${error.message}` }
-  }
-
-  return { ok: true, account }
+  return save(account, '账号存不下来')
 }
 
-module.exports = { checkName, offlineUuid, getAccount, setAccount }
+// ——————————————————————————————————————————————
+// 账号列表（R1.4 记住账号 / R1.5 多账号切换 / M16 外置登录）
+// ——————————————————————————————————————————————
+
+/**
+ * 一个账号在列表里的唯一标识。
+ *
+ * 【为什么不按名字】外置登录的账号能改角色名，只按名字的话改一次就变成两个账号。
+ * 用"类型 + UUID"：UUID 是服务器发的，不会变。
+ */
+function accountKey(account) {
+  if (!account) return ''
+  return `${account.type || 'offline'}:${account.uuid || account.name || ''}`
+}
+
+/**
+ * 现在存着哪些账号。
+ *
+ * 【为什么要兼容老配置】M16 之前配置里只有单个 `account`。
+ * 老用户升级上来不能"账号凭空消失"，所以列表为空时把那个补进来。
+ */
+function listAccounts() {
+  const config = settings.readConfig()
+  const list = Array.isArray(config.accounts) ? config.accounts.filter((a) => a && a.name) : []
+  if (list.length) return list
+
+  const legacy = config.account
+  return legacy && legacy.name ? [legacy] : []
+}
+
+/** 把账号存进列表并设为当前账号 */
+function save(account, failPrefix = '账号存不下来') {
+  try {
+    const list = listAccounts()
+    const key = accountKey(account)
+    const at = list.findIndex((item) => accountKey(item) === key)
+
+    if (at >= 0) list[at] = account
+    else list.push(account)
+
+    settings.writeConfig({ account, accounts: list })
+    return { ok: true, account }
+  } catch (error) {
+    return { ok: false, error: `${failPrefix}：${error.message}` }
+  }
+}
+
+/** 存一个外置登录账号（令牌已经在 account 里了，密码不在这儿） */
+function saveYggdrasil(account) {
+  return save(account, '外置账号存不下来')
+}
+
+/** 切换当前账号 */
+function setCurrent(key) {
+  const found = listAccounts().find((item) => accountKey(item) === key)
+  if (!found) return { ok: false, error: '找不到这个账号，可能已经删掉了' }
+
+  try {
+    settings.writeConfig({ account: found })
+  } catch (error) {
+    return { ok: false, error: `切换失败：${error.message}` }
+  }
+  return { ok: true, account: found }
+}
+
+/**
+ * 删掉一个账号。
+ * 【外置账号顺手把令牌作废】不然那个令牌还能在外面飘到过期为止。
+ */
+async function remove(key) {
+  const list = listAccounts()
+  const found = list.find((item) => accountKey(item) === key)
+  if (!found) return { ok: false, error: '找不到这个账号' }
+
+  const rest = list.filter((item) => accountKey(item) !== key)
+  const current = getAccount()
+  const nextCurrent = accountKey(current) === key ? rest[0] || null : current
+
+  try {
+    settings.writeConfig({ account: nextCurrent, accounts: rest })
+  } catch (error) {
+    return { ok: false, error: `删账号失败：${error.message}` }
+  }
+
+  if (found.type === 'yggdrasil') {
+    // 作废是"顺手做的好事"，失败了也不该让删除报错
+    require('./yggdrasil').invalidate(found)
+  }
+
+  return { ok: true, account: nextCurrent, accounts: rest }
+}
+
+module.exports = {
+  checkName,
+  offlineUuid,
+  accountKey,
+  getAccount,
+  setAccount,
+  saveYggdrasil,
+  listAccounts,
+  setCurrent,
+  remove
+}

@@ -99,12 +99,91 @@ function openStream(url, options = {}) {
   })
 }
 
-/** 带 HTTP 状态码的错误，方便调用方判断"是 404 还是网络问题" */
+/**
+ * 带 HTTP 状态码的错误，方便调用方判断"是 404 还是网络问题"。
+ * body / text 是服务器回的原文——**出错时说人话全靠它**：
+ * 比如外置登录密码错了，服务器会在响应体里写明原因，光看状态码看不错来。
+ */
 class HttpError extends Error {
-  constructor(statusCode) {
+  constructor(statusCode, body = null, text = '') {
     super(`服务器返回 ${statusCode}`)
     this.statusCode = statusCode
+    this.body = body
+    this.text = text
   }
+}
+
+/**
+ * POST 一段 JSON，把响应当 JSON 读回来（外置登录要用）。
+ *
+ * 【为什么不复用上面的 openStream】那个只走 GET。
+ * 【为什么失败也要把响应体读回来】Yggdrasil 出错时会在响应体里写清楚原因
+ * （账号密码不对、令牌过期……），只看状态码分不出是哪种。
+ */
+function postJson(url, payload, options = {}) {
+  const { timeout = 30000, signal, headers = {} } = options
+
+  return new Promise((resolve, reject) => {
+    let parsed
+    try {
+      parsed = new URL(url)
+    } catch {
+      reject(new Error(`地址格式不对：${url}`))
+      return
+    }
+
+    const client = parsed.protocol === 'https:' ? https : http
+    const data = Buffer.from(JSON.stringify(payload), 'utf8')
+
+    const req = client.request(
+      parsed,
+      {
+        method: 'POST',
+        headers: {
+          'User-Agent': USER_AGENT,
+          Accept: 'application/json',
+          'Content-Type': 'application/json; charset=utf-8',
+          'Content-Length': data.length,
+          ...headers
+        },
+        signal
+      },
+      (res) => {
+        const chunks = []
+        res.on('data', (chunk) => chunks.push(chunk))
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf8')
+          let body = null
+          try {
+            body = JSON.parse(text)
+          } catch {
+            // 不是 JSON（比如被网络中间人换成了网页）——调用方看 text
+          }
+
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve(body ?? {})
+            return
+          }
+          reject(new HttpError(res.statusCode, body, text))
+        })
+      }
+    )
+
+    req.on('error', (error) => {
+      if (error.name === 'AbortError') {
+        reject(new Error('已取消'))
+        return
+      }
+      reject(new Error(`连不上服务器：${error.message}`))
+    })
+
+    req.setTimeout(timeout, () => {
+      req.destroy(new Error('等太久了，连接超时'))
+    })
+
+    req.write(data)
+    req.end()
+  })
 }
 
 /**
@@ -144,4 +223,4 @@ async function fetchJson(url, options) {
   }
 }
 
-module.exports = { openStream, fetchBuffer, fetchText, fetchJson, HttpError, USER_AGENT }
+module.exports = { openStream, fetchBuffer, fetchText, fetchJson, postJson, HttpError, USER_AGENT }
