@@ -11,9 +11,9 @@
 
 :root {
   /* —— 渐变（顶栏 / 页面底 / 主按钮）—— */
-  --topbar-gradient: linear-gradient(120deg, #8fcbff, #5aa9ff);
+  --topbar-gradient: linear-gradient(120deg, #3d86d8, #2f6fb5);
   --page-gradient: linear-gradient(160deg, #eaf4ff, #f7fbff 45%, #e6f1ff);
-  --primary-gradient: linear-gradient(135deg, #7cc0ff, #4a9bff);
+  --primary-gradient: linear-gradient(135deg, #3d86d8, #2f6fb5);
   --page-tint: #eaf4ff;
 
   /* —— 面（卡片、输入框、选中态）—— */
@@ -36,7 +36,7 @@
 
   /* —— 强调色（按钮、选中、链接）—— */
   --accent: #4a9bff;
-  --accent-strong: #3d86d8;
+  --accent-strong: #3373bd;
   --accent-soft: #7cc0ff;
 
   /* —— 状态色 —— */
@@ -53,9 +53,10 @@
   --danger-ring: rgba(242, 109, 109, 0.28);
 
   /* —— 字 —— */
+  /* 灰阶按对比度挑的：白底上 dim 5.0、muted 4.3（原来 4.3 / 2.4，后者看不清） */
   --text: #1f2d3d;
-  --text-dim: #6b7c93;
-  --text-muted: #9aaabb;
+  --text-dim: #5f7186;
+  --text-muted: #66788c;
 
   /* —— 叠层（弹窗灰底、顶栏上的高光）—— */
   --overlay: rgba(31, 45, 61, 0.3);
@@ -65,6 +66,14 @@
   --surface-a82: rgba(255, 255, 255, 0.82);
   --surface-a72: rgba(255, 255, 255, 0.72);
   --surface-a55: rgba(255, 255, 255, 0.55);
+  /* —— 顶栏上的字（M14.2：这几个必须是跟顶栏走的变量，
+     不能拿 --surface 顶——深色主题下 --surface 是深色，字会消失。实测踩过）—— */
+  --on-topbar: #ffffff;
+  --on-topbar-dim: rgba(255, 255, 255, 0.82);
+  --on-topbar-hover: rgba(255, 255, 255, 0.18);
+  --pill-bg: #ffffff;
+  --pill-text: #2f6fb5;
+
   --on-accent: #fff;
   --on-accent-a35: rgba(255, 255, 255, 0.35);
   --on-accent-a25: rgba(255, 255, 255, 0.25);
@@ -123,8 +132,8 @@ body[data-theme='dark'] {
   --danger-ring: rgba(255, 118, 118, 0.3);
 
   --text: #e8ebf7;
-  --text-dim: #a9b0cc;
-  --text-muted: #7b83a3;
+  --text-dim: #c2c9e2;
+  --text-muted: #9aa3c4;
 
   --overlay: rgba(0, 0, 0, 0.5);
   --overlay-strong: rgba(0, 0, 0, 0.62);
@@ -134,14 +143,19 @@ body[data-theme='dark'] {
   --surface-a72: rgba(35, 39, 65, 0.75);
   --surface-a55: rgba(35, 39, 65, 0.6);
   --on-accent: #ffffff;
+  --on-topbar: #ffffff;
+  --on-topbar-dim: rgba(255, 255, 255, 0.7);
+  --on-topbar-hover: rgba(255, 255, 255, 0.14);
+  --pill-bg: #3b4270;
+  --pill-text: #d6cfff;
 }
 
 /* 抹茶绿 */
 body[data-theme='matcha'] {
-  --topbar-gradient: linear-gradient(120deg, #a8d8b9, #7bc59a);
+  --topbar-gradient: linear-gradient(120deg, #3d8a5c, #2f7048);
   --page-gradient: linear-gradient(160deg, #eef9f1, #f8fdf9 45%, #e7f5ec);
   --page-tint: #e7f5ec;
-  --primary-gradient: linear-gradient(135deg, #8fd3a8, #56b57f);
+  --primary-gradient: linear-gradient(135deg, #3d8a5c, #2f7048);
 
   --surface-soft: #f6fcf8;
   --surface-accent: #eaf7ef;
@@ -158,20 +172,22 @@ body[data-theme='matcha'] {
   --accent-ring-soft: rgba(86, 181, 127, 0.12);
 
   --accent: #56b57f;
-  --accent-strong: #3f9968;
+  --accent-strong: #2f7a4f;
   --accent-soft: #8fd3a8;
 
+  --pill-text: #2b7a48;
+
   --text: #22302a;
-  --text-dim: #5f7a6b;
-  --text-muted: #93a89b;
+  --text-dim: #48624f;
+  --text-muted: #5c7a66;
 }
 
 /* 暖阳橙 */
 body[data-theme='sunset'] {
-  --topbar-gradient: linear-gradient(120deg, #ffca8f, #ff9f5a);
+  --topbar-gradient: linear-gradient(120deg, #c97a1e, #a85f10);
   --page-gradient: linear-gradient(160deg, #fff5e9, #fffbf6 45%, #ffefe0);
   --page-tint: #ffefe0;
-  --primary-gradient: linear-gradient(135deg, #ffb877, #f79140);
+  --primary-gradient: linear-gradient(135deg, #c97a1e, #a85f10);
 
   --surface-soft: #fffaf4;
   --surface-accent: #fff2e2;
@@ -188,20 +204,22 @@ body[data-theme='sunset'] {
   --accent-ring-soft: rgba(247, 145, 64, 0.12);
 
   --accent: #f79140;
-  --accent-strong: #dd7623;
+  --accent-strong: #a8570f;
   --accent-soft: #ffb877;
 
+  --pill-text: #b25c12;
+
   --text: #35261a;
-  --text-dim: #8a6f58;
-  --text-muted: #b8a08c;
+  --text-dim: #6d543f;
+  --text-muted: #7d6249;
 }
 
 /* 樱花粉 */
 body[data-theme='sakura'] {
-  --topbar-gradient: linear-gradient(120deg, #ffc2d8, #ff9dc0);
+  --topbar-gradient: linear-gradient(120deg, #cc6489, #ad4a6e);
   --page-gradient: linear-gradient(160deg, #fff2f7, #fffafc 45%, #ffeaf3);
   --page-tint: #ffeaf3;
-  --primary-gradient: linear-gradient(135deg, #ffaecb, #f97fae);
+  --primary-gradient: linear-gradient(135deg, #cc6489, #ad4a6e);
 
   --surface-soft: #fff8fb;
   --surface-accent: #ffeef5;
@@ -218,12 +236,14 @@ body[data-theme='sakura'] {
   --accent-ring-soft: rgba(249, 127, 174, 0.12);
 
   --accent: #f97fae;
-  --accent-strong: #e0608f;
+  --accent-strong: #b34770;
   --accent-soft: #ffaecb;
 
+  --pill-text: #c04478;
+
   --text: #37232c;
-  --text-dim: #8d6a78;
-  --text-muted: #bb9aa8;
+  --text-dim: #6f4e5b;
+  --text-muted: #805965;
 }
 
 * {
@@ -259,7 +279,7 @@ body {
   padding: 0 16px;
   height: 54px;
   background: var(--topbar-gradient);
-  color: var(--surface);
+  color: var(--on-topbar);
   box-shadow: 0 2px 12px var(--accent-shadow);
 }
 
@@ -293,7 +313,7 @@ body {
   padding: 7px 18px;
   font-family: var(--font);
   font-size: 14px;
-  color: var(--surface-a82);
+  color: var(--on-topbar-dim);
   background: transparent;
   border: none;
   border-radius: 999px;
@@ -302,14 +322,14 @@ body {
 }
 
 .nav__btn:hover {
-  color: var(--surface);
-  background: var(--on-accent-a18);
+  color: var(--on-topbar);
+  background: var(--on-topbar-hover);
 }
 
 .nav__btn--on,
 .nav__btn--on:hover {
-  color: var(--accent-strong);
-  background: var(--surface);
+  color: var(--pill-text);
+  background: var(--pill-bg);
   font-weight: 600;
   box-shadow: 0 2px 8px var(--overlay-soft);
 }
@@ -324,7 +344,7 @@ body {
   padding: 5px 13px;
   font-family: var(--font);
   font-size: 12.5px;
-  color: var(--surface);
+  color: var(--on-topbar);
   background: var(--on-accent-a22);
   border: none;
   border-radius: 999px;
@@ -413,7 +433,7 @@ body {
 }
 
 .acc__tab--on {
-  color: var(--surface);
+  color: var(--on-accent);
   background: var(--primary-gradient);
 }
 
@@ -430,9 +450,9 @@ body {
   width: 52px;
   height: 52px;
   font-size: 24px;
-  color: var(--surface);
+  color: var(--on-accent);
   border-radius: 10px;
-  background: linear-gradient(160deg, var(--accent-line), var(--accent-soft));
+  background: var(--primary-gradient);
 }
 
 .acc__name {
@@ -487,7 +507,7 @@ body {
   /* 箭头要看得清：原来 11px 太小了，用户实测说"箭头太小" */
   font-size: 15px;
   line-height: 1;
-  color: var(--accent);
+  color: var(--accent-strong);
   background: var(--surface-accent);
   border: 1px solid var(--accent-line);
   border-radius: 7px;
@@ -653,7 +673,7 @@ body {
 }
 
 .btn--primary {
-  color: var(--surface);
+  color: var(--on-accent);
   background: var(--primary-gradient);
   box-shadow: 0 3px 12px var(--accent-shadow-strong);
 }
@@ -1057,7 +1077,7 @@ body {
 
 /* 危险操作按钮（删除）：红色，让人看清楚再点 */
 .btn--danger {
-  color: var(--surface);
+  color: var(--on-accent);
   background: linear-gradient(135deg, var(--danger), var(--danger));
   box-shadow: 0 3px 12px var(--danger-ring);
 }
@@ -1071,7 +1091,7 @@ body {
   padding: 2px 6px;
   font-family: var(--font);
   font-size: 12px;
-  color: var(--accent);
+  color: var(--accent-strong);
   background: none;
   border: none;
   border-radius: 6px;
@@ -1222,7 +1242,7 @@ body {
 .range {
   flex: 1 1 220px;
   min-width: 160px;
-  accent-color: var(--accent);
+  accent-color: var(--accent-strong);
 }
 
 /* 没勾"单独设置"的时候，这些控件是灰的、不能动 */
@@ -1242,7 +1262,7 @@ body {
 .check input {
   width: 16px;
   height: 16px;
-  accent-color: var(--accent);
+  accent-color: var(--accent-strong);
   cursor: pointer;
 }
 
@@ -1366,7 +1386,7 @@ body {
 }
 
 .input--edit:focus:not(:disabled) {
-  border-color: var(--accent);
+  border-color: var(--accent-strong);
   background: var(--surface);
   box-shadow: 0 0 0 3px var(--accent-ring);
 }
@@ -1426,13 +1446,13 @@ body {
 }
 
 .chip:hover {
-  color: var(--accent);
+  color: var(--accent-strong);
   border-color: var(--card-border-hover);
 }
 
 .chip--on,
 .chip--on:hover {
-  color: var(--surface);
+  color: var(--on-accent);
   border-color: transparent;
   background: var(--primary-gradient);
   box-shadow: 0 2px 8px var(--accent-shadow);
@@ -1761,7 +1781,7 @@ body {
   content: '＋';
   display: inline-block;
   width: 18px;
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 
 .faq[open] > summary::before {
@@ -1853,7 +1873,7 @@ body.has-bg {
 .theme-card--on {
   color: var(--text);
   background: var(--surface-accent);
-  border-color: var(--accent);
+  border-color: var(--accent-strong);
   box-shadow: 0 0 0 2px var(--accent-ring);
 }
 
