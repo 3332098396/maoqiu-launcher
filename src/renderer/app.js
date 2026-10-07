@@ -611,13 +611,27 @@ async function loadLaunchPage() {
   // 只在第一次把存下来的账号填进输入框，别把用户正在敲的字冲掉
   if (!accInputEl.value && launchInfo.account) accInputEl.value = launchInfo.account.name
 
+  refreshLaunchNotice()
+  refreshLaunchUi()
+}
+
+/**
+ * 启动页顶上那行提示，按"现在到底有没有版本"来说话。
+ *
+ * 【为什么要单独抽出来】以前这段只在"进启动页"的时候跑一次。
+ * 于是拖个整合包装完，版本都已经选上了，那行字还写着
+ * "还没有装过版本"——界面自己打自己的脸（实测反馈过）。
+ * 凡是会改变"本机有几个版本"的地方，装完都要再喊一声这个函数。
+ */
+function refreshLaunchNotice() {
+  if (launching) return
+
+  const installed = (launchInfo && launchInfo.installed) || []
   if (installed.length === 0) {
     setNotice('还没有装过版本。先到「下载」页挑一个装上，回来就能开始游戏了。')
-  } else if (!launching) {
+  } else {
     setNotice('在左边填一个游戏名字、选一个版本，就可以点「开始游戏」了。')
   }
-
-  refreshLaunchUi()
 }
 
 /**
@@ -1061,6 +1075,7 @@ const packProgressEl = document.getElementById('pack-progress')
 const packTargetRowEl = document.getElementById('pack-target-row')
 const packTargetEl = document.getElementById('pack-target')
 const packInstallEl = document.getElementById('pack-install')
+const packCancelEl = document.getElementById('pack-cancel')
 
 /** 这次拖进来的是哪个文件 */
 let packFilePath = ''
@@ -1068,6 +1083,14 @@ let packFilePath = ''
 let packInfo = null
 /** 有没有在装 */
 let packInstalling = false
+/**
+ * 装完了没有。
+ *
+ * 【为什么要有这么个标记】装完之后如果按钮还写着「开始安装」，用户只会一头雾水：
+ * 到底装没装完？再点一下会不会又装一遍？（用户实测反馈过这个问题。）
+ * 装完就把按钮换成「完成」——点它关掉对话框，这就是"这一趟结束了"的明确信号。
+ */
+let packDone = false
 
 // 文件拖到窗口上时：盖一层提示（不 preventDefault 的话，浏览器会直接打开这个文件）
 document.addEventListener('dragover', (event) => {
@@ -1104,13 +1127,20 @@ function closePackDialog() {
   packModalEl.hidden = true
   packFilePath = ''
   packInfo = null
+  packDone = false
+  // 按钮和标题都恢复成"还没开始装"的样子，下次拖包进来才不会是上回的残留
+  packInstallEl.textContent = '开始安装'
+  packCancelEl.hidden = false
 }
 
 async function openPackDialog(filePath) {
   packFilePath = filePath
   packInfo = null
   packInstalling = false
+  packDone = false
 
+  packInstallEl.textContent = '开始安装'
+  packCancelEl.hidden = false
   packTitleEl.textContent = '发现一个整合包'
   packSummaryEl.textContent = '正在看这个压缩包里有什么…'
   packWarnEl.textContent = ''
@@ -1177,6 +1207,12 @@ async function openPackDialog(filePath) {
 }
 
 packInstallEl.addEventListener('click', async () => {
+  // 装完了这次按钮是「完成」——再点就是关掉对话框，不是再装一遍
+  if (packDone) {
+    closePackDialog()
+    return
+  }
+
   if (!packInfo || packInstalling) return
 
   const targetVersionId =
@@ -1203,9 +1239,16 @@ packInstallEl.addEventListener('click', async () => {
     return
   }
 
+  // 装完了：按钮换成「完成」，那一行"装到哪个版本"也收起来（已经装完了，改不了了）
+  packDone = true
+  packInstallEl.textContent = '完成'
+  packCancelEl.hidden = true
+  packTargetRowEl.hidden = true
+
   packProgressEl.textContent = result.versionId
-    ? `装好了：多了个新版本「${result.versionId}」——回启动页选它就能玩` +
-      `（${result.files || 0} 个文件${result.overrides ? `，另有 ${result.overrides} 个作者的配置文件` : ''}）`
+    ? `装好了：多了个新版本「${result.versionId}」——回启动页选它就能玩。` +
+      `这次 ${packFileSummary(result)}` +
+      (result.overrides ? `，另有 ${result.overrides} 个作者的配置文件` : '')
     : `装好了：${result.written} 个文件已经解到 ${result.dest}`
 
   // 版本列表刷新，并把新版本选上
@@ -1214,7 +1257,32 @@ packInstallEl.addEventListener('click', async () => {
     selectedVersion = result.versionId
     refreshLaunchUi()
   }
+
+  // 装完这会儿"本机有几个版本"变了，启动页那行提示也得跟着改口
+  refreshLaunchNotice()
 })
+
+/**
+ * "这次装了多少文件"的说明。
+ *
+ * 【为什么不能直接写 result.files】拖进来的整合包有两种路子：
+ * 一种是 Modrinth 包（报"下了几个文件"），一种是 PCL 那种整个目录快照
+ * （报"新写了几个、跳过几个"）。以前不管哪种都拿 files 硬套，
+ * 于是重装一个已经装过的包时，界面上写着"装好了（0 个文件）"——
+ * 用户看到"0 个文件"只会以为没装上（实测反馈过）。
+ */
+function packFileSummary(result) {
+  const written = result.written || 0
+  const skipped = result.skipped || 0
+
+  if (result.files !== undefined) return `${result.files} 个文件到位`
+
+  const total = written + skipped
+  if (skipped > 0) {
+    return `${total} 个文件到位（新写 ${written} 个，本机已有的 ${skipped} 个直接跳过）`
+  }
+  return `${total} 个文件到位`
+}
 
 // 「安装本地整合包」按钮：不方便拖拽的时候，点它挑文件
 document.getElementById('pack-pick').addEventListener('click', async () => {
