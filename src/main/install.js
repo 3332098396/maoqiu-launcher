@@ -296,6 +296,48 @@ async function buildJavaFileList(component, javaRoot) {
   return files
 }
 
+/**
+ * 确保某一个 Java 运行时在本机有了，缺了就下。已经有就直接返回，不重复下。
+ *
+ * 【为什么单独有这么一步】装"整合包"（拖个 zip 进来那种）走的是另一条路：
+ * 它只是把包里的文件铺开，**不会碰 Java**。实测踩到过（2026-10-07）：
+ * 一个 1.20.1 Forge 的整合包文件全装好了，启动时本机没有它要的 Java 17，
+ * 于是拿了台机器上现成的 Java 16 顶上 → 游戏当场崩。所以启动前要检查一次。
+ *
+ * @param {string} component 运行时名字，比如 java-runtime-gamma
+ * @returns {Promise<{ok: boolean, already: boolean, path: string}>}
+ */
+async function ensureJavaComponent(component, { onStage, onProgress } = {}) {
+  const stage = (text) => {
+    if (onStage) onStage(text)
+  }
+
+  const javaRoot = path.join(paths.runtimeDir(), component)
+  const exe = path.join(javaRoot, 'bin', 'java.exe')
+
+  // 已经有了就别再下 100 MB
+  if (fs.existsSync(exe)) return { ok: true, already: true, path: exe }
+
+  stage('正在准备 Java 运行时的下载清单…')
+  const files = await buildJavaFileList(component, javaRoot)
+
+  stage(`开始下载 Java 运行时，共 ${files.length} 个文件…`)
+  const task = downloader.createTask(files, { onProgress })
+  const stats = await task.start()
+
+  if (stats.done + stats.failed < stats.total) {
+    throw new Error('Java 运行时下到一半停了')
+  }
+  if (stats.failed > 0) {
+    const first = stats.failures[0]
+    throw new Error(`Java 运行时没下全：${first?.error ?? '未知原因'}`)
+  }
+  // 下完了却还是没有 java.exe，说明清单给的东西不对，得当失败处理
+  if (!fs.existsSync(exe)) throw new Error('下完了却没找到 java.exe，Mojang 的清单可能变了')
+
+  return { ok: true, already: false, path: exe }
+}
+
 // ——————————————————————————————————————————————
 // 解压 natives
 // ——————————————————————————————————————————————
@@ -552,6 +594,7 @@ function dropPartialInstall(versionId, { removeVersionDir, downloaded = [] }) {
 
 module.exports = {
   installVersion,
+  ensureJavaComponent,
   buildFileList,
   rulesAllow,
   buildContext,

@@ -41,12 +41,24 @@ function readArchive(filePath) {
   }
 }
 
-/** 包里的顶层文件夹都有什么（给用户看的） */
+/**
+ * 包里的顶层文件夹都有什么（给用户看的，也用来判断"是不是整合包"）。
+ *
+ * 【踩过的坑】这里原来有一句"过滤掉点开头的名字"（本想滤掉 .DS_Store 这类），
+ * 结果把 **`.minecraft`** 也滤掉了——而很多整合包（尤其 PCL 导出的）
+ * 内容就装在 `.minecraft/` 里！判断"是不是整合包"时看不到它，
+ * 就会把好好的整合包判成"不是整合包"（用户实测踩到）。
+ * 现在只滤真正没用的那几个系统垃圾文件。
+ */
+const JUNK_NAMES = ['__macosx', '.ds_store', 'thumbs.db', 'desktop.ini']
+
 function topLevelNames(entries) {
   const names = new Set()
   for (const entry of entries) {
     const first = entry.name.replace(/^\//, '').split('/')[0]
-    if (first && !first.startsWith('.')) names.add(first)
+    if (!first) continue
+    if (JUNK_NAMES.includes(first.toLowerCase())) continue
+    names.add(first)
   }
   return [...names]
 }
@@ -339,13 +351,23 @@ async function installPlainPack(filePath, layout, targetVersionId, { onStage, on
   const buffer = fs.readFileSync(filePath)
   const entries = zip.listEntries(buffer)
 
-  let dest
+  // ——— "整个游戏目录快照"的包（PCL 导出的通常是这种）———
+  //
+  // 【它的结构长这样】（实测一个 1 GB 的真包）：
+  //   .minecraft/versions/<版本名>/   ← 版本文件夹：jar、版本 JSON、mods、config…
+  //   .minecraft/assets/  libraries/  ← 共享文件
+  //   PCL.ini / launcher_profiles.json / PCL/ / PCL.exe  ← 附带的启动器，没用
+  //
+  // 巧的是 **PCL 的"版本隔离"布局和我们的一模一样**（版本文件夹里装游戏文件），
+  // 所以照搬就行：versions / assets / libraries 原样放，
+  // 其余的游戏文件归到版本文件夹里，PCL 自己的东西丢掉。
   if (layout === 'gamedir') {
-    dest = paths.gameDir()
-  } else {
-    if (!targetVersionId) throw new Error('没选装到哪个版本')
-    dest = paths.versionDir(targetVersionId)
+    return installGameDirPack(buffer, entries, { onStage, onProgress })
   }
+
+  let dest = null
+  if (targetVersionId) dest = paths.versionDir(targetVersionId)
+  if (!dest) throw new Error('没选装到哪个版本')
 
   // 有些包外面套了一层 .minecraft/，那层要剥掉
   let wrapper = ''
@@ -451,4 +473,111 @@ async function installPack(filePath, options = {}) {
   return installPlainPack(filePath, info.layout, options.targetVersionId, options)
 }
 
-module.exports = { inspect, installPack, installModrinthPack, installPlainPack }
+/**
+ * 装一个"整个游戏目录快照"的整合包（里面是 .minecraft/ 那种）。
+ * 见 installPlainPack 里那段说明：我们的布局和 PCL 的一样，照搬即可。
+ */
+async function installGameDirPack(buffer, entries, { onStage, onProgress } = {}) {
+  const stage = (text) => {
+    if (onStage) onStage(text)
+  }
+
+  // 剥掉外面套的那层（.minecraft/ 或者别的单个文件夹）
+  const wrapper = detectWrapper(entries)
+
+  // 包里带着哪个版本？（versions/<名字>/<名字>.json）
+  const versionIds = new Set()
+  const pattern = new RegExp(`^${escapeRegExp(wrapper)}versions/([^/]+)/[^/]+\\.json$`)
+
+  for (const entry of entries) {
+    const match = entry.name.match(pattern)
+    if (match) versionIds.add(match[1])
+  }
+
+  let packVersion = [...versionIds][0] || ''
+  // 带加载器名的那个更像"要玩的版本"（有的包会同时带着原版和加载器版）
+  const preferred = [...versionIds].find((id) => /forge|fabric|neoforge/i.test(id))
+  if (preferred) packVersion = preferred
+
+  const SHARED = ['versions/', 'assets/', 'libraries/', 'runtime/']
+
+  const pending = entries.filter(
+    (entry) => !entry.name.endsWith('/') && entry.name.startsWith(wrapper) && entry.name !== wrapper
+  )
+
+  const gameRoot = path.resolve(paths.gameDir())
+  const versionRoot = packVersion ? path.resolve(paths.versionDir(packVersion)) : gameRoot
+
+  let written = 0
+  let skipped = 0
+
+  for (const entry of pending) {
+    const rel = entry.name.slice(wrapper.length)
+
+    // PCL 自己的东西（启动器本体、它的配置）——对我们没用
+    if (rel === 'PCL.ini' || rel === 'launcher_profiles.json') continue
+    if (/^pcl\//i.test(rel) || /plain craft launcher/i.test(rel)) continue
+
+    const shared = SHARED.some((prefix) => rel.startsWith(prefix))
+    const root = shared ? gameRoot : versionRoot
+    const dest = path.resolve(root, rel)
+
+    // 安全：别让压缩包里的 ../ 跑到外面去
+    if (dest !== root && !dest.startsWith(root + path.sep)) continue
+
+    paths.ensureDir(path.dirname(dest))
+
+    // 文件已经在了、大小也一样 → 跳过（省的重复写几百 MB，实测能省一大半时间）
+    try {
+      const stat = fs.statSync(dest)
+      if (stat.isFile() && stat.size === entry.size) {
+        skipped++
+        continue
+      }
+    } catch {
+      // 不存在就往下走
+    }
+
+    fs.writeFileSync(dest, zip.readEntry(buffer, entry))
+    written++
+
+    if (onProgress && written % 100 === 0) {
+      onProgress({
+        total: pending.length,
+        done: written + skipped,
+        percent: Math.round(((written + skipped) / pending.length) * 100)
+      })
+    }
+  }
+
+  stage('整合包安装完成')
+  return { ok: true, written, skipped, versionId: packVersion, dest: paths.gameDir() }
+}
+
+/** 找出"外面套的那层"目录（.minecraft/ 或者单个文件夹）；没有就返回空 */
+function detectWrapper(entries) {
+  const tops = topLevelNames(entries)
+
+  // 最常见的：套了一层 .minecraft/
+  const dotMinecraft = tops.find((name) => name.toLowerCase() === '.minecraft')
+  if (dotMinecraft) return `${dotMinecraft}/`
+
+  // 整个包只有唯一一个顶层目录 → 那它就是外壳
+  if (tops.length === 1 && entries.some((e) => e.name.startsWith(`${tops[0]}/`))) {
+    return `${tops[0]}/`
+  }
+
+  return ''
+}
+
+function escapeRegExp(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+module.exports = {
+  inspect,
+  installPack,
+  installModrinthPack,
+  installPlainPack,
+  installGameDirPack
+}

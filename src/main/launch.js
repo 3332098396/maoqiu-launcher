@@ -554,6 +554,16 @@ async function launch(versionId, options = {}) {
     }
   }
 
+  // 往界面日志里说一句话。⑨ 那步之前还没有正式的日志收集器，
+  // 但补下 Java 的过程也得让用户看得见，所以先备一个临时的
+  const say = (text) => {
+    try {
+      if (onLog) onLog([text])
+    } catch {
+      // 界面那边出问题不该影响游戏
+    }
+  }
+
   if (current) return { ok: false, error: '游戏已经在运行了' }
 
   // ——— ① 账号 ———
@@ -595,6 +605,29 @@ async function launch(versionId, options = {}) {
   const windowSize = { width: effective.windowWidth, height: effective.windowHeight }
 
   // ——— ④ Java ———
+  //
+  // 先看这个版本点名的运行时在不在，不在就补下。
+  // 【为什么启动前要管这个】"装整合包"（拖个 zip 进来那种）走的是另一条路，
+  // 只把包里的文件铺开、不碰 Java。实测踩到过（2026-10-07）：一个 1.20.1 Forge 的包
+  // 文件装得齐齐的，可本机没有它要的 Java 17，启动时拿现成的 Java 16 顶上，
+  // 游戏当场崩。所以缺了就补——和上面"日志配置缺了补下"是同一个套路。
+  const wantedComponent = fullJson.javaVersion && fullJson.javaVersion.component
+  if (wantedComponent) {
+    const wantedExe = path.join(paths.runtimeDir(), wantedComponent, 'bin', 'java.exe')
+
+    if (!fs.existsSync(wantedExe)) {
+      say(`[启动器] 这个版本要的 Java 运行时（${wantedComponent}）本机还没有，正在补下…`)
+      try {
+        await install.ensureJavaComponent(wantedComponent, { onStage: (text) => say(`[启动器] ${text}`) })
+        say('[启动器] Java 运行时下好了')
+      } catch (error) {
+        // 下不到不能拦住启动：本机要是有版本对得上的 Java，照样能跑；
+        // 真跑不起来，下面 findJava 的结果和退出时的提示会告诉用户为什么
+        say(`[启动器] Java 运行时没下成（${error.message}），先试试本机已有的 Java`)
+      }
+    }
+  }
+
   const javaExe = javaUtil.findJava(fullJson)
   if (!javaExe) {
     return {
