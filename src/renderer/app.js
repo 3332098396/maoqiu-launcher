@@ -25,6 +25,7 @@ function showPage(name) {
   if (name === 'download' && !manifestLoaded) {
     manifestLoaded = true
     loadManifest()
+    loadInstalled()
   }
 }
 
@@ -126,6 +127,25 @@ function renderVersions() {
     date.textContent = formatDate(version.released)
     li.appendChild(date)
 
+    // ——— 右侧：装过了就标一下，没装过给个「安装」按钮 ———
+    const action = document.createElement('div')
+    action.className = 'ver__action'
+
+    if (installedVersions.has(version.id)) {
+      const ok = document.createElement('span')
+      ok.className = 'ver__installed'
+      ok.textContent = '已安装'
+      action.appendChild(ok)
+    } else {
+      const button = document.createElement('button')
+      button.className = 'btn btn--primary btn--sm'
+      button.type = 'button'
+      button.dataset.install = version.id
+      button.textContent = '安装'
+      action.appendChild(button)
+    }
+    li.appendChild(action)
+
     frag.appendChild(li)
   }
 
@@ -220,6 +240,116 @@ filterEl.addEventListener('click', (event) => {
 })
 
 refreshBtn.addEventListener('click', refreshManifest)
+
+// ═══════════════════════════════════════
+// 安装版本（M4）
+// ═══════════════════════════════════════
+
+const installEl = document.getElementById('install')
+const installTitleEl = document.getElementById('install-title')
+const installStageEl = document.getElementById('install-stage')
+const installFillEl = document.getElementById('install-fill')
+const installDetailEl = document.getElementById('install-detail')
+
+/** 本机已经装了哪些版本。用来决定版本行右边显示「安装」还是「已安装」 */
+const installedVersions = new Set()
+/** 正在装哪个版本；空字符串表示没有任务在跑 */
+let installingVersion = ''
+
+function setStage(text) {
+  installStageEl.textContent = text
+}
+
+function setFill(percent) {
+  installFillEl.style.width = `${Math.max(0, Math.min(100, percent))}%`
+}
+
+function setDetail(text) {
+  installDetailEl.textContent = text
+}
+
+function formatSpeed(bytesPerSecond) {
+  if (!bytesPerSecond || bytesPerSecond < 1) return '—'
+  const mb = bytesPerSecond / 1024 / 1024
+  if (mb >= 1) return `${mb.toFixed(1)} MB/秒`
+  return `${(bytesPerSecond / 1024).toFixed(0)} KB/秒`
+}
+
+function formatSize(bytes) {
+  if (!bytes) return '0 MB'
+  return `${(bytes / 1024 / 1024).toFixed(0)} MB`
+}
+
+function formatEta(ms) {
+  if (!ms || ms <= 0) return '—'
+  const seconds = Math.round(ms / 1000)
+  if (seconds < 60) return `${seconds} 秒`
+  return `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`
+}
+
+/** 读一下本机装了哪些版本 */
+async function loadInstalled() {
+  try {
+    const info = await window.api.getGameInfo()
+    installedVersions.clear()
+    for (const id of info.installed) installedVersions.add(id)
+    renderVersions()
+  } catch {
+    // 读不到就当没装过，不影响别的功能
+  }
+}
+
+async function startInstall(versionId) {
+  if (installingVersion) return
+  installingVersion = versionId
+
+  installEl.hidden = false
+  installTitleEl.textContent = `正在安装 ${versionId}`
+  setStage('准备中…')
+  setFill(0)
+  setDetail('—')
+
+  const result = await window.api.startInstall(versionId)
+  installingVersion = ''
+
+  if (!result.ok) {
+    setStage('安装失败')
+    setFill(0)
+    setDetail(result.error ?? '未知原因')
+    return
+  }
+
+  setFill(100)
+  // 标题也改掉，否则"正在安装 xx"会一直挂在那儿，看着像没结束
+  installTitleEl.textContent = `${versionId} 安装完成`
+  setStage('')
+  setDetail(`共 ${result.stats.done} 个文件，没有失败`)
+
+  // 装完立刻刷新列表，让这一行变成「已安装」
+  await loadInstalled()
+}
+
+// 主进程推过来的阶段提示和进度
+window.api.onInstallStage((text) => setStage(text))
+window.api.onInstallProgress((stats) => {
+  setFill(stats.percent)
+  setDetail(
+    `${stats.percent}% · ${stats.done}/${stats.total} 个 · ${formatSize(stats.receivedBytes)}/${formatSize(stats.totalBytes)}` +
+      ` · ${formatSpeed(stats.speed)} · 剩 ${formatEta(stats.etaMs)}` +
+      (stats.failed > 0 ? ` · 失败 ${stats.failed}` : '')
+  )
+})
+
+// 列表里点「安装」
+listEl.addEventListener('click', (event) => {
+  const versionId = event.target.dataset?.install
+  if (versionId) startInstall(versionId)
+})
+
+// 进度面板可以手动收起，不挡着看列表
+document.getElementById('install-hide').addEventListener('click', () => {
+  installEl.hidden = true
+})
 
 // ═══════════════════════════════════════
 // 版本号

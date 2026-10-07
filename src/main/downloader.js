@@ -364,9 +364,14 @@ function createTask(files, options = {}) {
           }
         })
 
-        // 这个文件已经下完，把它计入总量，并从"正在下"里扣掉
+        // 这个文件已经下完，把它计入总量，并从"正在下"里扣掉。
+        //
+        // 注意这里加的是"清单里声明的大小"而不是"实际下了多少字节"：
+        // 进度条的分母 `totalBytes` 也是按声明大小累加的，
+        // 两边必须用同一个口径，否则下完最后一个文件时进度会停在
+        // "619/686MB" 这种看着像没下完的数字上（实际是账算岔了）。
         currentBytes = Math.max(0, currentBytes - result.bytes)
-        doneBytes += result.bytes
+        doneBytes += file.size || result.bytes
         doneCount++
 
         updateSourcePreference({

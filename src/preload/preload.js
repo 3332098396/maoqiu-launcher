@@ -25,5 +25,27 @@ contextBridge.exposeInMainWorld('api', {
    * 强制从网上更新一份版本清单，成功后写进缓存。
    * @returns {Promise<{ok: boolean, versions?, latest?, error?}>}
    */
-  refreshManifest: () => ipcRenderer.invoke('manifest:refresh')
+  refreshManifest: () => ipcRenderer.invoke('manifest:refresh'),
+
+  // ——— 安装版本（M4）———
+
+  /** 取游戏目录和本机已装版本列表：{ gameDir, installed: string[] } */
+  getGameInfo: () => ipcRenderer.invoke('game:info'),
+
+  /**
+   * 装一个版本，装完才 resolve。
+   * 过程中会通过 onInstallStage / onInstallProgress 主动推消息给界面。
+   * @returns {Promise<{ok: boolean, stats?, error?}>}
+   */
+  startInstall: (versionId) => ipcRenderer.invoke('install:start', versionId),
+
+  /** 安装到哪一步了（"正在读取版本信息…"这类文字） */
+  onInstallStage: (callback) => {
+    ipcRenderer.on('install:stage', (_event, text) => callback(text))
+  },
+
+  /** 下载进度（百分比、速度、剩余时间、失败数） */
+  onInstallProgress: (callback) => {
+    ipcRenderer.on('install:progress', (_event, stats) => callback(stats))
+  }
 })

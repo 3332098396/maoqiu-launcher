@@ -155,6 +155,21 @@
           <div class="verstatus" id="ver-status">正在读取版本清单…</div>
 
           <ul class="verlist" id="ver-list"></ul>
+
+          <!-- 安装进度面板。开始安装时从底部滑出来 -->
+          <div class="install" id="install" hidden>
+            <div class="install__row">
+              <span class="install__title" id="install-title">正在安装</span>
+              <span class="install__stage" id="install-stage">准备中…</span>
+            </div>
+            <div class="bar">
+              <div class="bar__fill" id="install-fill"></div>
+            </div>
+            <div class="install__row install__row--small">
+              <span id="install-detail">—</span>
+              <button class="linkbtn" type="button" id="install-hide">收起</button>
+            </div>
+          </div>
         </div>
       </section>
 

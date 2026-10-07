@@ -16,6 +16,8 @@
 const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('node:path')
 const mojang = require('./mojang')
+const install = require('./install')
+const paths = require('./paths')
 
 // 软件名。它会决定数据存放目录：%APPDATA%\MC启动器\
 app.setName('MC启动器')
@@ -54,7 +56,43 @@ function createWindow() {
 // 界面能调用的接口（与 preload 里列出的方法一一对应）
 // ——————————————————————————————————————————————
 
+/** 当前正在跑的安装任务（同时只允许一个） */
+let currentInstall = null
+
 function registerIpcHandlers() {
+  /** 本机已装了哪些版本 */
+  ipcMain.handle('versions:installed', () => paths.listInstalledVersions())
+
+  /** 装一个版本。进度通过 install:progress 主动推给界面 */
+  ipcMain.handle('install:start', async (event, versionId) => {
+    if (currentInstall) {
+      return { ok: false, error: '已经有一个安装任务在跑了，等它完成或取消它' }
+    }
+
+    const send = (channel, payload) => {
+      if (!event.sender.isDestroyed()) event.sender.send(channel, payload)
+    }
+
+    currentInstall = true
+    try {
+      const result = await install.installVersion(versionId, {
+        onStage: (text) => send('install:stage', text),
+        onProgress: (stats) => send('install:progress', stats)
+      })
+      return result
+    } finally {
+      currentInstall = null
+    }
+  })
+
+  /** 装完了、或者界面重新打开时，取一下已装列表和游戏目录 */
+  ipcMain.handle('game:info', () => ({
+    gameDir: paths.gameDir(),
+    installed: paths.listInstalledVersions()
+  }))
+
+  // ——— 版本清单（M2）———
+
   /**
    * 取版本清单。先给缓存（快、断网也能看），没有缓存才联网。
    * 出错时不是抛异常，而是返回 { ok: false, error }——
