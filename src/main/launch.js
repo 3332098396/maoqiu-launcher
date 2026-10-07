@@ -29,6 +29,7 @@ const javaUtil = require('./java')
 const install = require('./install')
 const downloader = require('./downloader')
 const inherit = require('./inherit')
+const authlibUtil = require('./authlib')
 
 const LAUNCHER_NAME = '毛球'
 const LAUNCHER_VERSION = '0.1.0'
@@ -104,7 +105,7 @@ function effectiveGameDir(versionId, dir) {
  *            nativesDir: string, assetsIndex: string,
  *            missing: string[], unknown: string[]}}
  */
-function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath, gameDir, window, rootId, dir }) {
+function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath, gameDir, window, rootId, dir, authlib }) {
   const ctx = install.buildContext()
   // 告诉规则判断："我们支持自定义分辨率"——版本 JSON 里那两条
   // --width/--height 参数就是靠这个开关才生效的
@@ -138,15 +139,23 @@ function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath
     (versionJson.assetIndex && versionJson.assetIndex.id) || versionJson.assets || ''
 
   // ——— 占位符对照表 ———
-  // 离线模式的取值见 docs/02 的"决策 5"：UUID 用离线算法算，
-  // accessToken 随便给一个——单机游戏根本不校验它。
+  //
+  // 离线模式：取值见 docs/02 的"决策 5"——UUID 用离线算法算，
+  // accessToken 随便给一个，单机游戏根本不校验它。
+  //
+  // 外置登录：**全都要换成真的**，而且规矩不一样（见 authlib-injector 官方的
+  // 《启动器技术规范》）：令牌用真的、user_type 写 mojang、
+  // **UUID 要去掉横杠**（游戏拿它去皮肤站认人，带横杠的写法规范里不要）。
+  // 光传令牌还不够——还得靠下面的 -javaagent 把游戏里的验证地址指到皮肤站去，
+  // 不然游戏会拿着这个令牌去问 Mojang，那当然不认。
+  const isYggdrasil = account.type === 'yggdrasil'
   const values = {
     auth_player_name: account.name,
-    auth_uuid: account.uuid,
-    auth_access_token: '0',
+    auth_uuid: isYggdrasil ? String(account.uuid).replace(/-/g, '') : account.uuid,
+    auth_access_token: isYggdrasil ? String(account.accessToken || '') : '0',
     clientid: '',
     auth_xuid: '',
-    user_type: 'legacy',
+    user_type: isYggdrasil ? 'mojang' : 'legacy',
 
     version_name: versionId,
     version_type: versionJson.type || 'release',
@@ -198,9 +207,28 @@ function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath
     jvmArgs.push(logging.argument.replace(/\$\{path\}/g, logConfigPath))
   }
 
+  // ——— 外置登录：挂上 authlib-injector ———
+  //
+  // 【这两条参数为什么必须在最前面】官方规范要求它们加在主类参数之前。
+  // 第一条是那个 Java 小代理本身（"把这个 jar 挂上去，验证地址换成这一家"），
+  // 第二条是我们提前取好的服务器信息——带上它游戏就不用自己去问，
+  // 启动更快，而且不会因为那一瞬间网络不通而崩。
+  const agentArgs = []
+  if (authlib && authlib.jar) {
+    agentArgs.push(`-javaagent:${authlib.jar}=${authlib.apiRoot}`)
+    if (authlib.prefetched) {
+      agentArgs.push(`-Dauthlibinjector.yggdrasil.prefetched=${authlib.prefetched}`)
+    }
+    // 【为什么关掉它自己的日志文件】实测：这个代理默认会往"当前目录"写一个
+    // authlib-injector.log，而启动游戏时当前目录就是**用户的游戏目录**——
+    // 白白往人家 .minecraft 里丢一个文件。关掉它之后输出照样进控制台，
+    // 而控制台的内容我们是全程记进启动器日志的（「日志」页能看）
+    agentArgs.push('-Dauthlibinjector.noLogFile')
+  }
+
   // ——— 内存 ———
   // 版本 JSON 里不写内存，是启动器自己加的（官方启动器也这么干）
-  const finalJvm = [`-Xmx${memoryMB}M`, ...jvmArgs].map(substitute)
+  const finalJvm = [`-Xmx${memoryMB}M`, ...agentArgs, ...jvmArgs].map(substitute)
   const finalGame = gameArgs.map(substitute)
 
   return {
@@ -668,6 +696,34 @@ async function launch(versionId, options = {}) {
   // ——— ⑥ 日志配置（很小，没有就补下；下不到不致命） ———
   const logConfigPath = await ensureLogConfig(fullJson, dir)
 
+  // ——— ⑥.5 外置登录：把 authlib-injector 准备好 ———
+  //
+  // 【配不上就别启动】挂不上这个代理，游戏会拿着皮肤站的令牌去问 Mojang，
+  // 结果只会是一头雾水。与其让用户进游戏看到莫名其妙的报错，
+  // 不如在这儿说清楚"组件没下下来"，并给出下一步。
+  let authlib = null
+  if (account.type === 'yggdrasil') {
+    if (!account.apiRoot || !account.accessToken) {
+      return {
+        ok: false,
+        error: '这个外置账号缺登录信息，到「启动」页左边重新登录一次试试'
+      }
+    }
+
+    try {
+      say(`[启动器] 正在准备外置登录组件…`)
+      const wrapped = await authlibUtil.ensure({ onStage: (text) => say(`[启动器] ${text}`) })
+      const prefetched = await authlibUtil.prefetchMetadata(account.apiRoot)
+      authlib = { jar: wrapped.path, apiRoot: account.apiRoot, prefetched }
+      say('[启动器] 外置登录组件就绪')
+    } catch (error) {
+      return {
+        ok: false,
+        error: `外置登录要用的组件没下下来（${error.message}）。检查一下网络再试；着急玩的话可以先换成离线账号。`
+      }
+    }
+  }
+
   // ——— ⑦ 拼参数，并检查文件齐不齐 ———
   const command = buildCommand(versionId, fullJson, {
     account,
@@ -676,7 +732,8 @@ async function launch(versionId, options = {}) {
     gameDir: runDir,
     window: windowSize,
     rootId,
-    dir
+    dir,
+    authlib
   })
 
   if (command.missing.length > 0) {

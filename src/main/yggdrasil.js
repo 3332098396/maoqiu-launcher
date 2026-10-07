@@ -59,19 +59,25 @@ function dashedUuid(raw) {
 }
 
 /**
- * 问一句"你的 API 在哪儿"（ALI）。
- * 问不到不算错——有些服务器没开这个功能，那就走惯例地址。
+ * 问一句"你的 API 在哪儿"（这套服务发现机制官方叫 ALI）。
+ *
+ * @returns {Promise<{answered: boolean, location: string}>}
+ *   answered=false 表示**压根没问上**（网络不通），跟"问上了但没这个头"
+ *   是两回事——规范里这两种情况的处理不一样，不能混。
  */
-async function askApiLocation(origin) {
+async function askApiLocation(target) {
   try {
-    const { stream } = await openStream(origin, { timeout: 10000 })
+    const { stream } = await openStream(target, { timeout: 10000 })
     const location = stream.headers['x-authlib-injector-api-location']
     stream.resume() // 我们只要响应头，正文扔掉，不然连接不释放
-    if (!location) return ''
-    // 服务器可能给相对地址，按当前站点补全
-    return trimSlash(new URL(location, `${origin}/`).toString())
+
+    return {
+      answered: true,
+      // 服务器可能给相对地址，按当前站点补全
+      location: location ? trimSlash(new URL(location, `${target}/`).toString()) : ''
+    }
   } catch {
-    return ''
+    return { answered: false, location: '' }
   }
 }
 
@@ -82,6 +88,12 @@ async function askApiLocation(origin) {
  *   littleskin.cn
  *   https://littleskin.cn
  *   https://littleskin.cn/api/yggdrasil
+ *
+ * 【规矩是按官方《启动器技术规范》来的】
+ *   ① 缺协议就补 HTTPS（**不许降级成明文 HTTP**，规范明文禁止）
+ *   ② 发个 GET，看响应里有没有 ALI 头；有就用它指的地址
+ *   ③ **没有这个头 = 你填的地址本身就是 API 地址**（不是"猜一个"）
+ *   ④ 只有"连都没连上"（网络问题）才退回惯例地址，让用户至少能试
  *
  * @returns {Promise<string>} 比如 https://littleskin.cn/api/yggdrasil
  */
@@ -95,14 +107,12 @@ async function resolveApiRoot(input) {
     throw new Error('服务器地址看不明白。填站点域名就行，比如 littleskin.cn')
   }
 
-  // 已经写全了就不用再问
-  if (/\/api\/yggdrasil$/i.test(trimSlash(url.pathname))) {
-    return trimSlash(url.toString())
-  }
+  const asked = await askApiLocation(url.toString())
+  if (asked.location) return asked.location
 
-  const found = await askApiLocation(url.origin)
-  if (found) return found
+  if (asked.answered) return trimSlash(url.toString())
 
+  // 连不上：按最常用的惯例猜一个，成不成用户一试就知道
   return `${url.origin}/api/yggdrasil`
 }
 

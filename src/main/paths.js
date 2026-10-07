@@ -60,6 +60,19 @@ function easytierDir(version) {
   return path.join(easytierRoot(), version)
 }
 
+/**
+ * authlib-injector 存哪儿（M16.2 外置登录用）。
+ * 它是个 java 小代理，不跟某一个游戏版本绑定，所以不同版本放在一个目录里。
+ */
+function authlibRoot() {
+  return path.join(configDir(), 'authlib-injector')
+}
+
+/** 某个版本的 authlib-injector.jar 在哪儿 */
+function authlibJarPath(version) {
+  return path.join(authlibRoot(), `authlib-injector-${String(version).replace(/^v/, '')}.jar`)
+}
+
 // ——————————————————————————————————————————————
 // 游戏目录
 // ——————————————————————————————————————————————
@@ -301,6 +314,8 @@ module.exports = {
   backupsDir,
   easytierRoot,
   easytierDir,
+  authlibRoot,
+  authlibJarPath,
   defaultGameDir,
   sameDir,
   listAllInstalledVersions,
