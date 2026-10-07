@@ -681,6 +681,11 @@ async function launch(versionId, options = {}) {
     child = spawn(javaExe.path, args, {
       cwd: runDir,
       windowsHide: true,
+      // 【为什么必须 detached】Electron 把它的子进程都放在一个"进程组"里，
+      // 主进程一退出，组里的全部被杀。实测过：不加这行，用户关掉启动器，
+      // **正在玩的游戏会跟着一起没**。detached 让游戏自己独立成组，
+      // 启动器关了它照样跑（和 PCL 的行为一致）。
+      detached: true,
       stdio: ['ignore', 'pipe', 'pipe']
     })
   } catch (error) {

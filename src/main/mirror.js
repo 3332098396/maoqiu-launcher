@@ -58,6 +58,12 @@ function toMirror(url) {
     case 'maven.fabricmc.net':
       return `https://${MIRROR_HOST}/maven${suffix}`
 
+    // Forge / NeoForge 的仓库。这两个在国内**直接连不上**（实测请求都发不出去），
+    // 镜像同样在 /maven 下面（实测 0.6 秒）
+    case 'maven.minecraftforge.net':
+    case 'maven.neoforged.net':
+      return `https://${MIRROR_HOST}/maven${suffix}`
+
     // 不认识的地址不动它——宁可用官方源，也不要伪造一个可能不存在的地址
     default:
       return null

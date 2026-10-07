@@ -1075,6 +1075,8 @@ const verIsolationOnEl = document.getElementById('ver-isolation-on')
 const verIsolationEl = document.getElementById('ver-isolation')
 const verSettingsHintEl = document.getElementById('ver-settings-hint')
 const verInstallFabricEl = document.getElementById('ver-install-fabric')
+const verInstallForgeEl = document.getElementById('ver-install-forge')
+const verInstallNeoForgeEl = document.getElementById('ver-install-neoforge')
 const verLoaderHintEl = document.getElementById('ver-loader-hint')
 
 /** 正在装 Mod 加载器吗（进度要写到版本设置弹窗里） */
@@ -1315,27 +1317,35 @@ verIsolationEl.addEventListener('change', () =>
   saveVersionSetting({ isolation: verIsolationEl.checked })
 )
 
-// ——— 装 Mod 加载器（M10）———
+// ——— 装 Mod 加载器（M10 / M10.2：Fabric、Forge、NeoForge）———
 
-verInstallFabricEl.addEventListener('click', async () => {
+const LOADER_LABELS = { fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge' }
+
+/** 三个按钮走同一条路，只是加载器不一样 */
+async function installLoader(type) {
   if (!editingVersion || loaderInstalling) return
   const base = editingVersion
+  const label = LOADER_LABELS[type]
 
   loaderInstalling = true
-  verInstallFabricEl.disabled = true
-  verLoaderHintEl.textContent = '正在准备…'
+  for (const button of [verInstallFabricEl, verInstallForgeEl, verInstallNeoForgeEl]) {
+    button.disabled = true
+  }
+  verLoaderHintEl.textContent = `正在准备装 ${label}…`
   // 提示文字在弹窗底部，可能看不到——滚过去让用户看见进度
   verLoaderHintEl.scrollIntoView({ block: 'nearest' })
 
   let result
   try {
-    result = await window.api.installLoader({ gameVersion: base, loader: 'fabric' })
+    result = await window.api.installLoader({ gameVersion: base, loader: type })
   } catch (error) {
     result = { ok: false, error: String(error?.message ?? error) }
   }
 
   loaderInstalling = false
-  verInstallFabricEl.disabled = false
+  for (const button of [verInstallFabricEl, verInstallForgeEl, verInstallNeoForgeEl]) {
+    button.disabled = false
+  }
 
   if (!result.ok) {
     verLoaderHintEl.textContent = `装不上：${result.error}`
@@ -1352,7 +1362,11 @@ verInstallFabricEl.addEventListener('click', async () => {
     selectedVersion = result.versionId
     refreshLaunchUi()
   }
-})
+}
+
+verInstallFabricEl.addEventListener('click', () => installLoader('fabric'))
+verInstallForgeEl.addEventListener('click', () => installLoader('forge'))
+verInstallNeoForgeEl.addEventListener('click', () => installLoader('neoforge'))
 
 verSettingsBtnEl.addEventListener('click', openVersionSettings)
 document.getElementById('ver-close').addEventListener('click', closeVersionSettings)

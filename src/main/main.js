@@ -28,6 +28,7 @@ const backup = require('./backup')
 const modrinth = require('./modrinth')
 const content = require('./content')
 const loaders = require('./loaders')
+const forge = require('./forge')
 
 // 软件名。它会决定数据存放目录：%APPDATA%\毛球\
 app.setName('毛球')
@@ -517,21 +518,32 @@ function registerIpcHandlers() {
     currentInstall = true
     try {
       const { gameVersion, loader } = options
-      if (loader && loader !== 'fabric') {
-        return { ok: false, error: '现在只支持装 Fabric，Forge / NeoForge 后面再做' }
+      const wanted = loader || 'fabric'
+      if (!['fabric', 'forge', 'neoforge'].includes(wanted)) {
+        return { ok: false, error: `不认识的加载器：${wanted}` }
       }
       if (!paths.isVersionInstalled(gameVersion)) {
         return { ok: false, error: `先把 ${gameVersion} 装好，才能在它上面装加载器` }
       }
 
-      send('install:stage', '正在问 Fabric 有哪些加载器版本…')
-      const built = await loaders.buildFabricProfile(gameVersion)
+      // Fabric 官方给现成的版本文件；Forge / NeoForge 得自己拆安装器
+      const built =
+        wanted === 'fabric'
+          ? await loaders.buildFabricProfile(gameVersion)
+          : await forge.prepare(wanted, gameVersion, {
+              onStage: (text) => send('install:stage', text),
+              onProgress: (stats) => send('install:progress', stats),
+              onTask: (task) => {
+                currentInstallTask = task
+              }
+            })
 
       if (paths.isVersionInstalled(built.versionId)) {
         return { ok: true, already: true, versionId: built.versionId }
       }
 
-      send('install:stage', `正在装 Fabric ${built.loaderVersion}…`)
+      const loaderLabel = wanted === 'fabric' ? 'Fabric' : wanted === 'forge' ? 'Forge' : 'NeoForge'
+      send('install:stage', `正在装 ${loaderLabel} ${built.loaderVersion}…`)
       const result = await install.installVersion(built.versionId, {
         providedJson: built.json,
         onStage: (text) => send('install:stage', text),
@@ -542,6 +554,23 @@ function registerIpcHandlers() {
       })
 
       if (!result.ok) return result
+
+      // Forge / NeoForge 还要多一步：给客户端 jar 打补丁
+      // （放在库都下好之后跑——打补丁的工具自己也要用库）
+      if (built.patcher) {
+        try {
+          await forge.runPatchers(built.patcher, {
+            onStage: (text) => send('install:stage', text),
+            onProgress: (stats) => send('install:progress', stats),
+            onTask: (task) => {
+              currentInstallTask = task
+            }
+          })
+        } catch (error) {
+          return { ok: false, error: String(error?.message ?? error) }
+        }
+      }
+
       return { ok: true, versionId: built.versionId, loaderVersion: built.loaderVersion }
     } catch (error) {
       return { ok: false, error: String(error?.message ?? error) }
