@@ -19,6 +19,9 @@
         <button class="nav__btn" type="button" data-page="launch">
           <span class="nav__icon">▶</span>启动
         </button>
+        <button class="nav__btn" type="button" data-page="online">
+          <span class="nav__icon">👥</span>联机
+        </button>
         <button class="nav__btn" type="button" data-page="download">
           <span class="nav__icon">⬇</span>下载
         </button>
@@ -67,6 +70,52 @@
               <li><b>版本信息</b><span>当前选中版本的图标、名称、加载器</span></li>
             </ul>
           </div>
+        </div>
+      </section>
+
+      <!-- ═══════════ 联机页 ═══════════ -->
+      <section class="page" data-page="online" hidden>
+        <aside class="side">
+          <nav class="menu">
+            <span class="menu__item menu__item--on">房间</span>
+          </nav>
+        </aside>
+
+        <div class="content">
+          <div class="notice">
+            <b>这是布局预览。</b>联机功能排在比较后面——现在软件还不能下载游戏，
+            联机了也没得玩。等能玩了再接上。
+          </div>
+
+          <div class="online-grid">
+            <section class="panel">
+              <h3 class="panel__title">创建房间</h3>
+              <p class="panel__desc">
+                建一个房间，会生成一串房间码。把它发给好友，他们输进来就能和你联机，
+                就像在同一个局域网里一样。
+              </p>
+              <button class="btn btn--primary btn--block" type="button" disabled>
+                创建房间
+              </button>
+            </section>
+
+            <section class="panel">
+              <h3 class="panel__title">加入好友的房间</h3>
+              <p class="panel__desc">把好友给你的房间码填在这里。</p>
+              <div class="join-row">
+                <input class="input" type="text" placeholder="房间码" disabled />
+                <button class="btn btn--ghost" type="button" disabled>加入</button>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel panel--full">
+            <h3 class="panel__title">连接状态</h3>
+            <p class="panel__desc">
+              还没连接。创建或加入房间后，这里会显示：你是房主还是加入的人、
+              连接方式（直连还是走了中转）、延迟多少、房间里都有谁。
+            </p>
+          </section>
         </div>
       </section>
 
