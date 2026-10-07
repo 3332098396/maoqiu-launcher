@@ -2182,9 +2182,11 @@ async function loadSettingsPage() {
   setMemoryNumEl.value = String(settingsInfo.memoryMB)
   renderMemoryHint()
 
-  // 下载速度那两项（M13）
-  setThreadsEl.value = String(config.downloadConcurrency || 8)
-  setSpeedEl.value = String(config.downloadSpeedLimitKB || 0)
+  // 下载速度那两项（M13）。
+  // 【注意变量名是 settingsInfo 不是 config】写错过一次：那行会抛 ReferenceError，
+  // 结果是这两个框一直空着（而且页面别的部分看着还正常，不好发现）。
+  setThreadsEl.value = String(settingsInfo.downloadConcurrency || 8)
+  setSpeedEl.value = String(settingsInfo.downloadSpeedLimitKB || 0)
   renderSpeedHint()
 
   setWidthEl.value = String(settingsInfo.windowWidth)
