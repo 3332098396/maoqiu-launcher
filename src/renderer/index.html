@@ -249,6 +249,57 @@
               连接方式（直连还是走了中转）、延迟多少。
             </p>
           </section>
+
+          <!-- ——— 樱花内网穿透（M15）：和房间码并列的另一种联机方式 ——— -->
+          <section class="panel panel--full" id="frp-panel">
+            <h3 class="panel__title">樱花内网穿透（FRP）</h3>
+            <p class="panel__desc">
+              另一种联机方式，<b>适合愿意自己配隧道的玩家</b>：到樱花穿透注册账号、
+              建一条 TCP 隧道指向本机的游戏端口，然后把两样东西填在下面，毛球帮你把隧道跑起来。
+              好处是<b>不用管理员权限</b>；代价是好友得手动连到你（不是自动出现在多人列表里）。
+            </p>
+
+            <ol class="frp-steps">
+              <li>
+                到樱花穿透注册、实名，然后
+                <button class="linkbtn" type="button" id="frp-open-site">打开官网</button>
+                ——在建隧道那页建一条 <b>TCP 隧道</b>，本地端口填你的游戏端口
+              </li>
+              <li>把「访问密钥」和「隧道 ID」复制到下面（密钥在用户信息页，ID 在隧道列表里）</li>
+              <li>frpc 也要从它面板的「软件下载」里下一个，选 Windows + amd64，然后在这里指给毛球</li>
+            </ol>
+
+            <label class="field">
+              <span class="field__label">访问密钥</span>
+              <input class="input" id="frp-key" type="password" autocomplete="off" spellcheck="false" />
+              <span class="field__hint">只存在你自己电脑上的配置文件里，不会发到别处</span>
+            </label>
+
+            <label class="field">
+              <span class="field__label">隧道 ID</span>
+              <input class="input" id="frp-tunnel" type="text" autocomplete="off" spellcheck="false" />
+              <span class="field__hint">一串数字，比如 12345</span>
+            </label>
+
+            <label class="field">
+              <span class="field__label">本地端口</span>
+              <input class="input" id="frp-port" type="number" min="1" max="65535" />
+              <span class="field__hint">游戏里点「对局域网开放」时用的端口（毛球抓到后会自己填）</span>
+            </label>
+
+            <div class="join-row">
+              <input class="input" id="frp-exe" type="text" readonly placeholder="还没选 frpc.exe" />
+              <button class="btn btn--ghost btn--sm" type="button" id="frp-pick">选 frpc 文件…</button>
+            </div>
+
+            <div class="modal__actions modal__actions--end">
+              <button class="btn btn--primary" type="button" id="frp-start">开始穿透</button>
+              <button class="btn btn--ghost" type="button" id="frp-stop" disabled>停止</button>
+            </div>
+
+            <p class="delbox" id="frp-message"></p>
+            <pre class="frp-log" id="frp-log"></pre>
+          </section>
         </div>
       </section>
 

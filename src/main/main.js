@@ -31,6 +31,7 @@ const modrinth = require('./modrinth')
 const content = require('./content')
 const pack = require('./pack')
 const online = require('./online')
+const frp = require('./frp')
 const loaders = require('./loaders')
 const forge = require('./forge')
 
@@ -732,6 +733,46 @@ function registerIpcHandlers() {
     } finally {
       packRunning = false
     }
+  })
+
+  // ——— 樱花内网穿透（M15）———
+
+  /** 让用户挑 frpc.exe（要他自己去樱花面板下，我们不代下） */
+  ipcMain.handle('frp:pick-exe', async () => {
+    const result = await dialog.showOpenDialog({
+      title: '找到你下载的 frpc.exe',
+      properties: ['openFile'],
+      filters: [{ name: 'frpc', extensions: ['exe'] }]
+    })
+    if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true }
+
+    const saved = frp.saveFrpConfig({ exePath: result.filePaths[0] })
+    return { ok: true, config: saved }
+  })
+
+  /** 起隧道 / 停隧道 / 看状态 */
+  ipcMain.handle('frp:start', (_event, options) => {
+    try {
+      return frp.start(options)
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  ipcMain.handle('frp:stop', () => frp.stop())
+
+  ipcMain.handle('frp:status', () => {
+    try {
+      return { ok: true, ...frp.status() }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 打开樱花穿透官网（用户要去那儿注册、建隧道、复制访问密钥） */
+  ipcMain.handle('frp:open-site', async () => {
+    await shell.openExternal('https://www.natfrp.com/')
+    return { ok: true }
   })
 
   /**

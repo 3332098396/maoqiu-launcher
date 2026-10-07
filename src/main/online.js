@@ -171,6 +171,10 @@ while ($true) {
   Start-Sleep -Seconds 2
   if (Test-Path -LiteralPath $Flag) { Note 'stop flag seen'; break }
   if (-not (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue)) { Note 'parent gone'; break }
+  # 【为什么要看 core 还在不在】万一 core 自己退了（崩了、被别的软件杀了），
+  # 这个脚本会一直傻等下去——变成一个永远不退的"管理员进程"（实测见过一次：
+  # 早上发现一个昨夜的 core 没人管）。core 没了就跟着退。
+  if (-not (Get-Process -Id $core.Id -ErrorAction SilentlyContinue)) { Note 'core already gone'; exit 0 }
 }
 
 Stop-Process -Id $core.Id -Force
@@ -292,7 +296,20 @@ async function startRoom(options) {
   paths.ensureDir(roomLogDir())
   fs.writeFileSync(argsFilePath(), args.join('\n'), 'utf8')
 
-  // 先把"该停了"的标记清掉——不然新房间刚起就被自己收掉
+  // ——— 先给"可能还在的旧包装脚本"一个收尾的机会 ———
+  //
+  // 【为什么要这么绕】毛球只有普通权限，杀不掉以管理员身份跑的 easytier-core；
+  // 唯一能收掉它的是那个包装脚本（它有管理员权限）。正常情况下包装脚本会
+  // 自己发现"毛球没了"然后收工，但**万一它先死了**（被强杀、被杀软干掉），
+  // core 就没人管了——实测真碰上一次，早上发现一个昨夜残留的 core 还在跑。
+  // 所以：起新房间之前先放个停止标记、等两秒，让可能存在的旧包装脚本看见它并收工，
+  // 再把标记清掉、起自己的。
+  try {
+    fs.writeFileSync(stopFlagPath(), 'stop', 'utf8')
+  } catch {
+    // 写不进去就算了
+  }
+  await sleep(2000)
   try {
     fs.rmSync(stopFlagPath(), { force: true })
   } catch {

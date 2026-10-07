@@ -71,7 +71,9 @@ const DEFAULTS = {
   online: {
     code: '',
     role: '',
-    version: ''
+    version: '',
+    /** 樱花内网穿透那套（M15）：访问密钥、隧道 ID、frpc 路径、本地端口 */
+    frp: { accessKey: '', tunnelId: '', exePath: '', localPort: 25565 }
   },
   /**
    * 每个版本的自定义信息（显示名、备注），按版本号存：
@@ -126,7 +128,12 @@ function readConfig() {
         known: Array.isArray(dirs.known) ? dirs.known.filter((d) => typeof d === 'string' && d) : [],
         lastPackDir: typeof dirs.lastPackDir === 'string' ? dirs.lastPackDir : ''
       },
-      online: { ...DEFAULTS.online, ...((raw.online) || {}) },
+      online: {
+        ...DEFAULTS.online,
+        ...((raw.online) || {}),
+        // frp 是里面的一层，得单独合一次（不然老配置读出来没有它）
+        frp: { ...DEFAULTS.online.frp, ...(((raw.online) || {}).frp || {}) }
+      },
       look: { ...DEFAULTS.look, ...((raw.look) || {}) }
     }
   } catch {

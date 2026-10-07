@@ -269,6 +269,19 @@ contextBridge.exposeInMainWorld('api', {
    */
   pickLookFile: (kind) => ipcRenderer.invoke('look:pick', kind),
 
+  // ——— 樱花内网穿透（M15）———
+
+  /** 挑 frpc.exe（用户自己去樱花面板下的那个） */
+  pickFrpc: () => ipcRenderer.invoke('frp:pick-exe'),
+
+  /** 起隧道 / 停隧道 / 看状态 */
+  frpStart: (options) => ipcRenderer.invoke('frp:start', options),
+  frpStop: () => ipcRenderer.invoke('frp:stop'),
+  frpStatus: () => ipcRenderer.invoke('frp:status'),
+
+  /** 打开樱花穿透官网 */
+  openFrpSite: () => ipcRenderer.invoke('frp:open-site'),
+
   /** 开始/停止盯着屏幕光标（M14.4 的 3D 小人用，出了窗口也要跟） */
   watchCursor: (on) => ipcRenderer.invoke('cursor:watch', on),
 

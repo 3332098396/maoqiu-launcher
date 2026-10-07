@@ -38,7 +38,10 @@ function showPage(name) {
   if (name === 'settings') loadSettingsPage()
 
   // 联机页：进来先看一眼"现在房间里是什么情况"（可能上次就没退出去）
-  if (name === 'online') refreshOnlinePage()
+  if (name === 'online') {
+    refreshOnlinePage()
+    loadFrpPanel()
+  }
 }
 
 for (const button of navButtons) {
@@ -937,6 +940,8 @@ window.api.onLaunchState((payload) => {
   } else if (payload.state === 'lan') {
     // 游戏里点了「对局域网开放」——拿到端口号，把它变成"发给好友的地址"
     lanPort = payload.port
+    // 樱花那块也顺手填上（大部分人的隧道就是指向这个端口）
+    if (frpPortEl && !frpRunning) frpPortEl.value = String(payload.port)
     appendLog([`[启动器] 你的世界已经对局域网开放（端口 ${payload.port}）`])
     if (onlineInfo.running) {
       // 在房间里：直接把"发给好友的地址"显示出来
@@ -3488,3 +3493,84 @@ document.getElementById('skin-reset').addEventListener('click', async () => {
 // 所以：**新加的代码一律加在这行之前**，别加在它后面。
 // ——————————————————————————————————————————————
 showPage('launch')
+
+// ═══════════════════════════════════════
+// 樱花内网穿透（M15）
+// ═══════════════════════════════════════
+
+const frpKeyEl = document.getElementById('frp-key')
+const frpTunnelEl = document.getElementById('frp-tunnel')
+const frpPortEl = document.getElementById('frp-port')
+const frpExeEl = document.getElementById('frp-exe')
+const frpMsgEl = document.getElementById('frp-message')
+const frpLogEl = document.getElementById('frp-log')
+const frpStartEl = document.getElementById('frp-start')
+const frpStopEl = document.getElementById('frp-stop')
+
+/** 有没有在跑（按钮状态要跟着变） */
+let frpRunning = false
+/** 定时刷状态的计时器 */
+let frpTimer = null
+
+/** 把主进程给的状态画到界面上 */
+function renderFrp(status) {
+  if (!status) return
+
+  const config = status.config || {}
+  if (document.activeElement !== frpKeyEl) frpKeyEl.value = config.accessKey || ''
+  if (document.activeElement !== frpTunnelEl) frpTunnelEl.value = config.tunnelId || ''
+  frpPortEl.value = String(config.localPort || 25565)
+  frpExeEl.value = config.exePath || ''
+
+  frpRunning = Boolean(status.running)
+  frpStartEl.disabled = frpRunning
+  frpStopEl.disabled = !frpRunning
+
+  frpMsgEl.textContent = status.message || ''
+  frpLogEl.textContent = (status.log || []).join('\n')
+  frpLogEl.scrollTop = frpLogEl.scrollHeight
+}
+
+async function refreshFrp() {
+  try {
+    const status = await window.api.frpStatus()
+    if (status.ok) renderFrp(status)
+  } catch {
+    // 问不到就先不动
+  }
+}
+
+/** 进联机页时把樱花那块的设置读出来 */
+function loadFrpPanel() {
+  refreshFrp()
+  if (!frpTimer) frpTimer = setInterval(refreshFrp, 3000)
+}
+
+document.getElementById('frp-open-site').addEventListener('click', () => window.api.openFrpSite())
+
+document.getElementById('frp-pick').addEventListener('click', async () => {
+  const picked = await window.api.pickFrpc()
+  if (!picked.ok) return
+  renderFrp({ config: picked.config, running: frpRunning, message: '记住 frpc 了。' })
+})
+
+frpStartEl.addEventListener('click', async () => {
+  frpMsgEl.textContent = '正在启动…'
+  try {
+    const result = await window.api.frpStart({
+      accessKey: frpKeyEl.value,
+      tunnelId: frpTunnelEl.value,
+      localPort: Number(frpPortEl.value),
+      exePath: frpExeEl.value
+    })
+    if (!result.ok) frpMsgEl.textContent = result.error
+  } catch (error) {
+    frpMsgEl.textContent = `起不来：${error.message}`
+  }
+  setTimeout(refreshFrp, 800)
+})
+
+frpStopEl.addEventListener('click', async () => {
+  await window.api.frpStop()
+  setTimeout(refreshFrp, 500)
+})
