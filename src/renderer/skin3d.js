@@ -294,19 +294,23 @@ function mount(container) {
   resize()
   window.addEventListener('resize', resize)
 
-  // 鼠标在卡片上一动，小人就跟着转（不用按着拖）
+  // 鼠标一动，小人就跟着转（不用按着拖）
   //
-  // 【怎么算的】把鼠标在卡片里的横向位置（0~1）映射成角度：
-  // 最左边转到 -50°，最右边 +50°，中间朝前。转头用"追"的（见 animate 里的 lerp），
-  // 不然鼠标一动小人就"啪"地跳过去，很生硬。
+  // 【为什么监听整个窗口，而不是只监听卡片】用户要的是"鼠标出了卡片也继续跟着"——
+  // 只挂在卡片上的话，鼠标一出去就不转了，手感很别扭。
+  // 现在整个窗口都在听，卡片只是当"刻度尺"用：
+  //   鼠标在卡片正中 = 朝前；往右挪 = 往右转；挪到卡片外面 = 继续往右转（有上限）。
+  //
+  // 【为什么用"追"而不是直接设】直接设的话鼠标一动小人"啪"地跳过去，很生硬；
+  // 让它每一帧往目标角度靠一点（见 animate 里的 lerp），看着像真的在转。
   renderer.domElement.style.cursor = 'default'
-  renderer.domElement.addEventListener('pointerleave', () => {
-    targetSpin = 0
-  })
-  renderer.domElement.addEventListener('pointermove', (event) => {
+  window.addEventListener('pointermove', (event) => {
+    if (!renderer) return
     const rect = renderer.domElement.getBoundingClientRect()
-    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
-    targetSpin = (ratio - 0.5) * 1.8 // 左右各约 50 度
+    // 不夹在 0~1：允许超出卡片，所以鼠标走到窗口两边还能继续转
+    // （上限收到 ±0.3 个卡片宽：再往外也不多转，免得转成"侧面对着人"看不出是谁）
+    const ratio = Math.min(1.3, Math.max(-0.3, (event.clientX - rect.left) / rect.width))
+    targetSpin = (ratio - 0.5) * 1.6 // 两侧最多约 ±73 度（能看侧面，但不会转过去背对人）
   })
 
   animate()
