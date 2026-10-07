@@ -1469,9 +1469,17 @@ packInstallEl.addEventListener('click', async () => {
   packCancelEl.hidden = true
   packTargetRowEl.hidden = true
   packNameRowEl.hidden = true
+  // 装完了，"装到哪儿"那一行和它下面那句"要重下一份"的提醒也该收起来——
+  // 留着的话用户会以为还要再装一次（实测截图里就是这个问题）
+  packDirRowEl.hidden = true
+
+  // 装在别处的话，成功提示里要写明"装到哪儿了"——不写的话用户还得回列表里猜
+  const where = targetDir && !samePath(targetDir, launchInfo?.gameDir)
+    ? `装到了 ${targetDir}。`
+    : ''
 
   packProgressEl.textContent = result.versionId
-    ? `装好啦！版本列表里多了个「${result.versionId}」——回启动页选它就能玩。` +
+    ? `装好啦！${where}版本列表里多了个「${result.versionId}」——回启动页选它就能玩。` +
       `这次 ${packFileSummary(result)}` +
       (result.overrides ? `，另有 ${result.overrides} 个作者的配置文件` : '')
     : `装好啦！${result.written} 个文件已经解到 ${result.dest}`
