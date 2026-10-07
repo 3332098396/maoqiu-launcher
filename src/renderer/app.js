@@ -33,6 +33,9 @@ function showPage(name) {
 
   // 设置页同理：设置可能被别处改过（比如改完内存回到启动页看信息卡）
   if (name === 'settings') loadSettingsPage()
+
+  // 联机页：进来先看一眼"现在房间里是什么情况"（可能上次就没退出去）
+  if (name === 'online') refreshOnlinePage()
 }
 
 for (const button of navButtons) {
@@ -865,6 +868,15 @@ window.api.onLaunchState((payload) => {
     launching = false
     refreshLaunchUi()
     setNotice(payload.error, 'error')
+  } else if (payload.state === 'lan') {
+    // 游戏里点了「对局域网开放」——拿到端口号，把它变成"发给好友的地址"
+    lanPort = payload.port
+    appendLog([`[启动器] 你的世界已经对局域网开放（端口 ${payload.port}）`])
+    if (onlineInfo.running) {
+      // 在房间里：直接把"发给好友的地址"显示出来
+      renderOnline()
+      setNotice(`世界开好了！把地址 ${HOST_VIRTUAL_IP}:${payload.port} 发给好友。`, 'ok')
+    }
   }
 })
 
@@ -2393,6 +2405,248 @@ document.getElementById('log-folder').addEventListener('click', async () => {
   const result = await window.api.openLogFolder()
   if (!result.ok) logTitleEl.textContent = `打不开文件夹：${result.error}`
 })
+
+// ═══════════════════════════════════════
+// 联机（M12）
+// ═══════════════════════════════════════
+
+const onlineNoticeEl = document.getElementById('online-notice')
+const onlineStartEl = document.getElementById('online-start')
+const onlineRoomEl = document.getElementById('online-room')
+const onlineRoomTitleEl = document.getElementById('online-room-title')
+const onlineCodeEl = document.getElementById('online-code')
+const onlineMyIpEl = document.getElementById('online-myip')
+const onlineTipEl = document.getElementById('online-tip')
+const onlinePeersEl = document.getElementById('online-peers')
+const onlinePeersEmptyEl = document.getElementById('online-peers-empty')
+const onlineStatusTextEl = document.getElementById('online-status-text')
+const onlineCodeInputEl = document.getElementById('online-code-input')
+const onlineJoinHintEl = document.getElementById('online-join-hint')
+const onlineCreateEl = document.getElementById('online-create')
+const onlineJoinEl = document.getElementById('online-join')
+const onlineCopyEl = document.getElementById('online-copy')
+const onlineLeaveEl = document.getElementById('online-leave')
+
+/** 房主的虚拟地址是固定的（联机模块里定死的），好友永远连这个 */
+const HOST_VIRTUAL_IP = '10.126.126.1'
+
+/** 联机现在的状态（主进程给的原文） */
+let onlineInfo = { running: false, peers: [], code: '', myIp: '', role: '' }
+/** 游戏里"对局域网开放"用的端口（从游戏日志里抓的，没开就是 0） */
+let lanPort = 0
+/** 正在建房间 / 进房间（这时候按钮要禁用，免得点两遍） */
+let onlineBusy = false
+/** 在房间里的时候，定时去问一下状态（谁进来了、延迟多少） */
+let onlineTimer = null
+
+function setOnlineNotice(text, kind = 'info') {
+  onlineNoticeEl.textContent = text
+  onlineNoticeEl.classList.toggle('notice--ok', kind === 'ok')
+  onlineNoticeEl.classList.toggle('notice--error', kind === 'error')
+}
+
+/** 进联机页时调一次：把现在的状态读回来画上去 */
+async function refreshOnlinePage() {
+  let status
+  try {
+    status = await window.api.onlineStatus()
+  } catch (error) {
+    setOnlineNotice(`联机状态读不出来：${error.message}`, 'error')
+    return
+  }
+
+  if (!status.ok) {
+    setOnlineNotice(status.error, 'error')
+    return
+  }
+
+  onlineInfo = status
+  renderOnline()
+}
+
+/**
+ * 把状态画到界面上。两种样子：
+ *   · 还没进房间 → 显示"创建房间 / 加入房间"两块
+ *   · 已经在房间里 → 显示房间码、房间里有谁、离开按钮
+ */
+function renderOnline() {
+  const inRoom = onlineInfo.running
+  onlineStartEl.hidden = inRoom
+  onlineRoomEl.hidden = !inRoom
+
+  // 定时问状态的开关：在房间里才需要
+  if (inRoom && !onlineTimer) {
+    onlineTimer = setInterval(refreshOnlineSilently, 3000)
+  } else if (!inRoom && onlineTimer) {
+    clearInterval(onlineTimer)
+    onlineTimer = null
+  }
+
+  if (!inRoom) {
+    onlineStatusTextEl.textContent =
+      '还没连接。创建或加入房间后，这里会显示：你是房主还是加入的人、连接方式（直连还是走了中转）、延迟多少。'
+    return
+  }
+
+  const isHost = onlineInfo.role === 'host'
+  onlineRoomTitleEl.textContent = isHost ? '你是房主' : '你在好友的房间里'
+  onlineCodeEl.textContent = onlineInfo.code || '—'
+  onlineMyIpEl.textContent = onlineInfo.myIp || (isHost ? '10.126.126.1' : '正在分配…')
+
+  // 房主和访客要做的事不一样，提示也分开写。
+  // 房主那边还分两种情况：世界还没对局域网开放 / 已经开了（抓到端口了）
+  if (isHost) {
+    onlineTipEl.textContent = lanPort
+      ? `世界已经开放了。把这个地址发给好友，让他在游戏里用「直接连接」填进去：` +
+        `${HOST_VIRTUAL_IP}:${lanPort}（他的多人游戏列表里多半也会自动出现）`
+      : '让好友在毛球里「加入房间」，把这个房间码填进去。然后你进游戏开一个世界，' +
+        '按 Esc 点「对局域网开放」——开了之后这里会显示要发给好友的地址。'
+  } else {
+    onlineTipEl.textContent =
+      '已经进房间了。等房主开好世界，去游戏里点「多人游戏」——列表里应该能看到；' +
+      '看不到就让房主把地址发你，用「直接连接」填进去。'
+  }
+
+  // 房间里的人
+  const peers = onlineInfo.peers || []
+  onlinePeersEl.textContent = ''
+  onlinePeersEmptyEl.hidden = peers.length > 0
+
+  for (const one of peers) {
+    const li = document.createElement('li')
+    li.className = 'peer'
+
+    const name = document.createElement('span')
+    name.className = 'peer__name'
+    name.textContent = `${one.name}（${one.ip}）`
+    li.appendChild(name)
+
+    const tag = document.createElement('span')
+    tag.className = `peer__tag peer__tag--${one.route === 'relay' ? 'relay' : 'direct'}`
+    tag.textContent =
+      (one.route === 'relay' ? '中转' : '直连') + (one.latencyMs !== null ? ` · ${one.latencyMs}ms` : '')
+    li.appendChild(tag)
+
+    onlinePeersEl.appendChild(li)
+  }
+
+  onlineStatusTextEl.textContent = isHost
+    ? `房间开着，里面有 ${peers.length} 位好友。`
+    : `已连上房主的房间。`
+}
+
+/** 定时刷新（不弹错误、不闪界面，安安静静地更新） */
+async function refreshOnlineSilently() {
+  if (onlineBusy) return
+  try {
+    const status = await window.api.onlineStatus()
+    if (status.ok) {
+      onlineInfo = status
+      renderOnline()
+    }
+  } catch {
+    // 问不到就先不动，下一轮再说
+  }
+}
+
+/** 建房间或者进房间（两个按钮走同一条路，只有 role 不一样） */
+async function startOnline(role) {
+  if (onlineBusy) return
+
+  if (role === 'guest') {
+    const typed = onlineCodeInputEl.value
+    if (!typed.trim()) {
+      onlineJoinHintEl.textContent = '先把房间码填上'
+      onlineJoinHintEl.className = 'delbox delbox--warn'
+      return
+    }
+  }
+
+  onlineBusy = true
+  onlineCreateEl.disabled = true
+  onlineJoinEl.disabled = true
+  onlineJoinHintEl.textContent = ''
+  onlineJoinHintEl.className = 'delbox'
+
+  try {
+    setOnlineNotice(
+      role === 'host'
+        ? '正在建房间…（第一次会下载联机组件；中途可能弹一次系统权限确认，点是就行）'
+        : '正在进房间…（中途可能弹一次系统权限确认，点是就行）'
+    )
+
+    const result = await window.api.onlineStart({
+      role,
+      code: role === 'guest' ? onlineCodeInputEl.value : ''
+    })
+
+    if (!result.ok) {
+      setOnlineNotice(result.error, 'error')
+      if (role === 'guest') {
+        onlineJoinHintEl.textContent = result.error
+        onlineJoinHintEl.className = 'delbox delbox--warn'
+      }
+      return
+    }
+
+    onlineInfo = {
+      ok: true,
+      running: true,
+      code: result.code,
+      role: result.role,
+      myIp: result.ip || '',
+      peers: []
+    }
+    onlineCodeInputEl.value = ''
+    setOnlineNotice(
+      role === 'host'
+        ? '房间建好了！把房间码发给好友。'
+        : '进房间了！等房主开好世界，去游戏里点「多人游戏」。',
+      'ok'
+    )
+    renderOnline()
+  } catch (error) {
+    setOnlineNotice(`出错了：${error.message}`, 'error')
+  } finally {
+    onlineBusy = false
+    onlineCreateEl.disabled = false
+    onlineJoinEl.disabled = false
+  }
+}
+
+onlineCreateEl.addEventListener('click', () => startOnline('host'))
+onlineJoinEl.addEventListener('click', () => startOnline('guest'))
+onlineCodeInputEl.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') startOnline('guest')
+})
+
+onlineCopyEl.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(onlineInfo.code || '')
+    onlineCopyEl.textContent = '复制好了'
+    setTimeout(() => (onlineCopyEl.textContent = '复制房间码'), 1500)
+  } catch {
+    onlineCopyEl.textContent = '复制不了，手动抄一下吧'
+    setTimeout(() => (onlineCopyEl.textContent = '复制房间码'), 1500)
+  }
+})
+
+onlineLeaveEl.addEventListener('click', async () => {
+  onlineLeaveEl.disabled = true
+  try {
+    await window.api.onlineLeave()
+    onlineInfo = { ok: true, running: false, peers: [], code: '', myIp: '', role: '' }
+    setOnlineNotice('已离开房间，虚拟网卡也收掉了。')
+    renderOnline()
+  } catch (error) {
+    setOnlineNotice(`离开房间时出错：${error.message}`, 'error')
+  } finally {
+    onlineLeaveEl.disabled = false
+  }
+})
+
+// 主进程推过来的阶段提示（"正在下载组件…""正在创建虚拟网卡…"）
+window.api.onOnlineStage((text) => setOnlineNotice(text))
 
 // ═══════════════════════════════════════
 // 版本号

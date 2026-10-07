@@ -28,6 +28,7 @@ const backup = require('./backup')
 const modrinth = require('./modrinth')
 const content = require('./content')
 const pack = require('./pack')
+const online = require('./online')
 const loaders = require('./loaders')
 const forge = require('./forge')
 
@@ -619,6 +620,60 @@ function registerIpcHandlers() {
       return { ok: false, error: String(error?.message ?? error) }
     } finally {
       packRunning = false
+    }
+  })
+
+  // ——— 联机（M12）———
+
+  /** 现在联机是什么情况（还没进房间就返回 running:false） */
+  ipcMain.handle('online:status', () => {
+    try {
+      const config = settings.readConfig().online
+      return {
+        ok: true,
+        ...online.status(),
+        code: config.code || '',
+        role: config.role || ''
+      }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error), running: false, peers: [] }
+    }
+  })
+
+  /**
+   * 建房间 / 进房间。这一步会弹一次系统权限确认（要建虚拟网卡），
+   * 进度通过 online:stage 推给界面。
+   */
+  ipcMain.handle('online:start', async (event, options) => {
+    const send = (text) => {
+      if (!event.sender.isDestroyed()) event.sender.send('online:stage', text)
+    }
+
+    const role = options && options.role === 'guest' ? 'guest' : 'host'
+    let code = String((options && options.code) || '')
+
+    if (role === 'host') {
+      code = online.newRoomCode()
+    } else {
+      const checked = online.normalizeCode(code)
+      if (!checked.ok) return { ok: false, error: checked.error }
+      code = checked.code
+    }
+
+    try {
+      const result = await online.startRoom({ role, code, onStage: send })
+      return { ...result, role, code }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 离开房间（虚拟网卡也会一起收掉） */
+  ipcMain.handle('online:leave', () => {
+    try {
+      return online.leave()
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
     }
   })
 

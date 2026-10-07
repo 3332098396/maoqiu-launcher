@@ -46,6 +46,15 @@ const DEFAULTS = {
     lastPackDir: ''
   },
   /**
+   * 联机（M12）。记着上次的房间码和用的组件版本，下次打开界面能直接接上。
+   * code 为空 = 现在没在房间里。
+   */
+  online: {
+    code: '',
+    role: '',
+    version: ''
+  },
+  /**
    * 每个版本的自定义信息（显示名、备注），按版本号存：
    * { "26.3": { name: "我的生存", note: "装了 XX" } }
    * 只存用户真填过的，留空的版本不会出现在这里。
@@ -97,14 +106,16 @@ function readConfig() {
         // 老配置文件里根本没有 gameDirs 这一项，读出来就是空的
         known: Array.isArray(dirs.known) ? dirs.known.filter((d) => typeof d === 'string' && d) : [],
         lastPackDir: typeof dirs.lastPackDir === 'string' ? dirs.lastPackDir : ''
-      }
+      },
+      online: { ...DEFAULTS.online, ...((raw.online) || {}) }
     }
   } catch {
     return {
       ...DEFAULTS,
       launch: { ...DEFAULTS.launch },
       download: { ...DEFAULTS.download },
-      gameDirs: { known: [], lastPackDir: '' }
+      gameDirs: { known: [], lastPackDir: '' },
+      online: { ...DEFAULTS.online }
     }
   }
 }
@@ -263,7 +274,8 @@ function writeConfig(patch) {
     ...config,
     ...patch,
     launch: { ...config.launch, ...(patch.launch || {}) },
-    gameDirs: { ...config.gameDirs, ...(patch.gameDirs || {}) }
+    gameDirs: { ...config.gameDirs, ...(patch.gameDirs || {}) },
+    online: { ...config.online, ...(patch.online || {}) }
   }
 
   paths.ensureDir(paths.configDir())

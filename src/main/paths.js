@@ -44,6 +44,22 @@ function backupsDir() {
   return path.join(configDir(), 'backups')
 }
 
+/**
+ * 联机组件（EasyTier）放在这儿：%APPDATA%\毛球\easytier\
+ *
+ * 【为什么放启动器自己的目录，不放进游戏目录】它跟游戏装在哪没关系，
+ * 是"启动器级"的工具（和 Java 运行时不一样——那个是每个游戏目录各一份也行）。
+ * 放这儿的好处：卸载重装游戏目录不会把它弄丢；换电脑时备份也只会带一份。
+ */
+function easytierRoot() {
+  return path.join(configDir(), 'easytier')
+}
+
+/** 某一个版本的 EasyTier 解在这儿 */
+function easytierDir(version) {
+  return path.join(easytierRoot(), version)
+}
+
 // ——————————————————————————————————————————————
 // 游戏目录
 // ——————————————————————————————————————————————
@@ -283,6 +299,8 @@ module.exports = {
   settingsFile,
   logsDir,
   backupsDir,
+  easytierRoot,
+  easytierDir,
   defaultGameDir,
   sameDir,
   listAllInstalledVersions,

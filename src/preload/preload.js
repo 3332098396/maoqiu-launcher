@@ -260,6 +260,28 @@ contextBridge.exposeInMainWorld('api', {
    */
   installPack: (options) => ipcRenderer.invoke('pack:install', options),
 
+  // ——— 联机（M12）———
+
+  /**
+   * 现在联机是什么情况。
+   * @returns {Promise<{ok: boolean, running: boolean, code?: string, peers: Array, myIp?: string, error?: string}>}
+   */
+  onlineStatus: () => ipcRenderer.invoke('online:status'),
+
+  /**
+   * 建房间（role: 'host'）或者进别人的房间（role: 'guest' + code）。
+   * ⚠️ 会弹一次系统权限确认（要建虚拟网卡），用户同意才能继续。
+   */
+  onlineStart: (options) => ipcRenderer.invoke('online:start', options),
+
+  /** 离开房间（虚拟网卡会一起收掉） */
+  onlineLeave: () => ipcRenderer.invoke('online:leave'),
+
+  /** 联机的阶段提示（"正在下载组件…""正在创建虚拟网卡…"） */
+  onOnlineStage: (callback) => {
+    ipcRenderer.on('online:stage', (_event, text) => callback(text))
+  },
+
   /** 整合包的进度与阶段提示 */
   onPackStage: (callback) => {
     ipcRenderer.on('pack:stage', (_event, text) => callback(text))

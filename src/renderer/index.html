@@ -133,38 +133,73 @@
         </aside>
 
         <div class="content">
-          <div class="notice">
-            <b>这是布局预览。</b>联机功能排在比较后面——现在软件还不能下载游戏，
-            联机了也没得玩。等能玩了再接上。
+          <div class="notice" id="online-notice">
+            两个人不在一个地方也能一起玩：一个人「创建房间」拿到房间码，
+            另一个人输码进来，之后就<b>像坐在同一个 WiFi 下</b>一样联机。
           </div>
 
-          <div class="online-grid">
+          <!-- 还没进房间时：创建 / 加入 -->
+          <div class="online-grid" id="online-start">
             <section class="panel">
               <h3 class="panel__title">创建房间</h3>
               <p class="panel__desc">
-                建一个房间，会生成一串房间码。把它发给好友，他们输进来就能和你联机，
-                就像在同一个局域网里一样。
+                建一个房间，会生成一串房间码。把它发给好友，他们输进来就能和你联机。
               </p>
-              <button class="btn btn--primary btn--block" type="button" disabled>
+              <button class="btn btn--primary btn--block" type="button" id="online-create">
                 创建房间
               </button>
             </section>
 
             <section class="panel">
               <h3 class="panel__title">加入好友的房间</h3>
-              <p class="panel__desc">把好友给你的房间码填在这里。</p>
+              <p class="panel__desc">把好友给你的房间码填在这里（8 位，字母数字）。</p>
               <div class="join-row">
-                <input class="input" type="text" placeholder="房间码" disabled />
-                <button class="btn btn--ghost" type="button" disabled>加入</button>
+                <input
+                  class="input input--edit"
+                  type="text"
+                  id="online-code-input"
+                  placeholder="房间码"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <button class="btn btn--ghost" type="button" id="online-join">加入</button>
               </div>
+              <p class="delbox" id="online-join-hint"></p>
             </section>
           </div>
 
-          <section class="panel panel--full">
+          <!-- 已经在房间里：房间码 + 状态 -->
+          <section class="panel panel--full" id="online-room" hidden>
+            <h3 class="panel__title" id="online-room-title">房间里</h3>
+
+            <div class="fact-row">
+              <div class="fact">
+                <span class="fact__k">房间码</span>
+                <span class="fact__v" id="online-code">—</span>
+              </div>
+              <div class="fact">
+                <span class="fact__k">你的地址</span>
+                <span class="fact__v fact__v--path" id="online-myip">—</span>
+              </div>
+            </div>
+
+            <p class="delbox" id="online-tip"></p>
+
+            <h3 class="panel__title">房间里的人</h3>
+            <ul class="peer-list" id="online-peers"></ul>
+            <p class="delbox" id="online-peers-empty">还没有别人进来。把房间码发给好友吧。</p>
+
+            <div class="modal__actions modal__actions--end">
+              <button class="btn btn--ghost" type="button" id="online-copy">复制房间码</button>
+              <button class="btn btn--danger" type="button" id="online-leave">离开房间</button>
+            </div>
+          </section>
+
+          <section class="panel panel--full" id="online-status-panel">
             <h3 class="panel__title">连接状态</h3>
-            <p class="panel__desc">
+            <p class="panel__desc" id="online-status-text">
               还没连接。创建或加入房间后，这里会显示：你是房主还是加入的人、
-              连接方式（直连还是走了中转）、延迟多少、房间里都有谁。
+              连接方式（直连还是走了中转）、延迟多少。
             </p>
           </section>
         </div>

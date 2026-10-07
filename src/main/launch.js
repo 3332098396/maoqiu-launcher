@@ -365,7 +365,7 @@ function decodeLine(buffer) {
  *   · 攒一批发给界面（一条一条发的话消息太多了）
  *   · 同时把完整日志写进启动器目录的 logs\ 里，留作排查
  */
-function createLogCollector({ onLog, logFile }) {
+function createLogCollector({ onLog, logFile, onLine }) {
   const lines = []
   let pending = []
   let flushTimer = null
@@ -391,6 +391,15 @@ function createLogCollector({ onLog, logFile }) {
 
     pending.push(text)
     if (out) out.write(`${text}\n`)
+
+    // 每一行都过一下这个小钩子——联机那边靠它抓"对局域网开放"的端口号
+    if (onLine) {
+      try {
+        onLine(text)
+      } catch {
+        // 钩子里出问题不该影响游戏
+      }
+    }
 
     if (pending.length >= 50) flush()
     else if (!flushTimer) {
@@ -698,7 +707,24 @@ async function launch(versionId, options = {}) {
   const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)
   const logFile = path.join(paths.logsDir(), `launch-${stamp}.log`)
 
-  const log = createLogCollector({ onLog, logFile })
+  // 游戏里点「对局域网开放」时会往日志里打一行，带着端口号。
+  // 抓到这个端口号，联机那边就能算出"把这个地址发给好友：10.126.126.1:54321"——
+  // 省得用户自己去日志里翻。
+  //
+  // 【这两句是怎么确认的】没靠记忆：直接把游戏的 jar 解开，
+  // 在里面的类文件里搜文本，找到了 `Started serving on {}`（1.20.1 用的就是它）。
+  // 另一句是别的版本用的，一起认着，反正匹配不上也没有副作用。
+  const lanPattern = /(?:Started serving on|Local game hosted on port)\s*[:：]?\s*(\d+)/i
+
+  const log = createLogCollector({
+    onLog,
+    logFile,
+    onLine: (text) => {
+      const match = text.match(lanPattern)
+      if (!match) return
+      state({ state: 'lan', port: Number(match[1]), versionId })
+    }
+  })
   log.line(`[启动器] 版本 ${versionId} · Java ${probe.version}（${javaExe.source}）· 内存 ${memoryMB} MB`)
   log.line(`[启动器] 游戏窗口：${windowSize.width} × ${windowSize.height}`)
   log.line(`[启动器] 游戏目录：${runDir}${effective.isolation ? '（开着版本隔离）' : ''}`)
