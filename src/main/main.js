@@ -601,6 +601,7 @@ function registerIpcHandlers() {
       }
       if (typeof look.background === 'string') lookPatch.background = look.background
       if (typeof look.bgm === 'string') lookPatch.bgm = look.bgm
+      if (typeof look.skin === 'string') lookPatch.skin = look.skin
       if (look.bgmVolume !== undefined) {
         lookPatch.bgmVolume = Math.min(100, Math.max(0, Math.round(Number(look.bgmVolume) || 0)))
       }
@@ -728,6 +729,18 @@ function registerIpcHandlers() {
     } finally {
       packRunning = false
     }
+  })
+
+  /** 挑一个皮肤文件（M14.4：3D 预览用）。只返回路径，不复制文件 */
+  ipcMain.handle('skin:pick', async () => {
+    const result = await dialog.showOpenDialog({
+      title: '挑一张 Minecraft 皮肤（64×64 的 PNG）',
+      properties: ['openFile'],
+      filters: [{ name: '皮肤', extensions: ['png'] }]
+    })
+
+    if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true }
+    return { ok: true, path: result.filePaths[0] }
   })
 
   /** 帮助页那三个"一键打开"：游戏目录 / 配置目录（日志那个早就有了） */

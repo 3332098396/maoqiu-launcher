@@ -29,7 +29,10 @@ function showPage(name) {
   }
 
   // 启动页每次进来都重新读一遍：用户可能刚在下载页装完新版本
-  if (name === 'launch') loadLaunchPage()
+  if (name === 'launch') {
+    loadLaunchPage()
+    ensureSkinCard() // 3D 皮肤预览（M14.4）：第一次进来时挂上
+  }
 
   // 设置页同理：设置可能被别处改过（比如改完内存回到启动页看信息卡）
   if (name === 'settings') loadSettingsPage()
@@ -2998,9 +3001,6 @@ window.api
   })
   .catch(() => {})
 
-// 所有定义都就位了，把启动页显示出来。
-// （放在最后调用：启动页要用到上面这些变量，页面还没解析完就调会踩空）
-showPage('launch')
 
 // ═══════════════════════════════════════
 // 个性化（M13）：藏页面 / 背景图 / 背景音乐 / 顶栏样式
@@ -3399,3 +3399,92 @@ insFilterEl.addEventListener('click', (event) => {
   }
   renderInstalled()
 })
+
+// ═══════════════════════════════════════
+// 3D 皮肤预览（M14.4）
+// 真正的渲染在 skin3d.js 里（它要 import Three.js，得是模块脚本）；
+// 这里只管"什么时候挂上去、换皮肤、记住上次选的"。
+// ═══════════════════════════════════════
+
+const skinStageEl = document.getElementById('skin-stage')
+const skinHintEl = document.getElementById('skin-hint')
+
+/** 3D 那块挂上了没有（模块脚本是异步加载的，可能要等一会儿） */
+let skinMounted = false
+
+/** 等 skin3d.js 加载好（它挂 window.skinViewer 出来） */
+function whenSkinReady(callback) {
+  if (window.skinViewer) return callback()
+  let tries = 0
+  const timer = setInterval(() => {
+    tries++
+    if (window.skinViewer) {
+      clearInterval(timer)
+      callback()
+    } else if (tries > 40) {
+      clearInterval(timer)
+      skinHintEl.textContent = '3D 预览起不来（可能是显卡驱动的问题），不影响玩游戏。'
+    }
+  }, 100)
+}
+
+/** 按存的路径加载皮肤文件 */
+function loadSkinFrom(path) {
+  return new Promise((resolve) => {
+    const image = new Image()
+    image.onload = () => {
+      window.skinViewer.setSkin(image)
+      resolve(true)
+    }
+    image.onerror = () => resolve(false)
+    image.src = toFileUrl(path)
+  })
+}
+
+/** 启动页露出来的时候把 3D 挂上（只挂一次） */
+function ensureSkinCard() {
+  if (skinMounted) return
+  whenSkinReady(async () => {
+    window.skinViewer.mount(skinStageEl)
+    skinMounted = true
+
+    const saved = settingsInfo?.look?.skin
+    if (saved) {
+      const okLoaded = await loadSkinFrom(saved)
+      if (!okLoaded) {
+        window.skinViewer.useDefaultSkin()
+        skinHintEl.textContent = '上次选的皮肤文件找不到了，先用默认的。'
+      }
+    }
+  })
+}
+
+document.getElementById('skin-pick').addEventListener('click', async () => {
+  const picked = await window.api.pickSkinFile()
+  if (!picked.ok) return
+
+  const loaded = await loadSkinFrom(picked.path)
+  if (!loaded) {
+    skinHintEl.textContent = '这张图读不出来——皮肤得是 64×64 的 PNG。'
+    return
+  }
+
+  skinHintEl.textContent = '换好了。用鼠标拖着可以转。'
+  await saveLook({ skin: picked.path })
+})
+
+document.getElementById('skin-reset').addEventListener('click', async () => {
+  window.skinViewer.useDefaultSkin()
+  skinHintEl.textContent = '换回默认皮肤了。'
+  await saveLook({ skin: '' })
+})
+
+// ——————————————————————————————————————————————
+// 最后一步：把启动页显示出来
+//
+// 【为什么必须放在**文件真正的最后**】启动页要用到上面几乎所有变量。
+// 这里踩过两次坑：一开始写在中间，后面又追加了新代码段（联机、个性化、3D 皮肤），
+// 结果它一跑就碰到还没初始化的变量（Cannot access 'xxx' before initialization）。
+// 所以：**新加的代码一律加在这行之前**，别加在它后面。
+// ——————————————————————————————————————————————
+showPage('launch')

@@ -146,6 +146,21 @@
             </div>
 
             <div class="launch-col">
+              <!-- 3D 皮肤预览（M14.4）：能拖着转，带走路动画 -->
+              <section class="panel skin-card">
+                <h3 class="panel__title">皮肤预览</h3>
+                <div class="skin-stage" id="skin-stage"></div>
+                <p class="delbox" id="skin-hint">用鼠标拖着可以转。</p>
+                <div class="modal__actions modal__actions--end">
+                  <button class="btn btn--ghost btn--sm" type="button" id="skin-pick">
+                    选个皮肤文件…
+                  </button>
+                  <button class="btn btn--ghost btn--sm" type="button" id="skin-reset">
+                    用默认的
+                  </button>
+                </div>
+              </section>
+
               <section class="panel" id="current-version-panel" hidden>
                 <h3 class="panel__title" id="cur-name">—</h3>
                 <p class="panel__desc" id="cur-note"></p>
@@ -1032,6 +1047,8 @@
       </div>
     </div>
 
+    <!-- 3D 皮肤预览（M14.4）：Three.js 是 ESM 模块，只有模块脚本能 import 它 -->
+    <script type="module" src="skin3d.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

@@ -269,6 +269,9 @@ contextBridge.exposeInMainWorld('api', {
    */
   pickLookFile: (kind) => ipcRenderer.invoke('look:pick', kind),
 
+  /** 挑一个皮肤文件（M14.4），只返回路径 */
+  pickSkinFile: () => ipcRenderer.invoke('skin:pick'),
+
   /** 帮助页的一键打开：'game' 游戏目录 / 'config' 配置目录 */
   openAppFolder: (which) => ipcRenderer.invoke('app:openFolder', which),
 

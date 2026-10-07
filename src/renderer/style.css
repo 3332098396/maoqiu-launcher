@@ -2154,3 +2154,19 @@ body.has-bg {
 .star--on {
   color: var(--warn);
 }
+
+/* ——— 3D 皮肤的舞台（M14.4）——— */
+.skin-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.skin-stage {
+  height: 240px;
+  margin: 4px 0 8px;
+  border-radius: 12px;
+  /* 深一点的底，皮肤小人（浅色）在上面才看得清 */
+  background: linear-gradient(180deg, var(--surface-soft), var(--surface-accent));
+  border: 1px solid var(--card-border);
+  overflow: hidden;
+}

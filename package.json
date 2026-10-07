@@ -45,5 +45,8 @@
       "createStartMenuShortcut": true,
       "runAfterFinish": true
     }
+  },
+  "dependencies": {
+    "three": "^0.186.1"
   }
 }
