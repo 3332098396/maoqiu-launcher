@@ -960,17 +960,20 @@ button.acc__tab:hover {
    内容比一般提示长，用一栏一栏的排法，别挤成一大坨 */
 .notice--skin {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 12px;
-  margin-bottom: 0;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 0;
+  /* 【高度是量过的】这一条以前有 127px 高，把下面三栏顶到要滚动（用户说"界面比例不对了"）。
+     收紧成两行、内边距也小一点，现在约 60px——三栏正好站得下 */
+  padding: 8px 14px;
   font-size: 12.5px;
-  line-height: 1.75;
+  line-height: 1.5;
   color: var(--text-dim);
 }
 
 .notice--skin > b {
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--accent-strong);
 }
 
@@ -2788,7 +2791,7 @@ button.acc__tab:hover {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .skin-head__actions {
