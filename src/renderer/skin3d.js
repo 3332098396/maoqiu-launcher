@@ -37,20 +37,58 @@ import * as THREE from './vendor/three.module.js'
  * 对称的皮肤看不出来，但戴手表、有纹身的皮肤一眼就露馅。
  * 所以下面 armR 的 pivot.x 是 -6、armL 是 +6，腿同理。
  */
-const PARTS = [
-  // 头：8×8×8，在 (0,0)
-  { name: 'head', w: 8, h: 8, d: 8, at: [0, 0], overlayAt: [32, 0], pivot: [0, 24, 0], boxTop: 8 },
-  // 身体：8×12×4，在 (16,16)
-  { name: 'body', w: 8, h: 12, d: 4, at: [16, 16], overlayAt: [16, 32], pivot: [0, 24, 0], boxTop: 0 },
-  // 右臂：4×12×4，在 (40,16) —— 在 -x 侧
-  { name: 'armR', w: 4, h: 12, d: 4, at: [40, 16], overlayAt: [40, 32], pivot: [-6, 22, 0], boxTop: 2 },
-  // 左臂：4×12×4，在 (32,48) —— 在 +x 侧
-  { name: 'armL', w: 4, h: 12, d: 4, at: [32, 48], overlayAt: [48, 48], pivot: [6, 22, 0], boxTop: 2 },
-  // 右腿：4×12×4，在 (0,16) —— 在 -x 侧
-  { name: 'legR', w: 4, h: 12, d: 4, at: [0, 16], overlayAt: [0, 32], pivot: [-2, 12, 0], boxTop: 0 },
-  // 左腿：4×12×4，在 (16,48) —— 在 +x 侧
-  { name: 'legL', w: 4, h: 12, d: 4, at: [16, 48], overlayAt: [16, 48], pivot: [2, 12, 0], boxTop: 0 }
-]
+/**
+ * 身体各部位摆在哪。
+ *
+ * 【粗细两种胳膊】MC 有"经典"（胳膊 4 宽）和"纤细"（slim，胳膊 3 宽，Alex 就是这种）
+ * 两种体型。哪张皮肤是纤细的，**不是从图上直接看出来的**，原版是按账号档案里的
+ * `model: slim` 定的；我们按行规用一条经验规则判断：皮肤上右臂外侧那一列
+ * （54, 20 那个像素）是透明的 → 纤细。skinview3d 这些现成的库也是这么认的。
+ *
+ * @param {boolean} slim 是不是纤细体型（Alex 那种）
+ */
+function makeParts(slim) {
+  const armW = slim ? 3 : 4
+  // 胳膊紧贴着身子站：经典的身子半边宽 4，胳膊 4 宽 → 中心在 ±6；
+  // 纤细的胳膊 3 宽 → 中心在 ±5.5
+  const armX = slim ? 5.5 : 6
+
+  return [
+    // 头：8×8×8，在 (0,0)
+    { name: 'head', w: 8, h: 8, d: 8, at: [0, 0], overlayAt: [32, 0], pivot: [0, 24, 0], boxTop: 8 },
+    // 身体：8×12×4，在 (16,16)
+    { name: 'body', w: 8, h: 12, d: 4, at: [16, 16], overlayAt: [16, 32], pivot: [0, 24, 0], boxTop: 0 },
+    // 右臂：在 (40,16) —— 在 -x 侧
+    {
+      name: 'armR',
+      w: armW,
+      h: 12,
+      d: 4,
+      at: [40, 16],
+      overlayAt: [40, 32],
+      pivot: [-armX, 22, 0],
+      boxTop: 2
+    },
+    // 左臂：在 (32,48) —— 在 +x 侧
+    {
+      name: 'armL',
+      w: armW,
+      h: 12,
+      d: 4,
+      at: [32, 48],
+      overlayAt: [48, 48],
+      pivot: [armX, 22, 0],
+      boxTop: 2
+    },
+    // 右腿：4×12×4，在 (0,16) —— 在 -x 侧
+    { name: 'legR', w: 4, h: 12, d: 4, at: [0, 16], overlayAt: [0, 32], pivot: [-2, 12, 0], boxTop: 0 },
+    // 左腿：4×12×4，在 (16,48) —— 在 +x 侧
+    { name: 'legL', w: 4, h: 12, d: 4, at: [16, 48], overlayAt: [16, 48], pivot: [2, 12, 0], boxTop: 0 }
+  ]
+}
+
+/** 当前这套还是纤细体型（换皮肤时可能变） */
+let PARTS = makeParts(false)
 
 /**
  * 一个部位六个面在皮肤图上的位置（相对这块的左上角）。
@@ -84,75 +122,39 @@ function faceRects(w, h, d) {
 }
 
 /**
- * 毛球自带的几套配色（M21）。
+ * 最后兜底用的一张"纯色小人"。
  *
- * 【为什么自备几套】没登录的时候，每次打开软件随机穿一套，软件看着是"活"的。
- * 这几套是**我们自己配的色**，不是从哪个皮肤站搬的——不联网、不欠谁、
- * 也不会有"人家改版就坏掉"的问题。
- * 【头发】head 的上/后/侧 三面刷头发色，前面留出脸——这是 MC 皮肤最基本的画法。
+ * 【什么时候用得上】官方 Steve 读不出来（游戏还没装）、皮肤库又一张都没有的时候。
+ * 平时**不会露脸**——正常情况身上穿的是官方皮肤或玩家自己挑的那张。
+ * 它就是保证"至少有个能看的人站在那儿"，不是给用户挑的皮肤。
  */
-const BUILTIN_STYLES = [
-  {
-    name: '毛球·小蓝',
-    skin: '#f0c8a0', hair: '#5a3a24', shirt: '#4a9bff', pants: '#2f4a6b', eye: '#2b3a4a'
-  },
-  {
-    name: '毛球·小红帽',
-    skin: '#f3d0ae', hair: '#c0342b', shirt: '#e0524a', pants: '#4a3b2f', eye: '#2b3a4a'
-  },
-  {
-    name: '毛球·林子里',
-    skin: '#e8c39a', hair: '#3f2d1e', shirt: '#3f9c5a', pants: '#2f4a3a', eye: '#20301f'
-  },
-  {
-    name: '毛球·紫夜',
-    skin: '#c98f66', hair: '#1f1a2e', shirt: '#8a5cf0', pants: '#2a2340', eye: '#f0f0f0'
-  },
-  {
-    name: '毛球·金发',
-    skin: '#f6d9b8', hair: '#e8c03a', shirt: '#f08a2a', pants: '#4a3524', eye: '#2b3a4a'
-  },
-  {
-    name: '毛球·石头人',
-    skin: '#c8c8c8', hair: '#3a3a3a', shirt: '#6b7280', pants: '#33383f', eye: '#111111'
-  }
-]
-
-/**
- * 画一张 64×64 的皮肤。
- * @param {number} [index] 用第几套配色（不给就用第 0 套，也就是原来那张"毛球小人"）
- */
-function makeBuiltinSkin(index = 0) {
-  const style = BUILTIN_STYLES[index % BUILTIN_STYLES.length]
+function makeFallbackSkin() {
   const canvas = document.createElement('canvas')
   canvas.width = 64
   canvas.height = 64
   const ctx = canvas.getContext('2d')
-
-  // 底色透明（没画到的地方=没东西）
   ctx.clearRect(0, 0, 64, 64)
+
+  const all = [0, 0, 64, 64] // 整张图铺一个底色，省得漏出透明的地方
+  ctx.fillStyle = '#6b7280'
+  ctx.fillRect(...all)
+  ctx.clearRect(0, 0, 64, 64) // 再清掉：只有下面画到的部位有内容
 
   const drawPart = (at, w, h, d, colors) => {
     const [bx, by] = at
     const rects = faceRects(w, h, d)
-    // 六个面各填一个颜色：上 前 侧 后 下 都有区别，方便看出映射对不对
-    const map = {
-      py: colors.top,
-      ny: colors.bottom,
-      pz: colors.front,
-      nz: colors.back,
-      px: colors.side,
-      nx: colors.side
-    }
+    const map = { py: colors.top, ny: colors.bottom, pz: colors.front, nz: colors.back, px: colors.side, nx: colors.side }
     for (const [key, rect] of Object.entries(rects)) {
       ctx.fillStyle = map[key]
       ctx.fillRect(bx + rect[0], by + rect[1], rect[2], rect[3])
     }
   }
 
-  const { skin, hair, shirt, pants, eye } = style
+  const skin = '#f0c8a0'
+  const hair = '#4a3524'
+  const shirt = '#6b7280'
+  const pants = '#3a3f4a'
 
-  // 头：顶上是头发，正面是脸。帽子那层（外套层）刷成头发色，就有个发型了
   drawPart([0, 0], 8, 8, 8, { top: hair, bottom: skin, front: skin, back: hair, side: skin })
   drawPart([16, 16], 8, 12, 4, { top: shirt, bottom: pants, front: shirt, back: shirt, side: shirt })
   drawPart([40, 16], 4, 12, 4, { top: shirt, bottom: skin, front: shirt, back: shirt, side: shirt })
@@ -160,26 +162,17 @@ function makeBuiltinSkin(index = 0) {
   drawPart([0, 16], 4, 12, 4, { top: pants, bottom: '#2a2a2a', front: pants, back: pants, side: pants })
   drawPart([16, 48], 4, 12, 4, { top: pants, bottom: '#2a2a2a', front: pants, back: pants, side: pants })
 
-  // 帽子层（head 的外套层在 (32,0)）：盖住头顶和两侧，看着像有头发
+  // 帽子层（盖住头顶那一圈，看着像有头发）
   ctx.fillStyle = hair
-  ctx.fillRect(40, 0, 8, 4) // 帽子层正面：只盖上面那几行 → 像刘海
-  ctx.fillRect(32, 0, 8, 8) // 帽子层顶面：整块
-  ctx.fillRect(32, 8, 4, 3) // 侧面（左）
-  ctx.fillRect(52, 8, 4, 3) // 侧面（右）
+  ctx.fillRect(40, 0, 8, 3)
+  ctx.fillRect(32, 0, 8, 8)
 
-  // 脸：两只眼睛 + 一张嘴（都在"前"那一面的坐标里）
-  ctx.fillStyle = eye
+  // 眼睛
+  ctx.fillStyle = '#2b3a4a'
   ctx.fillRect(9, 12, 2, 1)
   ctx.fillRect(13, 12, 2, 1)
-  ctx.fillStyle = skin
-  ctx.fillRect(8, 15, 8, 1) // 下巴那一行留白，脸别顶到边
 
   return canvas
-}
-
-/** 原来那张默认皮肤（第 0 套配色），老代码还在用它 */
-function makeDefaultSkin() {
-  return makeBuiltinSkin(0)
 }
 
 /** 把 canvas 上的一块切出来当纹理 */
@@ -294,7 +287,7 @@ let renderer = null
 let scene = null
 let camera = null
 let player = null
-let skinCanvas = makeDefaultSkin()
+let skinCanvas = makeFallbackSkin()
 let targetSpin = 0
 let spin = 0
 /** 取景比例：1 = 启动页那张小卡；皮肤页那个大预览用 1.15（拉太远人会太小） */
@@ -472,21 +465,82 @@ function mount(container, zoom) {
   animate()
 }
 
-/** 换一张皮肤（传一个能画到 canvas 上的图：Image / Canvas） */
-function setSkin(source) {
+/**
+ * 老式的 64×32 皮肤补成 64×64。
+ *
+ * 【为什么要补】2014 年以前的皮肤只有 64×32：图上只有**右**胳膊右腿，
+ * 左胳膊左腿是游戏自己镜像出来的。这种图直接贴到 64×64 的模型上，
+ * 左边那条胳膊和腿就是空的（透明）——看着像少了一半身子。
+ * 所以把右边那两块镜像一份写到左边的位置上。
+ *
+ * @returns {HTMLCanvasElement} 补好的 64×64
+ */
+function upgradeLegacySkin(source) {
   const canvas = document.createElement('canvas')
   canvas.width = 64
   canvas.height = 64
   const ctx = canvas.getContext('2d')
   ctx.imageSmoothingEnabled = false
   ctx.drawImage(source, 0, 0)
+
+  // 右边那块 16×16 → 水平翻个面 → 写到左边的位置
+  const mirrorBlock = (sx, sy, dx, dy) => {
+    const piece = document.createElement('canvas')
+    piece.width = 16
+    piece.height = 16
+    const pctx = piece.getContext('2d')
+    pctx.imageSmoothingEnabled = false
+    pctx.translate(16, 0)
+    pctx.scale(-1, 1) // 水平镜像
+    pctx.drawImage(canvas, sx, sy, 16, 16, 0, 0, 16, 16)
+    ctx.drawImage(piece, dx, dy)
+  }
+
+  mirrorBlock(0, 16, 16, 48) // 右腿 → 左腿
+  mirrorBlock(40, 16, 32, 48) // 右臂 → 左臂
+  return canvas
+}
+
+/**
+ * 这张皮肤是不是"纤细"体型（Alex 那种 3 宽的胳膊）。
+ *
+ * 【判断依据】纤细皮肤里，右臂外侧那一列（图上 x=54）是**完全没有**的
+ * ——原版把它省掉了，游戏按 slim 模型来贴。所以那个像素透明就当作纤细。
+ * 这条规则是行规（skinview3d 等库都这么认），不是我们瞎猜的。
+ */
+function isSlimSkin(canvas) {
+  try {
+    const ctx = canvas.getContext('2d')
+    const pixel = ctx.getImageData(54, 20, 1, 1).data
+    return pixel[3] === 0
+  } catch {
+    return false
+  }
+}
+
+/** 换一张皮肤（传一个能画到 canvas 上的图：Image / Canvas） */
+function setSkin(source) {
+  // 老式 64×32 的先补成 64×64（左右镜像），不然后半边是空的
+  const legacy = (source.height || source.naturalHeight) === 32
+  const canvas = legacy ? upgradeLegacySkin(source) : document.createElement('canvas')
+  if (!legacy) {
+    canvas.width = 64
+    canvas.height = 64
+    const ctx = canvas.getContext('2d')
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(source, 0, 0)
+  }
+
+  // 体型可能跟着这张皮肤变（Steve 是经典、Alex 是纤细），得重建一次模型
+  PARTS = makeParts(isSlimSkin(canvas))
+
   skinCanvas = canvas
   rebuild()
 }
 
 /** 用我们自带的默认皮肤 */
 function useDefaultSkin() {
-  skinCanvas = makeDefaultSkin()
+  skinCanvas = makeFallbackSkin()
   rebuild()
 }
 
@@ -508,9 +562,6 @@ window.skinViewer = {
   setSkin,
   useDefaultSkin,
   unmount,
-  makeDefaultSkin,
-  makeBuiltinSkin,
-  builtinCount: BUILTIN_STYLES.length,
-  builtinNames: BUILTIN_STYLES.map((one) => one.name)
+  makeFallbackSkin
 }
 

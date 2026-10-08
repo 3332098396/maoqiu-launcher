@@ -2847,12 +2847,6 @@ button.acc__tab:hover {
   gap: 6px;
 }
 
-.skin-big__name {
-  font-size: 18px;
-  font-weight: 700;
-  margin-top: 6px;
-}
-
 .skin-big__from {
   font-size: 12.5px;
   color: var(--text-muted);
@@ -2915,14 +2909,6 @@ button.acc__tab:hover {
   display: flex;
   flex-direction: column;
   gap: 2px;
-}
-
-.skin-item__name {
-  font-size: 13px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .skin-item__from {

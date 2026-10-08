@@ -38,6 +38,7 @@ function showPage(name) {
   // 皮肤页（M17.5）：把 3D 小人搬过来 + 重新画列表
   if (name === 'skin') {
     ensureSkinCard()
+    if (!bundledSkinNames.length) seedBundledSkins().then(() => renderSkinPage())
     moveSkinViewerTo(skinStageMainEl, 1.15) // 大预览：相机拉远一点，不然脚会被裁掉
     renderSkinPage()
   }
@@ -4734,7 +4735,7 @@ function ensureSkinCard() {
     window.skinViewer.mount(skinStageEl)
     skinMounted = true
     // 毛球自带的那几张示例皮肤，第一次运行时存成真文件（只做一次）
-    await seedBuiltinSkins()
+    await seedBundledSkins()
     await applyCurrentSkin()
   })
 }
@@ -4827,7 +4828,6 @@ async function applyCurrentSkin() {
           result.source === 'microsoft' ? '正版账号上的皮肤' : '皮肤站账号上的皮肤'
         skinHintEl.textContent = `这是你${from}。`
         skinBigFromEl.textContent = `来自：${from}`
-        skinBigNameEl.textContent = account.name || '我的角色'
       }
       image.onerror = () => {
         skinHintEl.textContent = '皮肤下下来了但读不出来，先用默认的。'
@@ -4846,7 +4846,6 @@ async function applyCurrentSkin() {
     if (okLoaded) {
       skinHintEl.textContent = '这是你自己传的皮肤。鼠标左右移动就能转。'
       skinBigFromEl.textContent = '来自：我上传的'
-      skinBigNameEl.textContent = saved.split(/[\\/]/).pop().replace(/\.png$/i, '')
       return
     }
     skinHintEl.textContent = '上次选的那张皮肤找不到了，先用默认的。'
@@ -4857,7 +4856,6 @@ async function applyCurrentSkin() {
     const picked = await pickRandomSkin()
     if (picked) {
       applySkin(picked.image)
-      skinBigNameEl.textContent = picked.name
       skinBigFromEl.textContent = `来自：随机（${picked.from}）`
       skinHintEl.textContent = '这是随机穿上的——想换一张到「皮肤」页点一下。'
       return
@@ -4869,7 +4867,6 @@ async function applyCurrentSkin() {
   if (official) {
     applySkin(official)
     skinBigFromEl.textContent = '来自：官方默认皮肤'
-    skinBigNameEl.textContent = 'Steve'
     if (!saved) skinHintEl.textContent = '鼠标在卡片上左右移动，小人就跟着转。'
     return
   }
@@ -4877,7 +4874,6 @@ async function applyCurrentSkin() {
   // ⑤ 实在没有（游戏还没装 / jar 读不出来）→ 用毛球自己画的那张顶着
   useDefaultSkinAndAvatar()
   skinBigFromEl.textContent = '来自：毛球自带的默认皮肤'
-  skinBigNameEl.textContent = '毛球小人'
   if (!saved) skinHintEl.textContent = '鼠标在卡片上左右移动，小人就跟着转。'
 }
 
@@ -4902,8 +4898,11 @@ let randomPick = null
 async function buildRandomPool() {
   const pool = []
 
-  const official = await getOfficialSkin()
-  if (official) pool.push({ image: official, name: 'Steve', from: '官方默认皮肤' })
+  // 官方原版两张：Steve（经典体型）和 Alex（纤细体型）
+  for (const [kind, label] of [['steve', 'Steve'], ['alex', 'Alex']]) {
+    const image = await getOfficialSkin(kind)
+    if (image) pool.push({ image, name: label, from: '官方默认皮肤', official: kind })
+  }
 
   if (!skinLibCache) skinLibCache = await loadSkinLib()
   for (const one of skinLibCache) {
@@ -4922,35 +4921,40 @@ async function buildRandomPool() {
 }
 
 /**
- * 把界面上画好的那几套示例皮肤**存成真的皮肤文件**（M21，只做一次）。
+ * 把**随软件打包的那几张皮肤**复制进皮肤库（M21，只做一次）。
  *
- * 【为什么存成文件】存进去之后它们就跟用户自己传的皮肤一个待遇：
- * 列表里看得见、能挑、能删，而且不联网也一直在——
- * 用户说的"挑几张简约好看的保存到皮肤文件里，没网就随机穿这几张"就是这个意思。
+ * 【它们从哪来】`assets/skins/` 里那几张 PNG，跟着安装包一起发出去——
+ * 用户提供的，免费公开、不侵权。复制进皮肤库之后它们就跟用户自己传的皮肤一个待遇：
+ * 列表里看得见、能挑；不联网也一直在。
  */
-async function seedBuiltinSkins() {
-  if (!settingsInfo) return
-  if (settingsInfo.look?.builtinsSeeded) return
-  if (!window.skinViewer || !window.skinViewer.makeBuiltinSkin) return
-
-  for (let i = 0; i < window.skinViewer.builtinCount; i++) {
-    const canvas = window.skinViewer.makeBuiltinSkin(i)
-    const name = window.skinViewer.builtinNames[i]
-    try {
-      await window.api.saveBuiltinSkin(name, canvas.toDataURL('image/png'))
-    } catch {
-      // 存不进去就算了（硬盘满了/没权限），不影响用
-    }
+async function seedBundledSkins() {
+  // 【每次开机都要问一遍名字】"哪几张是随包发的那种"由主进程读文件夹告诉我们；
+  // 只把"已经复制过了"这件事记进配置，免得每次开机都写一遍配置
+  let names = []
+  try {
+    const res = await window.api.seedBundledSkins()
+    if (res.ok && Array.isArray(res.names)) names = res.names
+  } catch {
+    // 复制不进去就算了（硬盘满/没权限），下一轮还会再试
   }
 
-  await saveLook({ builtinsSeeded: true })
-  if (settingsInfo) settingsInfo.look = { ...settingsInfo.look, builtinsSeeded: true }
-  skinLibCache = null // 名单变了，下次重读
+  if (names.length) {
+    bundledSkinNames = names
+    skinLibCache = null // 名单可能变了，下次重读
+  }
+
+  if (settingsInfo && !settingsInfo.look?.builtinsSeeded) {
+    await saveLook({ builtinsSeeded: true })
+    settingsInfo.look = { ...settingsInfo.look, builtinsSeeded: true }
+  }
 }
 
-/** 这一张是不是毛球自带的那几张（靠名字前缀认，简单可靠） */
+/** 随软件打包的那几张叫什么（主进程开机时报过来的） */
+let bundledSkinNames = []
+
+/** 这一张是不是随软件打包的那几张 */
 function builtinSource(one) {
-  return typeof one.name === 'string' && one.name.startsWith('毛球·')
+  return bundledSkinNames.includes(one.name)
 }
 
 /** 随机挑一张（同一次开软件里，一直用挑中的那张） */
@@ -4962,27 +4966,30 @@ async function pickRandomSkin(force = false) {
   return randomPick
 }
 
-/** 官方默认皮肤那张图（读一次就记着，别每次换皮肤都去翻一遍 jar） */
-let officialSkinImage = null
-let officialSkinTried = false
+/** 官方那两张默认皮肤（Steve / Alex）：读一次就记着，别每次换皮肤都去翻一遍 jar */
+const officialSkins = {}
+const officialTried = {}
 
-async function getOfficialSkin() {
-  if (officialSkinTried) return officialSkinImage
-  officialSkinTried = true
+async function getOfficialSkin(kind = 'steve') {
+  if (officialTried[kind]) return officialSkins[kind]
+  officialTried[kind] = true
 
   try {
-    const res = await window.api.getOfficialSkin()
-    if (!res.ok) return null
-    officialSkinImage = await new Promise((resolve) => {
+    const res = await window.api.getOfficialSkin(kind)
+    if (!res.ok) {
+      officialSkins[kind] = null
+      return null
+    }
+    officialSkins[kind] = await new Promise((resolve) => {
       const image = new Image()
       image.onload = () => resolve(image)
       image.onerror = () => resolve(null)
       image.src = res.dataUrl
     })
   } catch {
-    officialSkinImage = null
+    officialSkins[kind] = null
   }
-  return officialSkinImage
+  return officialSkins[kind]
 }
 
 // ═══════════════════════════════════════
@@ -4996,7 +5003,8 @@ async function getOfficialSkin() {
 // 这里多了账号卡、我上传过的皮肤列表、上传和移除。
 
 const skinListEl = document.getElementById('skin-list')
-const skinBigNameEl = document.getElementById('skin-big-name')
+// 大预览下面那行皮肤名已经不要了（用户 2026-10-09 说“皮肤页面不用带名字”），
+// index.html 里那个元素也删了——只留下面“来自：xxx”那一行
 const skinBigFromEl = document.getElementById('skin-big-from')
 const skinStageMainEl = document.getElementById('skin-stage-main')
 const skinAccountAvatarEl = document.getElementById('skin-account-avatar')
@@ -5120,15 +5128,13 @@ async function renderSkinPage() {
     if (opts.image) thumb.appendChild(headCanvas(opts.image))
     row.appendChild(thumb)
 
+    // 【不写皮肤名】（用户 2026-10-09："皮肤页面不用带名字"）
+    // 一排图摆在那儿，点哪个用哪个，比编一堆名字清楚
     const main = document.createElement('div')
     main.className = 'skin-item__main'
-    const name = document.createElement('div')
-    name.className = 'skin-item__name'
-    name.textContent = opts.name
     const from = document.createElement('div')
     from.className = 'skin-item__from'
     from.textContent = opts.from
-    main.appendChild(name)
     main.appendChild(from)
     row.appendChild(main)
 
@@ -5204,17 +5210,13 @@ async function renderSkinPage() {
 
   // ——— 中间那行名字/来源：就说身上穿的那张 ———
   if (showing.kind === 'default') {
-    skinBigNameEl.textContent = defaultName
     skinBigFromEl.textContent = defaultFrom
   } else if (showing.kind === 'account') {
-    skinBigNameEl.textContent = showing.name
     skinBigFromEl.textContent = '来自：账号'
   } else if (showing.kind === 'random') {
-    skinBigNameEl.textContent = showing.name
     skinBigFromEl.textContent = `来自：随机（${showing.from}）`
   } else {
     const one = skinLibCache.find((x) => samePath(x.path, showing.path))
-    skinBigNameEl.textContent = one ? one.name : String(showing.path).split(/[\\/]/).pop()
     skinBigFromEl.textContent = '来自：我上传的'
   }
 }

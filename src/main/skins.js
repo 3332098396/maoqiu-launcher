@@ -210,6 +210,54 @@ function importFile(sourcePath) {
 }
 
 /**
+ * 随软件打包的那几张皮肤（M21）。
+ *
+ * 【从哪来】`assets/skins/` 里的 PNG，跟着安装包一起发出去——
+ * 没网也能用，而且**每次打开软件随机穿一张**用的就是它们（加上官方的 Steve / Alex）。
+ * 【第一次运行时复制一份到皮肤库】复制过去之后它们就跟用户自己传的皮肤一样：
+ * 列表里看得见、能挑。原文件留在软件目录里不动。
+ */
+function bundledDir() {
+  // main.js 在 src/main/ 里；打包后 resources/app.asar 里也是这个相对位置
+  return path.join(__dirname, '..', '..', 'assets', 'skins')
+}
+
+/** 随包发的那几张叫什么（读文件名，去掉 .png） */
+function bundledList() {
+  try {
+    return fs
+      .readdirSync(bundledDir())
+      .filter((one) => one.toLowerCase().endsWith('.png'))
+      .map((one) => ({ name: path.basename(one, '.png'), path: path.join(bundledDir(), one) }))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * 把随包的那几张复制进皮肤库（已经有的不覆盖）。
+ * @returns {{ok: boolean, names: string[]}}
+ */
+function seedBundled() {
+  const dir = skinsDir()
+  paths.ensureDir(dir)
+  const names = []
+
+  for (const one of bundledList()) {
+    const target = path.join(dir, `${safeFileName(one.name)}.png`)
+    names.push(path.basename(target, '.png'))
+    if (fs.existsSync(target)) continue
+    try {
+      fs.copyFileSync(one.path, target)
+    } catch {
+      // 复制不了就算了（硬盘满/没权限），不影响别的
+    }
+  }
+
+  return { ok: true, names }
+}
+
+/**
  * 把界面画好的一张皮肤存进皮肤库（M21）。
  *
  * 【干什么用的】"没登录时随机穿一张"那几张示例皮肤，是界面用 canvas 画出来的；
@@ -388,6 +436,8 @@ module.exports = {
   importFile,
   removeLocal,
   saveBuiltin,
+  seedBundled,
+  bundledList,
   readPngSize,
   officialDefault
 }

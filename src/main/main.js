@@ -1116,9 +1116,18 @@ function registerIpcHandlers() {
    * 【从哪来】从**玩家自己的游戏文件**里读（客户端 jar 里就有），
    * 不是把 Mojang 的图打进我们的安装包——见 skins.js 上面的说明。
    */
-  ipcMain.handle('skin:official', () => {
+  ipcMain.handle('skin:official', (_event, kind) => {
     try {
-      return skins.officialDefault()
+      return skins.officialDefault('', kind === 'alex' ? 'alex' : 'steve')
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 把随软件打包的那几张皮肤复制进皮肤库（M21，已经有的不覆盖） */
+  ipcMain.handle('skin:seedBundled', () => {
+    try {
+      return skins.seedBundled()
     } catch (error) {
       return { ok: false, error: String(error?.message ?? error) }
     }
