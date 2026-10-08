@@ -5298,6 +5298,17 @@ document.getElementById('skin-upload').addEventListener('click', async () => {
   setNotice('皮肤传好了，已经给你换上了', 'ok', true)
 })
 
+// 「去皮肤站找皮肤」：开浏览器到皮肤站（用户自己下喜欢的皮肤，再用「上传皮肤…」装进来）
+for (const id of ['skin-site', 'skin-site-2']) {
+  const el = document.getElementById(id)
+  if (!el) continue
+  el.addEventListener('click', async (event) => {
+    event.preventDefault()
+    const res = await window.api.openSkinSite()
+    if (!res.ok) setNotice(`打不开皮肤站：${res.error}`, 'error')
+  })
+}
+
 document.getElementById('skin-open-folder').addEventListener('click', async () => {
   const res = await window.api.openSkinFolder()
   if (!res.ok) setNotice(`打不开文件夹：${res.error}`, 'error')

@@ -2769,6 +2769,20 @@ button.acc__tab:hover {
   margin-bottom: 14px;
 }
 
+.skin-head__actions {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.skin-list__tip {
+  margin-top: 10px;
+}
+
+.skin-list__tip .linkbtn {
+  font-size: inherit;
+}
+
 .skin-head__title {
   margin: 0 0 4px;
   font-size: 24px;

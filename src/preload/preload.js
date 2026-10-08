@@ -385,6 +385,9 @@ contextBridge.exposeInMainWorld('api', {
   /** 从皮肤库里删一份（只删我们自己复制进来的那份） */
   removeSkin: (path) => ipcRenderer.invoke('skin:remove', path),
 
+  /** 打开皮肤站（地址写死在主进程，界面只能请求打开它） */
+  openSkinSite: () => ipcRenderer.invoke('skin:openSite'),
+
   /** 在文件管理器里打开皮肤库 */
   openSkinFolder: () => ipcRenderer.invoke('skin:openFolder'),
 

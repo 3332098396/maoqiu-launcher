@@ -1142,6 +1142,20 @@ function registerIpcHandlers() {
     }
   })
 
+  /**
+   * 打开皮肤站（用户可以去那儿找喜欢的皮肤，下下来再用「上传皮肤…」装进来）。
+   * 【地址写死在主进程】界面只能"请求打开皮肤站"，不能自己指定网址——
+   * 它要是被塞了个乱七八糟的地址进来，用户点一下就在浏览器里打开了。
+   */
+  ipcMain.handle('skin:openSite', async () => {
+    try {
+      await shell.openExternal('https://littleskin.cn/skinlib')
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
   /** 在文件管理器里打开皮肤库（用户想自己往里丢图也行） */
   ipcMain.handle('skin:openFolder', async () => {
     try {
