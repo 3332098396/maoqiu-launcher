@@ -1344,6 +1344,14 @@ window.api.onLaunchState((payload) => {
     // 用户明明没开也能建房，那个提醒就形同虚设。
     lanPort = 0
     refreshLaunchUi()
+
+    // 游戏一退，"世界"就没了——房间也就没用了，顺手收掉（M17.x，用户提的：
+    // "我退出游戏了，但是毛球还在创建过的房间里"）。
+    // 【为什么该收】好友这会儿连不上（服务端跟着世界一起没了）；而且下次开游戏
+    // 端口多半会变，之前发给好友的地址也就失效了，留着只会误导人。
+    if (onlineInfo.running && onlineInfo.code) {
+      leaveRoomNow('游戏退出了，房间也顺手收了 —— 下次要联机，进游戏开局域网后重新建一个。')
+    }
     if (payload.ok) {
       setNotice('游戏正常退出了。可以再点「开始游戏」重新玩。', 'ok')
     } else {
@@ -3474,15 +3482,25 @@ onlineCopyEl.addEventListener('click', async () => {
   }
 })
 
-onlineLeaveEl.addEventListener('click', async () => {
-  onlineLeaveEl.disabled = true
+/**
+ * 退出房间。两条路都走这儿：用户点「离开房间」、以及**游戏退出时自动退**。
+ * @param {string} why 退完在联机页上说的那句话
+ */
+async function leaveRoomNow(why) {
   try {
     await window.api.onlineLeave()
     onlineInfo = { ok: true, running: false, peers: [], code: '', myIp: '', role: '' }
-    setOnlineNotice('已离开房间，虚拟网卡也收掉了。')
+    setOnlineNotice(why, 'ok')
     renderOnline()
   } catch (error) {
     setOnlineNotice(`离开房间时出错：${error.message}`, 'error')
+  }
+}
+
+onlineLeaveEl.addEventListener('click', async () => {
+  onlineLeaveEl.disabled = true
+  try {
+    await leaveRoomNow('已离开房间，虚拟网卡也收掉了。')
   } finally {
     onlineLeaveEl.disabled = false
   }
