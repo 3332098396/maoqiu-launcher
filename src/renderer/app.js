@@ -4634,7 +4634,9 @@ insFilterEl.addEventListener('click', (event) => {
 // ═══════════════════════════════════════
 
 const skinStageEl = document.getElementById('skin-stage')
-const skinHintEl = document.getElementById('skin-hint')
+// 【卡片下面那行提示已经去掉了】（用户 2026-10-09："把皮肤下面的，提示去掉，不需要"）
+// 以前那儿写着"鼠标左右移动，小人就跟着转"这类话，现在页面干净了；万一 3D 起不来，
+// 走右下角那个全局提示（setNotice）说一声
 
 /** 3D 那块挂上了没有（模块脚本是异步加载的，可能要等一会儿） */
 let skinMounted = false
@@ -4650,7 +4652,8 @@ function whenSkinReady(callback) {
       callback()
     } else if (tries > 40) {
       clearInterval(timer)
-      skinHintEl.textContent = '3D 预览起不来（可能是显卡驱动的问题），不影响玩游戏。'
+      // 3D 起不来（多半是显卡驱动的事）——不挡人，右下角说一句就完
+      setNotice('3D 预览起不来（可能是显卡驱动的问题），不影响玩游戏。', 'error')
     }
   }, 100)
 }
@@ -4758,17 +4761,14 @@ document.getElementById('skin-pick').addEventListener('click', async () => {
 
   const loaded = await loadSkinFrom(picked.path)
   if (!loaded) {
-    skinHintEl.textContent = '这张图读不出来——皮肤得是 64×64 的 PNG。'
     return
   }
 
-  skinHintEl.textContent = '换好了。鼠标左右移动就能转。'
   await saveLook({ skin: picked.path })
 })
 
 document.getElementById('skin-reset').addEventListener('click', async () => {
   useDefaultSkinAndAvatar()
-  skinHintEl.textContent = '换回默认皮肤了。'
   await saveLook({ skin: '' })
 })
 
@@ -4826,17 +4826,12 @@ async function applyCurrentSkin() {
         applySkin(image)
         const from =
           result.source === 'microsoft' ? '正版账号上的皮肤' : '皮肤站账号上的皮肤'
-        skinHintEl.textContent = `这是你${from}。`
         skinBigFromEl.textContent = `来自：${from}`
-      }
-      image.onerror = () => {
-        skinHintEl.textContent = '皮肤下下来了但读不出来，先用默认的。'
       }
       image.src = result.dataUrl
       return
     }
-    // 取不到（没设皮肤/网络抖动）——说一句，然后退回下面那两种
-    skinHintEl.textContent = result.error
+    // 取不到（没设皮肤 / 网络抖一下）——不吭声，直接退回下面那两种
   }
 
   // ② 自己定下来的那张（点过"换一张"、或者在皮肤页点过「使用」）
@@ -4847,7 +4842,6 @@ async function applyCurrentSkin() {
     const image = await getOfficialSkin(saved.slice(1))
     if (image) {
       applySkin(image)
-      skinHintEl.textContent = '官方原版皮肤，已经记住了。想换就点下面那个圈。'
       skinBigFromEl.textContent = '来自：官方默认皮肤'
       return
     }
@@ -4856,11 +4850,9 @@ async function applyCurrentSkin() {
   if (saved && !saved.startsWith('@')) {
     const okLoaded = await loadSkinFrom(saved)
     if (okLoaded) {
-      skinHintEl.textContent = '这张已经记住了——以后打开都是它。想换就点下面那个圈。'
       skinBigFromEl.textContent = '来自：我选的'
       return
     }
-    skinHintEl.textContent = '上次选的那张皮肤找不到了，先用默认的。'
   }
 
   // ③ 没登录、也没自己挑过 → 随机穿一张（M21，每次开软件换一次）
@@ -4869,7 +4861,6 @@ async function applyCurrentSkin() {
     if (picked) {
       applySkin(picked.image)
       skinBigFromEl.textContent = `来自：随机（${picked.from}）`
-      skinHintEl.textContent = '这是随机穿上的——想换一张到「皮肤」页点一下。'
       return
     }
   }
@@ -4879,14 +4870,12 @@ async function applyCurrentSkin() {
   if (official) {
     applySkin(official)
     skinBigFromEl.textContent = '来自：官方默认皮肤'
-    if (!saved) skinHintEl.textContent = '鼠标在卡片上左右移动，小人就跟着转。'
     return
   }
 
   // ⑤ 实在没有（游戏还没装 / jar 读不出来）→ 用毛球自己画的那张顶着
   useDefaultSkinAndAvatar()
   skinBigFromEl.textContent = '来自：毛球自带的默认皮肤'
-  if (!saved) skinHintEl.textContent = '鼠标在卡片上左右移动，小人就跟着转。'
 }
 
 // ——— 随机皮肤（M21）———
