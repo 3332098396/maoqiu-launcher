@@ -653,6 +653,16 @@
             </div>
           </div>
 
+          <!-- 皮肤页顶上这一条（M21）：跟启动页皮肤卡右边那条**内容一样、位置不同**——
+               用户要求两处都留着（"皮肤页顶的也不用挪走"）。
+               两处的 id 必须不一样，不然 getElementById 只会拿到前一个。 -->
+          <div class="notice notice--skin notice--skin--wide" id="skin-notice-page">
+            <b>这里的皮肤 ≠ 游戏里显示的皮肤</b>
+            <span>
+              游戏里的皮肤问的是账号服务器，跟这儿挑的没关系；<b>离线账号</b>进游戏只会穿官方默认皮肤。想换皮肤：<b>登录账号</b>（皮肤站 / 正版）在网站上上传，或者<b>给这个版本装皮肤 Mod</b>。
+            </span>
+          </div>
+
           <div class="skin-cols">
             <!-- 左：当前账号 -->
             <section class="panel skin-account" id="skin-account">

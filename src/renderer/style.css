@@ -987,6 +987,16 @@ button.acc__tab:hover {
   color: var(--text-dim);
 }
 
+/* 皮肤页顶上那条是**整页宽**的：标题和正文排一行，省高度
+   （启动页卡片里那条是 250px 窄栏，用上面的竖排） */
+.notice--skin--wide {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12.5px;
+  padding: 8px 14px;
+}
+
 .notice--skin > b {
   font-size: 12px;
   color: var(--accent-strong);
