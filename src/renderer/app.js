@@ -3470,13 +3470,16 @@ const HIDEABLE_PAGES = [
 
 /** 顶栏样式 */
 const THEMES = [
-  { key: 'blue', label: '渐变淡蓝（默认）', colors: ['#8fcbff', '#4a9bff', '#eef6ff'] },
-  { key: 'dark', label: '深色', colors: ['#2b2f45', '#8b7bff', '#1f2338'] },
+  { key: 'blue', label: '渐变淡蓝（亮色 · 默认）', colors: ['#8fcbff', '#4a9bff', '#eef6ff'] },
+  { key: 'dark', label: '深色（暗色）', colors: ['#2b2f45', '#8b7bff', '#1f2338'] },
   // M17.1：按委托人做的设计稿加的一套（深底 + 紫→青品牌渐变）
-  { key: 'neon', label: '霓虹紫青', colors: ['#9a5cf7', '#2fd4e8', '#141a2e'] },
-  { key: 'matcha', label: '抹茶绿', colors: ['#a8d8b9', '#56b57f', '#eaf7ef'] },
-  { key: 'sunset', label: '暖阳橙', colors: ['#ffca8f', '#f79140', '#fff2e2'] },
-  { key: 'sakura', label: '樱花粉', colors: ['#ffc2d8', '#f97fae', '#ffeef5'] }
+  // 【名字后面为什么要注明】用户翻这套主题找"图纸那种样子"，在「深色」和这套之间
+  // 挑错了——两套都是深底、大启动卡都带紫蓝渐变，光看那三个色点分不出来
+  // （2026-10-08 实测踩过）。所以每个主题都带上一句"长什么样"。
+  { key: 'neon', label: '霓虹紫青（暗色 · 图纸同款）', colors: ['#9a5cf7', '#2fd4e8', '#141a2e'] },
+  { key: 'matcha', label: '抹茶绿（亮色）', colors: ['#a8d8b9', '#56b57f', '#eaf7ef'] },
+  { key: 'sunset', label: '暖阳橙（亮色）', colors: ['#ffca8f', '#f79140', '#fff2e2'] },
+  { key: 'sakura', label: '樱花粉（亮色）', colors: ['#ffc2d8', '#f97fae', '#ffeef5'] }
 ]
 
 /**
@@ -3867,11 +3870,60 @@ function whenSkinReady(callback) {
 }
 
 /** 按存的路径加载皮肤文件 */
+// ——— 左上角那个圆头像（M17.x）———
+// 设计稿上它就是个**玩家的脑袋**。所以登录账号（或自己选了皮肤文件）之后，
+// 这里把皮肤图里的头部裁出来换上；没有皮肤就退回 HTML 里那个手画的小脑袋。
+const railAvatarEl = document.getElementById('rail-avatar')
+
+/**
+ * 把皮肤图里的"头部"裁出来，当左上角的头像。
+ *
+ * 【为什么要裁】皮肤是一整张 64×64 的图，脑袋只占左上角一小块 8×8；
+ * 整张塞进去只会看到一堆手脚。
+ * 【帽子层】脑袋正面在 (8,8)，"帽子层"在 (40,8)——那是一层能盖在头上的透明贴图
+ * （有人拿它画帽檐、耳机）。叠上去就对了；没有内容的皮肤这层是透明的，画了也不变。
+ */
+function paintAvatar(image) {
+  try {
+    const piece = document.createElement('canvas')
+    piece.width = 8
+    piece.height = 8
+    const brush = piece.getContext('2d')
+    brush.imageSmoothingEnabled = false
+    brush.drawImage(image, 8, 8, 8, 8, 0, 0, 8, 8)
+    brush.drawImage(image, 40, 8, 8, 8, 0, 0, 8, 8)
+
+    for (const old of railAvatarEl.querySelectorAll('canvas')) old.remove()
+    railAvatarEl.appendChild(piece)
+    railAvatarEl.classList.add('is-skin')
+  } catch {
+    // 裁不出来就先不换——别把原来那个小脑袋也弄没了
+  }
+}
+
+/** 退回默认那个手画的头像（退出登录、皮肤读不出来的时候）*/
+function clearAvatar() {
+  for (const old of railAvatarEl.querySelectorAll('canvas')) old.remove()
+  railAvatarEl.classList.remove('is-skin')
+}
+
+/** 换皮肤时**两个地方一起换**：右边那个 3D 小人 + 左边这个圆头像 */
+function applySkin(image) {
+  window.skinViewer.setSkin(image)
+  paintAvatar(image)
+}
+
+/** 换回默认皮肤时也一样，两个地方一起退 */
+function useDefaultSkinAndAvatar() {
+  window.skinViewer.useDefaultSkin()
+  clearAvatar()
+}
+
 function loadSkinFrom(path) {
   return new Promise((resolve) => {
     const image = new Image()
     image.onload = () => {
-      window.skinViewer.setSkin(image)
+      applySkin(image)
       resolve(true)
     }
     image.onerror = () => resolve(false)
@@ -3890,7 +3942,7 @@ function ensureSkinCard() {
     if (saved) {
       const okLoaded = await loadSkinFrom(saved)
       if (!okLoaded) {
-        window.skinViewer.useDefaultSkin()
+        useDefaultSkinAndAvatar()
         skinHintEl.textContent = '上次选的皮肤文件找不到了，先用默认的。'
       }
     }
@@ -3912,7 +3964,7 @@ document.getElementById('skin-pick').addEventListener('click', async () => {
 })
 
 document.getElementById('skin-reset').addEventListener('click', async () => {
-  window.skinViewer.useDefaultSkin()
+  useDefaultSkinAndAvatar()
   skinHintEl.textContent = '换回默认皮肤了。'
   await saveLook({ skin: '' })
 })
@@ -3944,7 +3996,7 @@ async function refreshAccountSkin() {
       // 退回"你自己选的那张 / 默认"（比如刚退出登录）
       const saved = settingsInfo?.look?.skin
       if (saved && (await loadSkinFrom(saved))) return
-      window.skinViewer.useDefaultSkin()
+      useDefaultSkinAndAvatar()
       return
     }
 
@@ -3956,7 +4008,7 @@ async function refreshAccountSkin() {
 
     const image = new Image()
     image.onload = () => {
-      window.skinViewer.setSkin(image)
+      applySkin(image)
       skinHintEl.textContent =
         result.source === 'microsoft' ? '这是你正版账号上的皮肤。' : '这是你皮肤站账号上的皮肤。'
     }

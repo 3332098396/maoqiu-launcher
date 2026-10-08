@@ -85,14 +85,11 @@
         <nav class="rail" id="nav">
         <!-- 顶上这一块（M17.5 照设计稿）：圆头像 + 「毛球」 + 小徽章 -->
         <div class="rail__brand">
-          <span class="rail__avatar" aria-hidden="true">
-            <svg viewBox="0 0 32 32">
-              <rect width="32" height="32" rx="6" fill="#8d6a4f" />
-              <rect x="0" y="0" width="32" height="9" rx="6" fill="#3b2a1d" />
-              <rect x="6" y="12" width="5" height="4" rx="1.2" fill="#2b3a4a" />
-              <rect x="21" y="12" width="5" height="4" rx="1.2" fill="#2b3a4a" />
-              <rect x="12" y="21" width="8" height="2.4" rx="1.2" fill="#b07f63" />
-            </svg>
+          <!-- 头像（M17.x）：**没登录**时就用启动动画里那个品牌图标（紫→青渐变的草方块）；
+               **登录之后**，JS 会往这儿塞一张 canvas——把皮肤图里的"头部"那块裁出来当头像，
+               见 app.js 的 paintAvatar() -->
+          <span class="rail__avatar" id="rail-avatar" aria-hidden="true">
+            <img src="../../assets/app-256.png" alt="" />
           </span>
           <span class="rail__name">毛球</span>
           <span class="rail__badge" id="rail-badge">0.1.0</span>
@@ -887,7 +884,9 @@
             </section>
 
             <section class="panel">
-              <h3 class="panel__title">顶栏样式</h3>
+              <!-- M17.x：原来这节叫「顶栏样式」——那时候主题确实只换顶栏颜色，
+                   现在连背景、卡片、按钮一起换，叫"顶栏"会让人以为改的只是顶上一条 -->
+              <h3 class="panel__title">界面主题</h3>
               <div class="icon-picker" id="look-themes"></div>
             </section>
           </div>

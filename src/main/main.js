@@ -41,6 +41,17 @@ const forge = require('./forge')
 // 软件名。它会决定数据存放目录：%APPDATA%\毛球\
 app.setName('毛球')
 
+// 开发模式换一个"网页缓存"目录（配置、账号那些还是共用的）。
+//
+// 【为什么】开发版和你桌面上装好的那份**用的是同一个** %APPDATA%\毛球\，
+// 里面那个 Cache 文件夹同一时间只允许一个程序用。两个一起开的时候，
+// 后启动的那个会刷一屏 "Unable to create cache 拒绝访问"，
+// 而且**图片会加载不出来**（实测：首页大启动卡那张风景图直接消失，只剩渐变底色，
+// 看起来就像"功能没做"）。开发模式的缓存丢了无所谓，换一个目录最省事。
+if (!app.isPackaged) {
+  app.commandLine.appendSwitch('disk-cache-dir', path.join(app.getPath('temp'), '毛球-dev-cache'))
+}
+
 /**
  * 从旧名字的目录搬一次家。
  *
