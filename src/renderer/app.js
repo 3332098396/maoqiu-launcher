@@ -4850,11 +4850,44 @@ async function applyCurrentSkin() {
     skinHintEl.textContent = '上次选的那张皮肤找不到了，先用默认的。'
   }
 
-  // ③ 默认
+  // ③ 官方默认皮肤（Steve）——从玩家自己的游戏文件里读出来的那一张
+  const official = await getOfficialSkin()
+  if (official) {
+    applySkin(official)
+    skinBigFromEl.textContent = '来自：官方默认皮肤'
+    skinBigNameEl.textContent = 'Steve'
+    if (!saved) skinHintEl.textContent = '鼠标在卡片上左右移动，小人就跟着转。'
+    return
+  }
+
+  // ④ 实在没有（游戏还没装 / jar 读不出来）→ 用毛球自己画的那张顶着
   useDefaultSkinAndAvatar()
-  skinBigFromEl.textContent = '来自：系统默认皮肤'
+  skinBigFromEl.textContent = '来自：毛球自带的默认皮肤'
   skinBigNameEl.textContent = '毛球小人'
   if (!saved) skinHintEl.textContent = '鼠标在卡片上左右移动，小人就跟着转。'
+}
+
+/** 官方默认皮肤那张图（读一次就记着，别每次换皮肤都去翻一遍 jar） */
+let officialSkinImage = null
+let officialSkinTried = false
+
+async function getOfficialSkin() {
+  if (officialSkinTried) return officialSkinImage
+  officialSkinTried = true
+
+  try {
+    const res = await window.api.getOfficialSkin()
+    if (!res.ok) return null
+    officialSkinImage = await new Promise((resolve) => {
+      const image = new Image()
+      image.onload = () => resolve(image)
+      image.onerror = () => resolve(null)
+      image.src = res.dataUrl
+    })
+  } catch {
+    officialSkinImage = null
+  }
+  return officialSkinImage
 }
 
 // ═══════════════════════════════════════
@@ -5022,11 +5055,12 @@ async function renderSkinPage() {
     })
   }
 
-  // ③ 系统默认
+  // ③ 默认那张：优先用官方的 Steve（从游戏文件里读），没有才用毛球自己画的
+  const official = await getOfficialSkin()
   addItem({
-    name: '毛球小人',
-    from: '来自：系统默认皮肤',
-    image: window.skinViewer ? window.skinViewer.makeDefaultSkin() : null,
+    name: official ? 'Steve' : '毛球小人',
+    from: official ? '来自：官方默认皮肤' : '来自：毛球自带的默认皮肤',
+    image: official || (window.skinViewer ? window.skinViewer.makeDefaultSkin() : null),
     on: current === 'default',
     canUse: current === 'default' ? null : () => chooseSkin('default')
   })
@@ -5036,8 +5070,9 @@ async function renderSkinPage() {
     skinBigNameEl.textContent = account?.name || '我的角色'
     skinBigFromEl.textContent = '来自：账号'
   } else if (current === 'default') {
-    skinBigNameEl.textContent = '毛球小人'
-    skinBigFromEl.textContent = '来自：系统默认皮肤'
+    const official = await getOfficialSkin()
+    skinBigNameEl.textContent = official ? 'Steve' : '毛球小人'
+    skinBigFromEl.textContent = official ? '来自：官方默认皮肤' : '来自：毛球自带的默认皮肤'
   } else {
     const one = skinLibCache.find((x) => samePath(x.path, current))
     skinBigNameEl.textContent = one ? one.name : String(current).split(/[\\/]/).pop()

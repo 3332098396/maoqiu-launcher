@@ -229,6 +229,114 @@ function removeLocal(target) {
   return { ok: true }
 }
 
+// ——————————————————————————————————————————————
+// 官方默认皮肤（Steve / Alex）
+// ——————————————————————————————————————————————
+//
+// 【从哪来】这两张图是**随游戏资产一起下到玩家电脑上的**（游戏自己就要用它们）。
+// 所以我们**从玩家自己的游戏文件里读**，而不是把 Mojang 的美术资源打进安装包——
+// 玩家本机那份是玩家自己从官方下的，读它天经地义；把那张图塞进我们的安装包
+// 分发出去就是另一回事了（PCL / HMCL 这些老牌启动器也都是这么干的）。
+//
+// 找的地方，按顺序：
+//   ① `assets/indexes/<索引>.json` 里查表 → `assets/objects/<前两位>/<哈希>`
+//   ② 实在没有就翻客户端的 jar（老版本的皮肤是打在 jar 里的）
+// 都没有就返回失败——调用方退回去用手画的那张（毛球小人）。
+
+const zip = require('./zip')
+
+/** 这两张图在资产清单/ jar 里可能叫什么（1.19.4 起挪到 wide/slim 两个文件夹里了） */
+const DEFAULT_SKIN_NAMES = {
+  steve: [
+    'minecraft/textures/entity/player/wide/steve.png',
+    'minecraft/textures/entity/steve.png'
+  ],
+  alex: ['minecraft/textures/entity/player/slim/alex.png', 'minecraft/textures/entity/alex.png']
+}
+
+/** 从资产清单里查一张图，找到就把它读出来 */
+function readFromAssets(dir, kind) {
+  const indexesDir = path.join(paths.assetsDir(dir), 'indexes')
+  let files = []
+  try {
+    files = fs.readdirSync(indexesDir).filter((one) => one.endsWith('.json'))
+  } catch {
+    return null
+  }
+  // 装了不止一个版本就可能有好几份索引，从最新的往回找
+  files.sort().reverse()
+
+  for (const name of files) {
+    let index
+    try {
+      index = JSON.parse(fs.readFileSync(path.join(indexesDir, name), 'utf8'))
+    } catch {
+      continue
+    }
+    const objects = (index && index.objects) || {}
+    for (const assetName of DEFAULT_SKIN_NAMES[kind]) {
+      const entry = objects[assetName]
+      if (!entry || !entry.hash) continue
+      const file = path.join(paths.assetsDir(dir), 'objects', entry.hash.slice(0, 2), entry.hash)
+      try {
+        const buffer = fs.readFileSync(file)
+        if (buffer.length > 100) return { buffer, from: `游戏资产（${assetName}）` }
+      } catch {
+        // 这个哈希的文件不在，换下一个
+      }
+    }
+  }
+  return null
+}
+
+/** 翻客户端 jar（老版本皮肤打在 jar 里） */
+function readFromJars(dir, kind) {
+  let ids = []
+  try {
+    ids = fs.readdirSync(paths.versionsDir(dir))
+  } catch {
+    return null
+  }
+
+  for (const id of ids) {
+    const jar = paths.versionJarFile(id, dir)
+    if (!fs.existsSync(jar)) continue
+    try {
+      const buffer = fs.readFileSync(jar)
+      const entries = zip.listEntries(buffer)
+      for (const assetName of DEFAULT_SKIN_NAMES[kind]) {
+        const entry = entries.find((one) => one.name.replace(/^\/+/, '') === `assets/${assetName}`)
+        if (!entry) continue
+        const data = zip.readEntry(buffer, entry)
+        if (data && data.length > 100) return { buffer: data, from: `游戏本体的 jar（${id}）` }
+      }
+    } catch {
+      // 这个 jar 读不动（坏了/正在写），换下一个
+    }
+  }
+  return null
+}
+
+/**
+ * 拿官方的默认皮肤。
+ * @param {string} [dir] 游戏目录
+ * @param {'steve'|'alex'} [kind]
+ * @returns {{ok: boolean, dataUrl?: string, from?: string}}
+ */
+function officialDefault(dir, kind = 'steve') {
+  try {
+    const found = readFromAssets(dir, kind) || readFromJars(dir, kind)
+    if (!found) return { ok: false }
+    return {
+      ok: true,
+      dataUrl: `data:image/png;base64,${found.buffer.toString('base64')}`,
+      from: found.from
+    }
+  } catch {
+    return { ok: false }
+  }
+}
+
 module.exports = {
   hasRemoteSkin,
   fetchFor,
@@ -236,5 +344,6 @@ module.exports = {
   listLocal,
   importFile,
   removeLocal,
-  readPngSize
+  readPngSize,
+  officialDefault
 }

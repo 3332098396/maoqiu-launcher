@@ -1104,6 +1104,19 @@ function registerIpcHandlers() {
     }
   })
 
+  /**
+   * 官方的默认皮肤（Steve）。
+   * 【从哪来】从**玩家自己的游戏文件**里读（客户端 jar 里就有），
+   * 不是把 Mojang 的图打进我们的安装包——见 skins.js 上面的说明。
+   */
+  ipcMain.handle('skin:official', () => {
+    try {
+      return skins.officialDefault()
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
   /** 在文件管理器里打开皮肤库（用户想自己往里丢图也行） */
   ipcMain.handle('skin:openFolder', async () => {
     try {
