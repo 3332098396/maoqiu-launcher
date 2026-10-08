@@ -315,6 +315,11 @@ function folderFor(id, which, dir) {
   switch (which) {
     case 'version':
       return versionDir
+    // 这个版本所在的**游戏目录**本身（不是版本文件夹）。
+    // 启动页那张"目录"卡片上写的就是它——没开隔离时游戏读的正是这个目录，
+    // 开了隔离才会缩到 versions\<版本号>\ 里去（见下面 saves 那几行）
+    case 'gamedir':
+      return paths.gameDir(dir)
     case 'saves':
       return isolated ? path.join(versionDir, 'saves') : paths.savesDir(dir)
     case 'mods':

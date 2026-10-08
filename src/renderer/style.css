@@ -994,7 +994,15 @@ button.acc__tab:hover {
 /* 四格状态卡（M17.3 照设计稿改成"白卡 + 彩色图标 + 两行字"）
  *
  * 【为什么在深色主题里也用白卡】设计稿就是这么画的——四张白卡压在深色页面上，
- * 是整套设计里最跳的一处。颜色走下面三个变量，想调改一处就行。 */
+ * 是整套设计里最跳的一处。颜色走下面三个变量，想调改一处就行。
+ *
+ * M19：这四张卡**点得动了**（用户 2026-10-09 反馈"点不了、鼠标放上边也没反应"）。
+ * 所以现在它们四个是 <button>——长得像能点的东西，就得真的能点、还得有反应。
+ * 有版本的时候悬停会抬起来 + 亮一圈主题色的边；没装版本时按钮是禁用的。
+ *
+ * 【注意 [data-fact] 这个限定】`.fact` 这个类联机页也在用（房间码 / 你的地址那两格），
+ * 那两格是纯展示、点了没反应。所以"能点"的那一套（手型鼠标、悬停抬起、箭头）
+ * 一律写在 [data-fact] 上——不然联机页那两格也会装成能点的样子。 */
 .fact {
   display: flex;
   align-items: center;
@@ -1004,6 +1012,85 @@ button.acc__tab:hover {
   border: 1px solid var(--fact-border);
   border-radius: 12px;
   box-shadow: var(--fact-shadow);
+}
+
+.fact[data-fact] {
+  /* button 的默认样式要抹掉（它本质上还是那张白卡） */
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.fact[data-fact]:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow: var(--card-shadow-hover), 0 0 0 3px var(--accent-ring);
+}
+
+.fact[data-fact]:active {
+  transform: translateY(0);
+}
+
+/* 键盘 Tab 过来时也要看得见（鼠标用户看不到它，只有按键盘才出现） */
+.fact[data-fact]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 最右边那个"点得动"的箭头：平时藏着，鼠标放上去才浮出来。
+   它一直都在（只是透明的），所以不会因为出现/消失把文字挤一下 */
+.fact__go {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--accent);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+.fact[data-fact]:hover .fact__go {
+  opacity: 0.8;
+  transform: translateX(0);
+}
+
+/* 没版本可管的时候（按钮被禁用）：样子照旧，但按下去没有任何事发生——
+   那就别装成能点的样子（鼠标不变手、悬停不抬、箭头不出现） */
+.fact[data-fact]:disabled {
+  cursor: default;
+}
+
+.fact[data-fact]:disabled:hover {
+  transform: none;
+  border-color: var(--fact-border);
+  box-shadow: var(--fact-shadow);
+}
+
+.fact[data-fact]:disabled .fact__go {
+  display: none;
+}
+
+/* 点上面那几张卡跳到别处之后，给"要看的那一块"闪一圈光，
+   不然用户得自己找——点了内存卡跳到设置页，眼前一整页谁知道该看哪 */
+@keyframes flash-hi {
+  0% {
+    box-shadow: 0 0 0 4px var(--accent-ring);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.flash-hi {
+  animation: flash-hi 1.6s ease-out;
 }
 
 /* 图标：矢量图（SVG），颜色写死在图里——它自己就是一整套配色的图标，

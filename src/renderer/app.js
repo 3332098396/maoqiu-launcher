@@ -1026,6 +1026,9 @@ function refreshLaunchUi() {
 
   factVersionEl.textContent = selectedVersion || '—'
 
+  // 四格卡片是能点的（M19）：一个版本都没装的时候没什么可管，就别装成能点的样子
+  for (const button of factButtonEls) button.disabled = !selectedVersion
+
   // ——— 大启动卡上那两行（M14.2）———
   {
     const one = picked
@@ -1046,6 +1049,8 @@ function refreshLaunchUi() {
 
     const isolated =
       typeof override.isolation === 'boolean' ? override.isolation : launchInfo.isolation
+    // 记下来给"点目录卡片"用（要和卡片上显示的那个路径保持一致）
+    selectedIsolated = isolated
     // 游戏目录要用**这个版本自己那个**目录，不是默认目录
     const base = selectedDir || launchInfo.gameDir
     factDirEl.textContent = isolated ? `${base}\\versions\\${selectedVersion}` : base
@@ -1087,6 +1092,64 @@ function shortJavaSource(source) {
   if (text.includes('手动')) return '手动指定'
   if (text.includes('本机已有')) return '本机已有的'
   return '版本自带'
+}
+
+/** 当前选中的版本有没有开版本隔离（四格卡片点"目录"时要按它决定打开哪个文件夹） */
+let selectedIsolated = false
+
+// ——— 四格卡片：点一下去做对应的事（M19）———
+//
+// 【为什么做成能点的】用户 2026-10-09 反馈"这几个卡片点不了，鼠标放上边也没反应"。
+// 这四格本来只是"现在的状态"，看着不对劲也没处下手；做成入口之后，
+// 内存小了、Java 不对，当场就能点进去改。
+const factButtonEls = document.querySelectorAll('.fact[data-fact]')
+
+for (const button of factButtonEls) {
+  button.addEventListener('click', () => onFactClick(button.dataset.fact))
+}
+
+async function onFactClick(kind) {
+  if (!selectedVersion) return
+
+  if (kind === 'version') {
+    openVersionSettings()
+    return
+  }
+
+  // Java 那一行在「版本设置」弹窗里（那儿才看得到完整路径和来源）
+  if (kind === 'java') {
+    openVersionSettings()
+    flashAt(verJavaEl.closest('.vermeta__row'))
+    return
+  }
+
+  if (kind === 'memory') {
+    showPage('settings')
+    showSettingsTab('launch')
+    flashAt(document.getElementById('panel-memory'))
+    return
+  }
+
+  if (kind === 'dir') {
+    // 打开的就是卡片上写着的那一个：
+    // 开了隔离 → versions\<版本号>\；没开 → 这个版本所在的游戏目录
+    const result = await window.api.openVersionFolder(
+      selectedVersion,
+      selectedIsolated ? 'version' : 'gamedir',
+      selectedDir
+    )
+    if (!result.ok) setNotice(`打不开文件夹：${result.error}`, 'error')
+  }
+}
+
+/** 让某一块闪一圈光——点了卡片跳过来之后，告诉用户"看这儿" */
+function flashAt(el) {
+  if (!el) return
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  el.classList.remove('flash-hi')
+  void el.offsetWidth // 强制重排一下，连点两次才会重新播动画
+  el.classList.add('flash-hi')
+  setTimeout(() => el.classList.remove('flash-hi'), 1800)
 }
 
 /** 只把启动页的信息重新读一遍并刷新（比如刚在版本设置里改了内存） */

@@ -205,7 +205,7 @@
           <!-- ③ 四格状态（M17.3 照设计稿：白卡 + 左边一个彩色图标 + 两行字）
                图标是内嵌的矢量图（SVG）——颜色跟着卡片走，放大也不糊 -->
           <div class="launch-facts">
-            <div class="fact">
+            <button class="fact" type="button" data-fact="version" title="点开版本设置">
               <!-- 草方块（M17.2 照设计稿换的，原来是块蓝立方体）：
                    等距视角的小方块，顶面是草、两侧是土、土上面压一条草边 -->
               <span class="fact__icon fact__icon--grass" aria-hidden="true">
@@ -221,9 +221,10 @@
                 <span class="fact__k">游戏版本</span>
                 <span class="fact__v" id="fact-version">—</span>
               </span>
-            </div>
+              <span class="fact__go" aria-hidden="true">›</span>
+            </button>
 
-            <div class="fact">
+            <button class="fact" type="button" data-fact="java" title="点开看看用的是哪个 Java">
               <span class="fact__icon fact__icon--java" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none">
                   <path d="M4 15h13a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v8Z" fill="#e05b3a" />
@@ -237,9 +238,10 @@
                 <span class="fact__k">Java</span>
                 <span class="fact__v" id="fact-java">—</span>
               </span>
-            </div>
+              <span class="fact__go" aria-hidden="true">›</span>
+            </button>
 
-            <div class="fact">
+            <button class="fact" type="button" data-fact="memory" title="去设置里改内存">
               <span class="fact__icon fact__icon--ram" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none">
                   <rect x="2.5" y="7" width="19" height="10" rx="1.8" fill="#3fae6a" />
@@ -254,9 +256,10 @@
                 <span class="fact__k">内存</span>
                 <span class="fact__v" id="fact-memory">—</span>
               </span>
-            </div>
+              <span class="fact__go" aria-hidden="true">›</span>
+            </button>
 
-            <div class="fact">
+            <button class="fact" type="button" data-fact="dir" title="在文件资源管理器里打开">
               <span class="fact__icon fact__icon--folder" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none">
                   <path
@@ -270,7 +273,8 @@
                 <span class="fact__k">目录</span>
                 <span class="fact__v fact__v--path" id="fact-dir">—</span>
               </span>
-            </div>
+              <span class="fact__go" aria-hidden="true">›</span>
+            </button>
           </div>
 
           <!-- ④ 两栏：左边选版本，右边皮肤预览（账号挪到头像弹窗里了，见 M17.5）-->
@@ -634,7 +638,7 @@
             这里改完马上生效，下次启动游戏就按这里的来。
           </div>
 
-          <section class="panel">
+          <section class="panel" id="panel-memory">
             <h3 class="panel__title">内存分配</h3>
             <p class="panel__desc">
               给游戏多少内存。给少了游戏会卡，给太多会把整台电脑拖慢。
