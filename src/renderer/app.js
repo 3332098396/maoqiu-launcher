@@ -674,6 +674,28 @@ async function doMicrosoftLogin() {
 }
 
 accTabMicrosoftEl.addEventListener('click', () => setAccTab('microsoft'))
+
+// ——— 账号弹窗（M17.5）———
+//
+// 账号卡原来在启动页左边，但设计稿里首页左边只有「版本选择」，
+// 账号在侧栏头像那边。所以把它挪进弹窗，点左上角头像打开。
+const accModalEl = document.getElementById('acc-modal')
+
+function openAccountModal() {
+  accModalEl.hidden = false
+  renderAccountCard()
+  setAccTab(accTab) // 让那张表按当前状态显示（顺便把焦点放到该放的地方）
+}
+
+document.querySelector('.rail__brand')?.addEventListener('click', openAccountModal)
+document.getElementById('acc-close').addEventListener('click', () => {
+  accModalEl.hidden = true
+})
+
+// 点弹窗外面那层黑也能关（跟别的弹窗一个手感）
+accModalEl.addEventListener('click', (event) => {
+  if (event.target === accModalEl) accModalEl.hidden = true
+})
 accMsLoginEl.addEventListener('click', doMicrosoftLogin)
 accMsGoSetupEl.addEventListener('click', () => {
   // 直接把人送到该填的地方，别让他自己在设置里找
@@ -953,15 +975,15 @@ function renderPickList() {
 function accountProblem() {
   if (accTab === 'yggdrasil') {
     if (launchInfo?.account?.type === 'yggdrasil') return ''
-    return '先在上面登录一个外置账号，按钮就能点了'
+    return '点左上角的头像登录一个外置账号，按钮就能点了'
   }
   if (accTab === 'microsoft') {
     if (launchInfo?.account?.type === 'microsoft') return ''
-    return '先在上面用微软账号登录，按钮就能点了'
+    return '点左上角的头像用微软账号登录，按钮就能点了'
   }
 
   const typed = accInputEl.value.trim()
-  if (!typed) return '填一个游戏名字（上面那个框），按钮就能点了'
+  if (!typed) return '点左上角的头像填个游戏名字，按钮就能点了'
   return nameProblem(typed)
 }
 
@@ -1024,10 +1046,15 @@ function refreshLaunchUi() {
       ? `${java.version}（${shortJavaSource(java.source)}）`
       : java.error || '还没找到——装好版本后会自动带上'
 
-    // 「当前版本」那张卡：名字、备注，以及"要改去哪改"的提示
+    // 「当前版本」那张卡（M17.5：首页上不再显示它）
+    //
+    // 【为什么拿掉了】设计稿的首页是"大启动卡 + 四格 + [版本选择 | 皮肤预览]"，
+    // **没有这张卡**——版本的名字、备注这些，设计稿里归「版本设置」那个弹窗管。
+    // 而且实测：留着它首页会多出 90px，正好把皮肤预览挤出屏幕（用户看到过半个皮肤）。
+    // 内容照样算好（下面的 else 分支），哪天想放回去，把 hidden 那行改回来就行。
+    currentVersionPanelEl.hidden = true
     if (selectedVersion) {
       const info = selectedItem() || {}
-      currentVersionPanelEl.hidden = false
       // 名字后面缀上"正式版/快照"——光看版本号分不出来（对照 PCL 整理的 ⭐⭐⭐ 项）
       const typeLabel = VERSION_TYPE_LABELS[info.type] || ''
       curNameEl.textContent =
@@ -1038,8 +1065,6 @@ function refreshLaunchUi() {
       curHintEl.textContent = info.isDefault
         ? '想改名字、写备注、打开存档文件夹或者删掉它：点左下角的「版本设置」'
         : `这个版本在 ${info.dir} 里。想改名字、写备注、打开存档文件夹或者删掉它：点左下角的「版本设置」`
-    } else {
-      currentVersionPanelEl.hidden = true
     }
   }
 
@@ -1117,7 +1142,7 @@ function refreshLaunchNotice() {
   if (versionList().length === 0) {
     setNotice('这里还空着——去「下载」页挑个版本装上，回来就能开玩了。')
   } else {
-    setNotice('在左边填一个游戏名字、选一个版本，就可以点「开始游戏」了。')
+    setNotice('点左上角的头像填个游戏名字、选一个版本，就可以点「开始游戏」了。')
   }
 }
 
@@ -1243,7 +1268,7 @@ async function startGame() {
   if (accTab !== 'offline') {
     if (launchInfo?.account?.type !== accTab) {
       const which = accTab === 'yggdrasil' ? '外置账号' : '微软账号'
-      setNotice(`先在上面登录一个${which}，再点「开始游戏」`, 'error')
+      setNotice(`先点左上角的头像登录一个${which}，再点「开始游戏」`, 'error')
       if (accTab === 'yggdrasil') accUserEl.focus()
       else accMsLoginEl.focus()
       return

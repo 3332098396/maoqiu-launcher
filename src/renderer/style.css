@@ -26,6 +26,10 @@
   --card-border-hover: #b8dbff;
   --accent-line: #e3f0ff;
   --card-radius: 12px;
+  /* 左边导航"选中项"的样子。默认各主题沿用自己那套（浅底 + 强调色字）；
+     霓虹主题照设计稿改成"浅色胶囊 + 深色字"，在它那一块里覆盖。 */
+  --rail-on-bg: var(--surface-accent);
+  --rail-on-fg: var(--accent-strong);
   /* 四格状态卡（M17.3 照设计稿：白底 + 深字。深色主题里也用它，所以单独一组变量） */
   --fact-bg: #ffffff;
   --fact-border: #dfe9f7;
@@ -229,6 +233,9 @@ body[data-theme='neon'] {
   --on-topbar-hover: rgba(255, 255, 255, 0.14);
   --pill-bg: rgba(43, 49, 85, 0.7);
   --pill-text: #d9ccff;
+  /* 导航选中项：设计稿里是**浅色胶囊 + 深色字**（跟其他主题正好反过来） */
+  --rail-on-bg: rgba(233, 238, 250, 0.9);
+  --rail-on-fg: #1a2130;
 }
 
 /* ── 磨砂玻璃：把这套主题里所有"面"都加上背景模糊（M17.2）
@@ -952,9 +959,20 @@ button.acc__tab:hover {
    ═══════════════════════════════════════ */
 .launch-facts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 8px;
-  margin-bottom: 14px;
+  /* 【为什么写死 4 列，不用 auto-fit】设计稿里这四格是**并排一行**的。
+     用 auto-fit + 230px 的话，窗口一窄就折成两行（用户实际看到过：
+     3 个一行、第 4 个被挤到下一行），跟图对不上。
+     窗口窄到放不下时由外面的媒体查询统一处理，不靠它自己折。 */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+/* 窗口窄的时候四格才折成两行 */
+@media (max-width: 1000px) {
+  .launch-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* 四格状态卡（M17.3 照设计稿改成"白卡 + 彩色图标 + 两行字"）
@@ -1408,6 +1426,14 @@ button.acc__tab:hover {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 14px;
+}
+
+/* 【必须显式写】.panel 设了 display:flex，会**盖掉** HTML 的 hidden 属性——
+   所以 `element.hidden = true` 对它不起作用（实测踩到：版本信息卡明明设了 hidden，
+   量出来还是 90px 高，把首页顶出屏幕）。
+   项目里好几个地方都犯过同一个错（.online-grid 那次也是），见 CLAUDE.md 排查小抄。 */
+.panel[hidden] {
+  display: none;
 }
 
 .panel {
@@ -2144,37 +2170,66 @@ body.has-bg {
   flex-direction: column;
   align-items: stretch;
   gap: 4px;
-  width: 84px;
-  padding: 10px 8px;
+  /* 设计稿的导航是"图标 + 文字"横排，所以比原来那种窄图标条宽得多 */
+  width: 196px;
+  padding: 16px 12px;
   background: var(--surface-a72);
   border-right: 1px solid var(--card-border);
 }
 
-.rail__logo {
+/* 顶上：圆头像 + 名字 + 小徽章（M17.5 照设计稿） */
+.rail__brand {
   display: flex;
   align-items: center;
-  justify-content: center;
-  height: 44px;
-  margin-bottom: 6px;
-  font-size: 22px;
-  border-radius: 12px;
-  background: var(--primary-gradient);
-  color: var(--on-accent);
-  box-shadow: var(--card-shadow);
+  gap: 10px;
+  padding: 4px 6px 16px;
 }
 
+.rail__avatar {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  overflow: hidden;
+  /* 头像外面那圈紫边（设计稿里就是圈着的） */
+  box-shadow: 0 0 0 2px var(--accent), 0 4px 16px var(--accent-shadow);
+}
+
+.rail__avatar svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.rail__name {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* 版本号那个小徽章：贴着名字右下角，比名字小一号、用强调色 */
+.rail__badge {
+  align-self: flex-end;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* 每个导航项：横排（图标 + 文字）。设计稿里就是横排的。 */
 .rail__btn {
+  position: relative;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 3px;
-  padding: 9px 2px;
+  gap: 12px;
+  padding: 10px 14px;
   font-family: var(--font);
-  font-size: 11.5px;
+  font-size: 15px;
   color: var(--text-dim);
   background: transparent;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease;
 }
@@ -2186,14 +2241,34 @@ body.has-bg {
 
 .rail__btn--on,
 .rail__btn--on:hover {
-  color: var(--accent-strong);
-  background: var(--surface-accent);
+  color: var(--rail-on-fg);
+  background: var(--rail-on-bg);
   font-weight: 600;
 }
 
+/* 选中项左边那道小竖条（设计稿里贴在最左边，青色） */
+.rail__btn--on::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  width: 3px;
+  height: 22px;
+  border-radius: 0 3px 3px 0;
+  transform: translateY(-50%);
+  background: linear-gradient(180deg, #9a5cf7, #2fd4e8);
+}
+
 .rail__icon {
-  font-size: 17px;
-  line-height: 1;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+}
+
+.rail__icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .rail__gap {
@@ -2237,8 +2312,8 @@ body.has-bg {
   flex-direction: column;
   justify-content: space-between;
   gap: 18px;
-  min-height: 230px;
-  padding: 26px 28px 16px;
+  min-height: 150px;
+  padding: 20px 26px 14px;
   margin-bottom: 12px;
   border-radius: 18px;
   overflow: hidden;
@@ -2256,7 +2331,7 @@ body.has-bg {
 /* 版本号：设计稿里它是整页最大的东西，一眼就看见"我要启动哪个版本" */
 .hero__name {
   margin: 0 0 2px;
-  font-size: 46px;
+  font-size: 38px;
   font-weight: 800;
   line-height: 1.05;
   letter-spacing: 0.5px;
@@ -2350,7 +2425,8 @@ body.has-bg {
 /* 下面两栏：左边账号 + 选版本，右边版本详情 */
 .launch-cols {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  /* M17.5 照设计稿：左栏（版本选择）约占内容区三分之一，右栏（皮肤预览）占其余 */
+  grid-template-columns: 34% minmax(0, 1fr);
   gap: 12px;
   align-items: start;
 }
@@ -2451,7 +2527,7 @@ body.has-bg {
 
 .skin-stage {
   position: relative;
-  height: 300px;
+  height: 170px;
   margin: 4px 0 8px;
   border-radius: 12px;
   /* 深一点的底，皮肤小人（浅色）在上面才看得清 */

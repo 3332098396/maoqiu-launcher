@@ -136,7 +136,9 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     // 左边现在有个导航栏（M14.2），窗口宽一点内容才不挤
     width: 1180,
-    height: 740,
+    // M17.5：设计稿是大版式（一屏放下大启动卡 + 四格 + 两栏），
+    // 740 太挤会把皮肤预览挤到屏幕外，所以默认高一点
+    height: 824,
     minWidth: 900,
     minHeight: 600,
     title: '毛球',
