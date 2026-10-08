@@ -24,8 +24,38 @@ const zlib = require('node:zlib')
 // ——————————————————————————————————————————————
 // 一、配色
 // ——————————————————————————————————————————————
-const GRASS = '#6FAE4A' // 草：上层的绿
-const DIRT = '#8B6239' // 泥土：下层的棕
+const GRASS = '#6FAE4A' // 草：上层的绿（旧配色，留着备用）
+const DIRT = '#8B6239' // 泥土：下层的棕（旧配色，留着备用）
+
+/**
+ * M17.3：换成品牌渐变（紫→青），跟"霓虹紫青"那套主题一套。
+ *
+ * 【为什么用渐变而不是纯色】设计稿里那套配色的招牌就是紫→青的渐变
+ * （大启动卡、主按钮都是它）。图标只用一个纯紫或纯青，放在任务栏里
+ * 跟别的软件没区别；用渐变一眼就能认出是毛球。
+ *
+ * 【泥层为什么用"同一个渐变压暗"】草方块要有"块"的立体感，
+ * 上下两层得是同色系、一亮一暗。用两种不相干的颜色就不像一块了。
+ */
+const BRAND_FROM = [154, 92, 247] // #9a5cf7（紫）
+const BRAND_TO = [47, 212, 232] // #2fd4e8（青）
+const mix = (a, b, t) => Math.round(a + (b - a) * t)
+
+/** 按横坐标取品牌渐变的颜色（1.5~30.5 是方块在 32 格设计稿里的范围） */
+function brandColor(px) {
+  const t = Math.min(1, Math.max(0, (px - 1.5) / 29))
+  return [
+    mix(BRAND_FROM[0], BRAND_TO[0], t),
+    mix(BRAND_FROM[1], BRAND_TO[1], t),
+    mix(BRAND_FROM[2], BRAND_TO[2], t)
+  ]
+}
+
+/** 泥层：同一条渐变，压暗到一半左右 */
+function brandColorDark(px) {
+  const [r, g, b] = brandColor(px)
+  return [Math.round(r * 0.48), Math.round(g * 0.48), Math.round(b * 0.48)]
+}
 
 // ——————————————————————————————————————————————
 // 二、PNG 编码
@@ -111,14 +141,18 @@ function renderIcon(size) {
 
   const acc = new Float32Array(S * S * 4)
 
-  /** 按形状铺一层颜色。test 返回 true 的地方就被涂上 */
-  const paint = (test, hex) => {
-    const [r, g, b] = hexToRgb(hex)
+  /**
+   * 按形状铺一层颜色。test 返回 true 的地方就被涂上。
+   * colorAt 传字符串就是铺纯色；传函数就是"按坐标算颜色"（渐变用它）。
+   */
+  const paint = (test, colorAt) => {
+    const flat = typeof colorAt === 'string' ? hexToRgb(colorAt) : null
     for (let y = 0; y < S; y++) {
       for (let x = 0; x < S; x++) {
         const px = (x + 0.5) / k
         const py = (y + 0.5) / k
         if (!test(px, py)) continue
+        const [r, g, b] = flat || colorAt(px, py)
         const i = (y * S + x) * 4
         acc[i] = r
         acc[i + 1] = g
@@ -130,11 +164,11 @@ function renderIcon(size) {
 
   // —— 第 1 层：泥土（整个方块） ——
   // 留 1.5 像素的边距，免得贴到图标边缘显得挤
-  paint((px, py) => inRect(px, py, 1.5, 1.5, 29, 29), DIRT)
+  paint((px, py) => inRect(px, py, 1.5, 1.5, 29, 29), brandColorDark)
 
   // —— 第 2 层：草（上面约三分之一） ——
   // 真实的草方块，草大概占方块高度的三成左右，多了就不像了
-  paint((px, py) => inRect(px, py, 1.5, 1.5, 29, 9.5), GRASS)
+  paint((px, py) => inRect(px, py, 1.5, 1.5, 29, 9.5), brandColor)
 
   // —— 第 3 层：草往下垂得不齐，像真的草皮 ——
   // 几块高低不一的草挂在下面。**用和草一样的绿**，只是往下参差；
@@ -147,7 +181,7 @@ function renderIcon(size) {
     { x: 26, w: 3, h: 1.8 }
   ]
   for (const tab of tabs) {
-    paint((px, py) => inRect(px, py, tab.x, 11, tab.w, tab.h), GRASS)
+    paint((px, py) => inRect(px, py, tab.x, 11, tab.w, tab.h), brandColor)
   }
 
   // —— 缩回目标尺寸：把 SS×SS 个像素平均成一个 ——
