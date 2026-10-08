@@ -992,15 +992,22 @@ function refreshLaunchUi() {
   const problem = accountProblem()
   const picked = selectedItem()
 
-  launchBtnEl.disabled = launching || !selectedVersion || Boolean(problem)
+  // 【没装版本时这个按钮换个身份】用户要求：一个版本都没装的时候，
+  // 按钮不该是灰着的"开始游戏"，而应该是能点的「下载一个版本」，点一下直接去下载页。
+  // 所以这时候既不置灰、也不看账号有没有问题——反正点下去是跳页面，不是启动游戏。
+  const noVersions = !selectedVersion
+
+  launchBtnEl.disabled = launching || (!noVersions && Boolean(problem))
 
   // 按钮上直接写清楚"要启动的是哪个版本"——不用回头看左边列表
   // （对照 PCL 整理的 ⭐⭐⭐ 项：PCL 那个大按钮里就写着版本名）
   launchBtnEl.textContent = launching
     ? '游戏运行中…'
-    : picked
-      ? `开始游戏 · ${shortVersionLabel(picked)}`
-      : '开始游戏'
+    : noVersions
+      ? '下载一个版本'
+      : picked
+        ? `开始游戏 · ${shortVersionLabel(picked)}`
+        : '开始游戏'
 
   // 没选版本就没得设置
   verSettingsBtnEl.disabled = !selectedVersion
@@ -1009,7 +1016,7 @@ function refreshLaunchUi() {
   // 光把按钮变灰，用户只能自己猜（实测时用户就问过"为什么点不了"）
   let tip = ''
   if (!launching) {
-    if (!selectedVersion) tip = '先到「下载」页装一个版本，才能开始游戏'
+    if (!selectedVersion) tip = '一个版本都还没装 —— 点上面那个按钮，去下载页挑一个'
     else if (problem) tip = problem
   }
   launchTipEl.textContent = tip
@@ -1310,7 +1317,14 @@ async function startGame() {
   }
 }
 
-launchBtnEl.addEventListener('click', startGame)
+// 一个版本都没装的时候，这个按钮是"去下载"，不是"开始游戏"（用户点名要的）
+launchBtnEl.addEventListener('click', () => {
+  if (!selectedVersion) {
+    showPage('download')
+    return
+  }
+  startGame()
+})
 
 // 主进程推过来的游戏日志和状态
 window.api.onLaunchLog((lines) => appendLog(lines))
