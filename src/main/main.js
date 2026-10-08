@@ -1086,6 +1086,8 @@ function registerIpcHandlers() {
       return {
         ok: true,
         ...online.status(),
+        // 启动时清理残留的那句提示（读一次就清掉，免得反复弹）
+        startupNote: online.takeStartupNote(),
         code: config.code || '',
         role: config.role || ''
       }
@@ -1356,6 +1358,7 @@ app.whenReady().then(() => {
     const onlineCfg = settings.readConfig().online
     if (onlineCfg.code && online.isRunning() && !launch.isRunning()) {
       online.leave()
+      online.noteStrayRoom()
       console.log('[启动器] 收掉了一个游戏已经退出的空房间')
     }
   } catch (error) {

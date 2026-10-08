@@ -155,6 +155,19 @@ function Note([string]$text) {
 
 Note 'wrapper started'
 
+# 【起新的之前，先把老的清干净】2026-10-08 实测踩到的大坑：
+# 毛球被强杀（装安装包、任务管理器结束进程）之后，上一次那个 core 会留下来。
+# 它是**管理员权限**起的，普通权限的 taskkill 杀不动，而那个包装脚本只管自己起的那一个
+# ——于是谁都管不了它。后果很阴：新 core 因为端口被老占着，起来就秒退；
+# 毛球连的其实还是那个老 core，界面上看着一切正常，**房间却是上一次的**。
+# 这个脚本本身是管理员，所以在这儿清最合适：一次 UAC 之内顺手做完。
+$old = @(Get-Process -Name 'easytier-core' -ErrorAction SilentlyContinue)
+if ($old.Count -gt 0) {
+  Note ("cleaning " + $old.Count + " stale core(s)")
+  Stop-Process -Name 'easytier-core' -Force
+  Start-Sleep -Seconds 1
+}
+
 $argsList = @()
 if (Test-Path -LiteralPath $ArgFile) {
   foreach ($one in Get-Content -LiteralPath $ArgFile -Encoding UTF8) {
@@ -177,7 +190,9 @@ while ($true) {
   if (-not (Get-Process -Id $core.Id -ErrorAction SilentlyContinue)) { Note 'core already gone'; exit 0 }
 }
 
-Stop-Process -Id $core.Id -Force
+# 按**名字**杀，不只杀自己起的那个：万一刚才那一步清完、又冒出来一个
+# （或者 core 自己拉起了子进程），一起收拾掉。这个脚本是管理员，杀得动。
+Stop-Process -Name 'easytier-core' -Force
 Remove-Item -LiteralPath $Flag -Force
 Note 'core stopped, wrapper done'
 `
@@ -464,7 +479,26 @@ function cleanupStray() {
   if (!isRunning()) return false // 没在跑，无事可做
 
   leave()
+  startupNote = '顺手收掉了一个上次没退干净的联机进程。'
   return true
+}
+
+/**
+ * 启动时清理残留的提示，**读一次就清掉**（免得界面上反复弹）。
+ * 【为什么要给界面看】用户要求"每次打开毛球让他自己检测有没有没退干净的残留"——
+ * 光在控制台打一行他看不见，得让他知道"检查过了、还清理了"。
+ */
+let startupNote = ''
+
+function takeStartupNote() {
+  const note = startupNote
+  startupNote = ''
+  return note
+}
+
+/** 启动时收掉"游戏早就退了的空房间"，顺带记一句给界面 */
+function noteStrayRoom() {
+  startupNote = '收掉了一个上次留下的空房间（游戏已经退出了）。'
 }
 
 /**
@@ -522,6 +556,8 @@ module.exports = {
   startRoom,
   leave,
   cleanupStray,
+  takeStartupNote,
+  noteStrayRoom,
   isRunning,
   status,
   HOST_IP,

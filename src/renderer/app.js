@@ -3291,6 +3291,11 @@ async function refreshOnlinePage() {
 
   onlineInfo = status
   renderOnline()
+
+  // 启动时毛球自己收拾过残留（上次没退干净的联机进程 / 游戏已退出的空房间）——
+  // 说一声，不然用户只知道"打开来没房间"，不知道毛球替他清过。
+  // 这句在服务端是"读一次就清掉"的，所以不会反复弹。
+  if (status.startupNote) setOnlineNotice(status.startupNote, 'ok')
 }
 
 /**
