@@ -1219,6 +1219,22 @@ pickToggleEl.addEventListener('click', () => {
   renderPickList()
 })
 
+// 大启动卡上那个「刷新」：重新问一遍主进程（版本列表、Java、内存这些）
+// 比如用户在别处装了新版本、或者把 Java 换了，不用重开软件
+document.getElementById('hero-refresh').addEventListener('click', async (event) => {
+  const button = event.currentTarget
+  button.disabled = true
+  const original = button.textContent
+  button.textContent = '刷新中…'
+  try {
+    await loadLaunchPage()
+    setNotice('刷新好了。', 'ok')
+  } finally {
+    button.textContent = original
+    button.disabled = false
+  }
+})
+
 async function startGame() {
   if (!selectedVersion) return
 

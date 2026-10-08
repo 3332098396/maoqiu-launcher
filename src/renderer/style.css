@@ -26,6 +26,12 @@
   --card-border-hover: #b8dbff;
   --accent-line: #e3f0ff;
   --card-radius: 12px;
+  /* 四格状态卡（M17.3 照设计稿：白底 + 深字。深色主题里也用它，所以单独一组变量） */
+  --fact-bg: #ffffff;
+  --fact-border: #dfe9f7;
+  --fact-shadow: 0 4px 14px rgba(31, 45, 61, 0.12);
+  --fact-k: #6b7688;
+  --fact-v: #1f2d3d;
   --card-shadow: 0 2px 8px rgba(74, 155, 255, 0.08);
   --card-shadow-hover: 0 6px 18px rgba(74, 155, 255, 0.18);
   --accent-shadow: rgba(74, 155, 255, 0.28);
@@ -255,6 +261,31 @@ body[data-theme='neon'] .btn--ghost,
 body[data-theme='neon'] .icon-picker__item {
   backdrop-filter: blur(16px) saturate(140%);
   -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+
+/* ── 霓虹紫青：大启动卡铺风景图（M17.3，设计稿就是这么画的）
+ * 【为什么上面还要压一层渐变】不压的话白字压在亮风景上会看不清；
+ * 这层是"上浅下深"——上半截留着看清风景，下半截压暗好放按钮和字。 */
+body[data-theme='neon'] .hero {
+  background: linear-gradient(
+      180deg,
+      rgba(6, 8, 16, 0.26) 0%,
+      rgba(6, 8, 16, 0.62) 55%,
+      rgba(6, 8, 16, 0.9) 100%
+    ),
+    url('../../assets/hero-landscape.jpg') center 42% / cover no-repeat;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.5);
+}
+
+/* 启动按钮：设计稿里它是"紫→青渐变的胶囊 + 光晕"，不是白底 */
+body[data-theme='neon'] .btn--hero {
+  color: #fff;
+  background: var(--primary-gradient);
+  box-shadow: 0 10px 28px rgba(154, 92, 247, 0.45);
+}
+
+body[data-theme='neon'] .btn--hero:hover:not(:disabled) {
+  box-shadow: 0 14px 34px rgba(154, 92, 247, 0.58);
 }
 
 /* 抹茶绿 */
@@ -926,35 +957,62 @@ button.acc__tab:hover {
   margin-bottom: 14px;
 }
 
+/* 四格状态卡（M17.3 照设计稿改成"白卡 + 彩色图标 + 两行字"）
+ *
+ * 【为什么在深色主题里也用白卡】设计稿就是这么画的——四张白卡压在深色页面上，
+ * 是整套设计里最跳的一处。颜色走下面三个变量，想调改一处就行。 */
 .fact {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 10px 14px;
-  font-size: 12.5px;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 10px;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  background: var(--fact-bg);
+  border: 1px solid var(--fact-border);
+  border-radius: 12px;
+  box-shadow: var(--fact-shadow);
+}
+
+/* 图标：矢量图（SVG），颜色写死在图里——它自己就是一整套配色的图标，
+   不跟着主题的强调色走（设计稿里那四个图标各有各的颜色） */
+.fact__icon {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+}
+
+.fact__icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.fact__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .fact__k {
-  flex: 0 0 60px;
-  color: var(--text-muted);
+  font-size: 12px;
+  color: var(--fact-k);
 }
 
 .fact__v {
-  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fact-v);
   user-select: text;
 }
 
 .fact__v--path {
-  font-size: 11.5px;
-  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fact-k);
 }
 
 /* 版本设置里那两行"这个版本是什么"（版本类型 / 将会用的 Java） */
@@ -2166,43 +2224,94 @@ body.has-bg {
   max-width: none;
 }
 
+/* ── 大启动卡（M17.3 照设计稿重排）
+ *
+ * 【版式变了】以前是"左边版本名 + 右边按钮"横着摆；
+ * 设计稿里是：版本号很大放左上，按钮全部挪到底部一条里（左边三个小胶囊、
+ * 右边一个大启动键）。
+ * 【底】默认还是品牌渐变（其他主题保持原样）；霓虹那套主题下面会覆盖成风景图。
+ */
 .hero {
+  position: relative;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: space-between;
-  gap: 20px;
-  flex-wrap: wrap;
-  padding: 22px 26px;
+  gap: 18px;
+  min-height: 230px;
+  padding: 26px 28px 16px;
   margin-bottom: 12px;
-  border-radius: 16px;
+  border-radius: 18px;
+  overflow: hidden;
   background: var(--primary-gradient);
-  box-shadow: var(--card-shadow-hover);
+  box-shadow: 0 14px 40px var(--accent-shadow);
   color: var(--on-accent);
 }
 
 .hero__label {
-  font-size: 12px;
+  margin-top: 2px;
+  font-size: 13px;
   opacity: 0.85;
 }
 
+/* 版本号：设计稿里它是整页最大的东西，一眼就看见"我要启动哪个版本" */
 .hero__name {
-  margin: 4px 0 6px;
-  font-size: 30px;
-  font-weight: 700;
+  margin: 0 0 2px;
+  font-size: 46px;
+  font-weight: 800;
+  line-height: 1.05;
   letter-spacing: 0.5px;
   word-break: break-all;
 }
 
 .hero__meta {
-  font-size: 12.5px;
+  margin-top: 6px;
+  font-size: 13px;
   opacity: 0.9;
 }
 
-.hero__actions {
+/* —— 底部那条：左小胶囊 + 右大按钮 —— */
+.hero__bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex: 0 0 auto;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hero__bar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 底部几个小胶囊：半透明深色，压在图上也不抢眼 */
+.btn--herochip {
+  padding: 8px 18px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #fff;
+  background: rgba(10, 13, 24, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn--herochip:hover:not(:disabled) {
+  background: rgba(10, 13, 24, 0.62);
+}
+
+.btn--herochip:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* 大启动按钮上那个小三角 */
+.hero__play {
+  margin-left: 6px;
+  font-size: 12px;
+  opacity: 0.9;
 }
 
 /* 大按钮：白底 + 主色字，在渐变卡上最显眼 */
@@ -2341,6 +2450,7 @@ body.has-bg {
 }
 
 .skin-stage {
+  position: relative;
   height: 300px;
   margin: 4px 0 8px;
   border-radius: 12px;
@@ -2348,6 +2458,35 @@ body.has-bg {
   background: linear-gradient(180deg, var(--surface-soft), var(--surface-accent));
   border: 1px solid var(--card-border);
   overflow: hidden;
+}
+
+/* 画布要盖在发光圆环上面（环在下、人在上，才像"站在光里"） */
+.skin-stage canvas {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── 霓虹紫青：小人脚下那圈发光（M17.3，设计稿里的）──
+ * 【怎么实现的】一个压扁的圆 + 径向渐变 + 模糊，放在画布**下面**。
+ * 画布本身是透明的，所以光能透上来，看着就是"人站在光里"。 */
+body[data-theme='neon'] .skin-stage::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  left: 50%;
+  bottom: 6%;
+  width: 66%;
+  height: 18%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    rgba(154, 92, 247, 0.6),
+    rgba(47, 212, 232, 0.3) 62%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  filter: blur(12px);
+  pointer-events: none;
 }
 
 /* ——— 樱花穿透那张卡（M15）——— */

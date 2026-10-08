@@ -57,19 +57,26 @@
       <!-- ═══════════ 启动页（M14.2 改成"大启动卡"布局）═══════════ -->
       <section class="page" data-page="launch">
         <div class="content content--wide">
-          <!-- ① 大启动卡：版本名 + 一个大按钮 -->
+          <!-- ① 大启动卡（M17.3 照设计稿重排：版本号放左上、按钮挪到底部一条里） -->
           <section class="hero">
             <div class="hero__info">
-              <div class="hero__label">当前版本</div>
               <div class="hero__name" id="hero-name">还没有装版本</div>
+              <div class="hero__label">当前游戏版本</div>
               <div class="hero__meta" id="hero-meta">先去「下载」页装一个</div>
             </div>
-            <div class="hero__actions">
+
+            <!-- 底部那条：左边几个小胶囊，右边一个大启动按钮 -->
+            <div class="hero__bar">
+              <div class="hero__bar-left">
+                <button class="btn btn--herochip" type="button" id="ver-settings-btn" disabled>
+                  版本设置
+                </button>
+                <button class="btn btn--herochip" type="button" id="hero-refresh">
+                  刷新
+                </button>
+              </div>
               <button class="btn btn--primary btn--hero" type="button" id="launch-btn" disabled>
-                开始游戏
-              </button>
-              <button class="btn btn--ghost btn--sm" type="button" id="ver-settings-btn" disabled>
-                版本设置
+                开始游戏 <span class="hero__play">▸</span>
               </button>
             </div>
           </section>
@@ -81,23 +88,70 @@
             先在左边填一个游戏名字、选一个版本，就可以开始游戏了。
           </div>
 
-          <!-- ③ 三格状态：Java / 内存 / 游戏目录 -->
+          <!-- ③ 四格状态（M17.3 照设计稿：白卡 + 左边一个彩色图标 + 两行字）
+               图标是内嵌的矢量图（SVG）——颜色跟着卡片走，放大也不糊 -->
           <div class="launch-facts">
             <div class="fact">
-              <span class="fact__k">当前版本</span>
-              <span class="fact__v" id="fact-version">—</span>
+              <span class="fact__icon fact__icon--cube" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2.6 21 7v10l-9 4.4L3 17V7l9-4.4Z" fill="#6f8cff" />
+                  <path d="M12 2.6 21 7l-9 4.4L3 7l9-4.4Z" fill="#9db4ff" />
+                  <path d="M12 11.4V21.4L3 17V7l9 4.4Z" fill="#4f6ede" />
+                </svg>
+              </span>
+              <span class="fact__text">
+                <span class="fact__k">游戏版本</span>
+                <span class="fact__v" id="fact-version">—</span>
+              </span>
             </div>
+
             <div class="fact">
-              <span class="fact__k">Java</span>
-              <span class="fact__v" id="fact-java">—</span>
+              <span class="fact__icon fact__icon--java" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M4 15h13a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v8Z" fill="#e05b3a" />
+                  <path d="M17 9.5h1.8a2.2 2.2 0 0 1 0 4.4H17" stroke="#c9482a" stroke-width="1.6" />
+                  <path d="M8 5.4c1.2-.6 0-1.6.6-2.4" stroke="#f0a58c" stroke-width="1.3" stroke-linecap="round" />
+                  <path d="M11 5.4c1.2-.6 0-1.6.6-2.4" stroke="#f0a58c" stroke-width="1.3" stroke-linecap="round" />
+                  <rect x="3" y="17.5" width="18" height="2.6" rx="1.3" fill="#5b6478" />
+                </svg>
+              </span>
+              <span class="fact__text">
+                <span class="fact__k">Java</span>
+                <span class="fact__v" id="fact-java">—</span>
+              </span>
             </div>
+
             <div class="fact">
-              <span class="fact__k">内存分配</span>
-              <span class="fact__v" id="fact-memory">—</span>
+              <span class="fact__icon fact__icon--ram" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <rect x="2.5" y="7" width="19" height="10" rx="1.8" fill="#3fae6a" />
+                  <rect x="5" y="9.5" width="2.6" height="5" rx="0.6" fill="#8ff0b6" />
+                  <rect x="9.2" y="9.5" width="2.6" height="5" rx="0.6" fill="#8ff0b6" />
+                  <rect x="13.4" y="9.5" width="2.6" height="5" rx="0.6" fill="#8ff0b6" />
+                  <rect x="17.6" y="9.5" width="1.8" height="5" rx="0.6" fill="#8ff0b6" />
+                  <path d="M6 17v3M18 17v3" stroke="#2c8a51" stroke-width="1.8" stroke-linecap="round" />
+                </svg>
+              </span>
+              <span class="fact__text">
+                <span class="fact__k">内存</span>
+                <span class="fact__v" id="fact-memory">—</span>
+              </span>
             </div>
+
             <div class="fact">
-              <span class="fact__k">游戏目录</span>
-              <span class="fact__v fact__v--path" id="fact-dir">—</span>
+              <span class="fact__icon fact__icon--folder" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M3 6.5A2 2 0 0 1 5 4.5h4.2a2 2 0 0 1 1.5.7l1 1.2H19a2 2 0 0 1 2 2v8.6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6.5Z"
+                    fill="#4a9bff"
+                  />
+                  <path d="M3 9.4h18v-1H3v1Z" fill="#3d86d8" />
+                </svg>
+              </span>
+              <span class="fact__text">
+                <span class="fact__k">目录</span>
+                <span class="fact__v fact__v--path" id="fact-dir">—</span>
+              </span>
             </div>
           </div>
 
