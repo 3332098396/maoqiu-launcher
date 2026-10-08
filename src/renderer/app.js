@@ -3284,7 +3284,11 @@ async function refreshOnlinePage() {
  *   · 已经在房间里 → 显示房间码、房间里有谁、离开按钮
  */
 function renderOnline() {
-  const inRoom = onlineInfo.running
+  // 【为什么还要看 code】光看 running 不够：EasyTier 残留的时候（毛球被强杀过），
+  // running 是 true 但房间码是空的——那样界面上会显示成"你在好友的房间里"配一个空房间码，
+  // 用户完全看不懂（他实测撞到过："为什么安装程序安装完就显示已经创建房间"）。
+  // 主进程启动时已经会清掉这种残留（online.cleanupStray），这里再兜一层。
+  const inRoom = onlineInfo.running && Boolean(onlineInfo.code)
   onlineStartEl.hidden = inRoom
   onlineRoomEl.hidden = !inRoom
   // 连接状态那块只在**真的开着房间**时露出来。
@@ -3322,8 +3326,10 @@ function renderOnline() {
       : '世界好像关掉了（游戏退出了？）。重新进游戏、开一个世界、按 Esc 点「对局域网开放」，' +
         '然后回来重新创建一次房间。'
   } else {
+    // 访客这边：房主既然能开出房间，就说明他那边世界已经开局域网了
+    // （用户这轮定的规矩：没开局域网不许建房），所以别再说"等房主开好世界"。
     onlineTipEl.textContent =
-      '已经进房间了。等房主开好世界，去游戏里点「多人游戏」——列表里应该能看到；' +
+      '房主那边的世界已经开好了。去游戏里点「多人游戏」——列表里应该能看到；' +
       '看不到就让房主把地址发你，用「直接连接」填进去。'
   }
 

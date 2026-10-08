@@ -1329,6 +1329,20 @@ function countSharedWorlds() {
 
 app.whenReady().then(() => {
   registerIpcHandlers()
+
+  // 收拾"上一个毛球留下的联机进程"（M17.x）。
+  // 毛球被强杀（装安装包、任务管理器结束进程）时 EasyTier 会残留，
+  // 新开的毛球一问"有进程在跑"就说"你在房间里"——可房间码早清空了，
+  // 界面上显示成"你在好友的房间里"配一个空的房间码（用户实测撞到过）。
+  // 这里只收"没有房间记录"的那种，正常开着的房间不动。
+  try {
+    if (online.cleanupStray()) {
+      console.log('[启动器] 收掉了一个上次没退干净的联机进程')
+    }
+  } catch (error) {
+    console.warn('[启动器] 清理残留联机进程时出错：', error.message)
+  }
+
   createSplash() // 开场动画（M17.4）——先盖着，主窗口画好了再收
   createWindow()
 

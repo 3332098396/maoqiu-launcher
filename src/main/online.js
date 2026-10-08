@@ -443,6 +443,31 @@ function describePeer(raw) {
 }
 
 /**
+ * 收拾"上一个毛球留下来的联机进程"。
+ *
+ * 【为什么需要】EasyTier 是 detached 起来的（为了让关掉毛球后联机还能用一会儿）。
+ * 正常情况下毛球一退、那个以管理员跑的包装脚本会自己收工；
+ * 但**毛球被强杀**（装安装包、任务管理器结束进程）时，core 会一直挂着。
+ * 于是新开的毛球一问"有进程在跑"就说"你在房间里"——可房间码和身份早已经清空了，
+ * 界面上就会显示成"你在好友的房间里"、房间码一个横杠（2026-10-08 用户就是这么撞上的：
+ * "为什么安装程序安装完就显示已经创建房间，我并没有创建"）。
+ *
+ * 【判据】**配置里没有房间记录**（code 为空）却检测到在跑 → 一定是残留，收掉。
+ * 有记录的一律留着——那种是"毛球崩了又重开"，房间本来就该继续。
+ *
+ * @returns {boolean} 有没有真收拾掉一个
+ */
+function cleanupStray() {
+  const config = settings.readConfig().online
+  if (config.code) return false // 有记录：正常的房间，别动
+  if (!currentVersion()) return false // 这台机器还没装过联机组件
+  if (!isRunning()) return false // 没在跑，无事可做
+
+  leave()
+  return true
+}
+
+/**
  * 房间现在什么情况：通不通、都有谁、延迟多少、直连还是中转。
  * @returns {{running: boolean, peers: Array, error?: string}}
  */
@@ -496,6 +521,7 @@ module.exports = {
   networkFor,
   startRoom,
   leave,
+  cleanupStray,
   isRunning,
   status,
   HOST_IP,
