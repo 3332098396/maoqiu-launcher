@@ -2967,10 +2967,18 @@ button.acc__tab:hover {
 
 /* 画布要盖在发光圆环上面（环在下、人在上，才像"站在光里"） */
 /* "换一张"那个转圈按钮（M21）
-   【放哪儿】用户先是要"脚下中央"，看了之后说"不要放到脚上，放到脚下去"——
-   所以现在放在小人下面那一排按钮里、「选个皮肤文件…」的左边 */
+   【放哪儿】用户改了三次才定：先是"脚下中央"→"不要放到脚上，放到脚下去"→
+   "上下位置不用动，往左边调到脚的正下方"。
+   所以：**垂直**跟旁边那排按钮齐平（不动），**水平**摆在小人正下方
+   （画布是居中的，所以那排按钮的 50% 就是小人站的地方）。 */
+.skin-card .modal__actions {
+  position: relative;
+}
+
 .skin-shuffle {
-  flex: 0 0 auto;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2985,18 +2993,13 @@ button.acc__tab:hover {
   transition:
     color 0.15s ease,
     border-color 0.15s ease,
-    background-color 0.15s ease,
-    transform 0.15s ease;
+    background-color 0.15s ease;
 }
 
 .skin-shuffle:hover {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--surface-accent);
-}
-
-.skin-shuffle:active {
-  transform: scale(0.94);
 }
 
 .skin-shuffle svg {
