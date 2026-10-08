@@ -334,11 +334,13 @@ async function startInstall(versionId) {
   setStage('准备中…')
   setFill(0)
   setDetail('—')
-  installCancelEl.disabled = false
+  installCancelEl.hidden = false
 
   const result = await window.api.startInstall(versionId)
   installingVersion = ''
-  installCancelEl.disabled = true
+  // 【装完要收起来，不能只置灰】用户反馈："安装完成之后右下角还是取消安装"——
+  // 光禁用的话它还杵在那儿、点又点不动，看着像坏了。
+  installCancelEl.hidden = true
   cancelModalEl.hidden = true // 装完了/取消了，取消确认框(如果开着)收掉
 
   if (!result.ok) {
@@ -410,7 +412,7 @@ function openCancelDialog() {
 
 async function finishCancel(mode) {
   cancelModalEl.hidden = true
-  installCancelEl.disabled = true
+  installCancelEl.hidden = true
   setStage(mode === 'drop' ? '正在取消并清理…' : '正在取消…')
 
   const result = await window.api.cancelInstall(mode)
@@ -1582,7 +1584,7 @@ async function installMrProject(button) {
   setFill(0)
   setDetail('—')
   // 社区资源一般都很小，不给取消按钮（避免和"取消装版本"混在一起）
-  installCancelEl.disabled = true
+  installCancelEl.hidden = true
   mrDoneEl.hidden = true
 
   let result
