@@ -13,3 +13,21 @@
 !macro customUnInstall
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "electron.app.${PRODUCT_NAME}"
 !macroend
+
+; 装的时候就替用户把「皮肤文件夹」建好（M21）。
+;
+; 【为什么要在这儿建】用户一装完就能往里丢皮肤图片，点「打开皮肤文件夹」也马上能打开——
+; 不用先开一次软件。程序自己第一次运行时也会建（复制随包那几张皮肤时），
+; 两边都建、谁也不依赖谁。
+;
+; 【注意】路径里那个中文名走的是 ${PRODUCT_NAME}（构建时注入的），
+; **不要在脚本里写中文字面量**：这个 .nsh 没有 BOM，NSIS 按 ANSI 读，
+; 写中文会变成乱码文件夹名。
+!macro customInstall
+  CreateDirectory "$APPDATA\${PRODUCT_NAME}\skins"
+!macroend
+
+; 卸载时**不删**这个文件夹（里面可能有用户自己下的皮肤）——
+; 跟 deleteAppDataOnUninstall: false 一个道理。
+!macro customRemoveFiles
+!macroend
