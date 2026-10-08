@@ -2966,45 +2966,42 @@ button.acc__tab:hover {
 }
 
 /* 画布要盖在发光圆环上面（环在下、人在上，才像"站在光里"） */
-/* 小人脚下正中那个"换一张"的圆按钮（M21）
-   【为什么放这儿】用户要的就是"在皮肤卡脚下中央放一个转圈图标，点一下随机换一张"——
-   位置贴着发光环，一眼就能看见，又不挡小人 */
+/* "换一张"那个转圈按钮（M21）
+   【放哪儿】用户先是要"脚下中央"，看了之后说"不要放到脚上，放到脚下去"——
+   所以现在放在小人下面那一排按钮里、「选个皮肤文件…」的左边 */
 .skin-shuffle {
-  position: absolute;
-  left: 50%;
-  bottom: 8px;
-  transform: translateX(-50%);
-  z-index: 2;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   color: var(--text-dim);
-  background: var(--surface-a95, rgba(20, 24, 40, 0.9));
+  background: var(--surface-soft);
   border: 1px solid var(--card-border);
   border-radius: 50%;
   cursor: pointer;
   transition:
     color 0.15s ease,
     border-color 0.15s ease,
+    background-color 0.15s ease,
     transform 0.15s ease;
 }
 
 .skin-shuffle:hover {
   color: var(--accent);
   border-color: var(--accent);
-  transform: translateX(-50%) scale(1.08);
+  background: var(--surface-accent);
 }
 
 .skin-shuffle:active {
-  transform: translateX(-50%) scale(0.96);
+  transform: scale(0.94);
 }
 
 .skin-shuffle svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   display: block;
 }
 

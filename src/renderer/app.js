@@ -4847,7 +4847,7 @@ async function applyCurrentSkin() {
     const image = await getOfficialSkin(saved.slice(1))
     if (image) {
       applySkin(image)
-      skinHintEl.textContent = '官方原版皮肤，已经记住了。想换就点小人脚下那个圈。'
+      skinHintEl.textContent = '官方原版皮肤，已经记住了。想换就点下面那个圈。'
       skinBigFromEl.textContent = '来自：官方默认皮肤'
       return
     }
@@ -4856,7 +4856,7 @@ async function applyCurrentSkin() {
   if (saved && !saved.startsWith('@')) {
     const okLoaded = await loadSkinFrom(saved)
     if (okLoaded) {
-      skinHintEl.textContent = '这张已经记住了——以后打开都是它。想换就点小人脚下那个圈。'
+      skinHintEl.textContent = '这张已经记住了——以后打开都是它。想换就点下面那个圈。'
       skinBigFromEl.textContent = '来自：我选的'
       return
     }
