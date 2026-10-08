@@ -3978,6 +3978,8 @@ function renderOnline() {
   }
 
   const isHost = onlineInfo.role === 'host'
+  // 房间里的人（下面写提示和列表都要用，所以先在顶上取出来）
+  const peers = onlineInfo.peers || []
   onlineRoomTitleEl.textContent = isHost ? '你是房主' : '你在好友的房间里'
   onlineCodeEl.textContent = onlineInfo.code || '—'
   onlineMyIpEl.textContent = onlineInfo.myIp || (isHost ? '10.126.126.1' : '正在分配…')
@@ -3993,18 +3995,28 @@ function renderOnline() {
         `${HOST_VIRTUAL_IP}:${lanPort}（他的多人游戏列表里多半也会自动出现）`
       : '世界现在是关着的。要联机的话：进游戏开一个世界，按 Esc 点「对局域网开放」' +
         '——开了之后这里会自动出现发给好友的地址，房间不用重建。'
-  } else {
-    // 访客这边：房主既然能开出房间，就说明他那边世界已经开局域网了
-    // （用户这轮定的规矩：没开局域网不许建房），所以别再说"等房主开好世界"。
+  } else if (peers.length > 0) {
+    // 访客这边：**看到人了**才敢说"房主那边已经开好世界"
+    // （用户这轮定的规矩：没开局域网不许建房，所以房主在就说明他开好了）
     onlineTipEl.textContent =
       '房主那边的世界已经开好了。去游戏里点「多人游戏」——列表里应该能看到；' +
       '看不到就让房主把地址发你，用「直接连接」填进去。'
+  } else {
+    // 房间里一个人都没有 —— 这时候说"房主世界开好了"就是骗人
+    // （实测：随手编一个房间码也能"进去"，因为房间码只是给虚拟网络起个名字，
+    //   没有一个服务器能回答"这个房间存在吗"。所以这儿只能如实说：没人）
+    onlineTipEl.textContent =
+      '这个房间里现在只有你一个 —— 房主还没上来，或者房间码打错了。' +
+      '等房主那边开了房间，这里会自动看到人。'
   }
 
-  // 房间里的人
-  const peers = onlineInfo.peers || []
+  // 房间里的人（peers 在上面已经取过了）
   onlinePeersEl.textContent = ''
   onlinePeersEmptyEl.hidden = peers.length > 0
+  // 空着的时候说什么，房主和访客不一样：让访客"把房间码发给好友"是牛头不对马嘴
+  onlinePeersEmptyEl.textContent = isHost
+    ? '还没有别人进来。把房间码发给好友吧。'
+    : '房间里还没看到别人 —— 房主可能还没上来（房间码打错了也会是这样）。'
 
   for (const one of peers) {
     const li = document.createElement('li')
@@ -4024,9 +4036,18 @@ function renderOnline() {
     onlinePeersEl.appendChild(li)
   }
 
-  onlineStatusTextEl.textContent = isHost
-    ? `房间开着，里面有 ${peers.length} 位好友。`
-    : `已连上房主的房间。`
+  // 【说人话，别说假话】以前这儿对访客一律写"已连上房主的房间"——
+  // 可房间码只是给虚拟网络起个名字，**没有一个服务器能回答"这个房间存在吗"**：
+  // 随手编一串码也能"进去"（实测用户编了个 DAADUBRV，界面照样说已连上）。
+  // 所以有没有连上，只能看"房间里有没有别人"。
+  if (isHost) {
+    onlineStatusTextEl.textContent = `房间开着，里面有 ${peers.length} 位好友。`
+  } else if (peers.length > 0) {
+    onlineStatusTextEl.textContent = `连上房主了，房间里一共 ${peers.length + 1} 个人。`
+  } else {
+    onlineStatusTextEl.textContent =
+      '还没看到房主——房间码已经用上了，但这个房间里现在一个人都没有。'
+  }
 }
 
 /** 定时刷新（不弹错误、不闪界面，安安静静地更新） */
@@ -4095,7 +4116,9 @@ async function startOnline(role) {
     setOnlineNotice(
       role === 'host'
         ? '房间建好了！把房间码发给好友。'
-        : '进房间了！等房主开好世界，去游戏里点「多人游戏」。',
+        : // 别一上来就说"进房间了"——那会儿还没跟任何人握上手，
+          // 说得跟真连上了似的，用户会以为房主已经在等他了
+          '房间码填上了。正在找房主……几个人算连上，下面那行"连接状态"会说实话。',
       'ok'
     )
     renderOnline()
