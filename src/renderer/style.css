@@ -956,6 +956,28 @@ button.acc__tab:hover {
   color: var(--accent-strong);
 }
 
+/* 皮肤页那条"先说清楚"的说明（M21）
+   内容比一般提示长，用一栏一栏的排法，别挤成一大坨 */
+.notice--skin {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  margin-bottom: 0;
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--text-dim);
+}
+
+.notice--skin > b {
+  font-size: 13.5px;
+  color: var(--accent-strong);
+}
+
+.notice--skin span {
+  display: block;
+}
+
 /* 提示条按内容换颜色：绿色=顺利，红色=出问题了 */
 .notice--ok {
   color: var(--ok-text);
