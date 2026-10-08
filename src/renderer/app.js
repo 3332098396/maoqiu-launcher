@@ -4853,7 +4853,7 @@ async function applyCurrentSkin() {
   // ③ 默认
   useDefaultSkinAndAvatar()
   skinBigFromEl.textContent = '来自：系统默认皮肤'
-  skinBigNameEl.textContent = 'Steve'
+  skinBigNameEl.textContent = '毛球小人'
   if (!saved) skinHintEl.textContent = '鼠标在卡片上左右移动，小人就跟着转。'
 }
 
@@ -5024,7 +5024,7 @@ async function renderSkinPage() {
 
   // ③ 系统默认
   addItem({
-    name: 'Steve',
+    name: '毛球小人',
     from: '来自：系统默认皮肤',
     image: window.skinViewer ? window.skinViewer.makeDefaultSkin() : null,
     on: current === 'default',
@@ -5036,7 +5036,7 @@ async function renderSkinPage() {
     skinBigNameEl.textContent = account?.name || '我的角色'
     skinBigFromEl.textContent = '来自：账号'
   } else if (current === 'default') {
-    skinBigNameEl.textContent = 'Steve'
+    skinBigNameEl.textContent = '毛球小人'
     skinBigFromEl.textContent = '来自：系统默认皮肤'
   } else {
     const one = skinLibCache.find((x) => samePath(x.path, current))

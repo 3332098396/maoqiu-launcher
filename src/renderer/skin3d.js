@@ -142,6 +142,11 @@ function cropTexture(source, rect, flipY) {
   ctx.drawImage(source, rect[0], rect[1], rect[2], rect[3], 0, 0, rect[2], rect[3])
 
   const texture = new THREE.CanvasTexture(canvas)
+  // 【必须声明这是 sRGB 颜色】不写这一句，Three.js 会把皮肤图当成"线性"数据，
+  // 输出时又转回 sRGB —— 结果**整张皮肤被冲淡**：衬衫 #4a9bff 渲染出来是 #93CDFF，
+  // 一眼看去就是"这不像 Minecraft 的角色"（实测采像素发现的，数了一下：
+  // 0x4a(0.29) 按 sRGB 编码一次 = 0.57 = 0x93，分毫不差）。
+  texture.colorSpace = THREE.SRGBColorSpace
   // 像素风：放大用最近邻（一格一格清清楚楚），也不生成 mipmap（那玩意会让远处发糊）
   texture.magFilter = THREE.NearestFilter
   texture.minFilter = THREE.NearestFilter
@@ -243,7 +248,7 @@ let player = null
 let skinCanvas = makeDefaultSkin()
 let targetSpin = 0
 let spin = 0
-/** 取景比例：1 = 启动页那张小卡；皮肤页那个大预览用 1.3 左右 */
+/** 取景比例：1 = 启动页那张小卡；皮肤页那个大预览用 1.15（拉太远人会太小） */
 let cameraZoom = 1
 /** 3D 挂上了没有 */
 let mounted = false
@@ -450,3 +455,4 @@ function unmount() {
 
 
 window.skinViewer = { mount, setSkin, useDefaultSkin, unmount, makeDefaultSkin }
+
