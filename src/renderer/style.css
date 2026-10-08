@@ -1161,6 +1161,11 @@ button.acc__tab:hover {
   color: var(--text-muted);
 }
 
+/* "选择…"那个小按钮，推到最右边（M20） */
+.vermeta__go {
+  margin-left: auto;
+}
+
 .vermeta__v {
   flex: 1 1 auto;
   min-width: 0;
@@ -1440,6 +1445,11 @@ button.acc__tab:hover {
 
 .modal__actions--end {
   justify-content: flex-end;
+}
+
+/* 一头一尾：左边放"管理 Java"这种次要入口，右边放确定取消（M20） */
+.modal__spacer {
+  flex: 1 1 auto;
 }
 
 /* 删除确认那层要盖在版本设置上面 */
@@ -3131,4 +3141,42 @@ body[data-theme='amber'] {
   flex: 0 0 auto;
   font-size: 12px;
   opacity: 0.75;
+}
+
+/* ——— Java 列表（M20）———
+   两个地方都用它：设置页的「用哪个 Java」，和版本设置里那个"选择 Java"弹窗。
+   一行 = 单选圈 + 名字 + 路径（复用设置页"下载源"那套 .check--block 的样子，
+   不另发明一套，免得同一个界面里出现两种长相的单选） */
+.javalist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* 一行：左边是能点的单选，右边挂一个"移除"（只有自己添加进来的才有） */
+.java-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.java-row .check {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 路径那行太长会顶破卡片，得能省略 */
+.java-row .check__help {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 不能用的那些（文件没了、跑不起来）：灰掉，但**照样列出来**——
+   直接藏起来的话，用户会以为"我自己加的那个 Java 怎么不见了" */
+.java-row--bad {
+  opacity: 0.55;
 }

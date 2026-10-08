@@ -713,8 +713,12 @@ async function launch(versionId, options = {}) {
   // 只把包里的文件铺开、不碰 Java。实测踩到过（2026-10-07）：一个 1.20.1 Forge 的包
   // 文件装得齐齐的，可本机没有它要的 Java 17，启动时拿现成的 Java 16 顶上，
   // 游戏当场崩。所以缺了就补——和上面"日志配置缺了补下"是同一个套路。
+  // 【M20 加的开关】设置里那个「自动检测并下载所需 Java」关掉之后，
+  // 这里就**一个字节都不下**——只在本机已有的 Java 里找。
+  // 有的用户网按流量算，或者就是不想让启动器往硬盘里塞 200 MB。
+  const autoJava = settings.readConfig().launch.autoJava !== false
   const wantedComponent = fullJson.javaVersion && fullJson.javaVersion.component
-  if (wantedComponent) {
+  if (wantedComponent && autoJava) {
     const wantedExe = path.join(paths.runtimeDir(), wantedComponent, 'bin', 'java.exe')
 
     if (!fs.existsSync(wantedExe)) {
@@ -728,13 +732,26 @@ async function launch(versionId, options = {}) {
         say(`[启动器] Java 运行时没下成（${error.message}），先试试本机已有的 Java`)
       }
     }
+  } else if (wantedComponent && !autoJava) {
+    say('[启动器] 你关掉了"自动下载 Java"，只在本机已有的里面找')
   }
 
-  const javaExe = javaUtil.findJava(fullJson)
+  const key = settings.versionKey(dir, versionId)
+  const javaExe = javaUtil.findJava(fullJson, { key })
   if (!javaExe) {
+    // 用户指定的那个不见了，得单独说——不然他会以为自己选的没生效
+    const preference = javaUtil.javaPreference(key)
+    if (preference.chosen) {
+      return {
+        ok: false,
+        error: `你指定的那个 Java 不在了：${preference.chosen}\n到「设置 → Java 运行时」重新选一个，或者把「自动检测并下载所需 Java」打开。`
+      }
+    }
     return {
       ok: false,
-      error: '找不到这个版本需要的 Java。到「下载」页对着这个版本点「重装」，会自动把 Java 也下好。'
+      error: autoJava
+        ? '找不到这个版本需要的 Java。到「下载」页对着这个版本点「重装」，会自动把 Java 也下好。'
+        : '这个版本要的 Java 本机没有，而你把「自动检测并下载所需 Java」关掉了。到「设置 → Java 运行时」打开它，或者自己指定一个 Java。'
     }
   }
 

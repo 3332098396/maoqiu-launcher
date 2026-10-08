@@ -389,7 +389,7 @@ function registerIpcHandlers() {
         const pick =
           list.find((one) => one.id === last.id && paths.sameDir(one.dir, last.dir)) || list[0]
         const versionJson = JSON.parse(fs.readFileSync(paths.versionJsonFile(pick.id, pick.dir), 'utf8'))
-        const candidate = javaUtil.findJava(versionJson)
+        const candidate = javaUtil.findJava(versionJson, { key: settings.versionKey(pick.dir, pick.id) })
         if (candidate) {
           const probe = javaUtil.probeJava(candidate.path)
           javaInfo = {
@@ -647,7 +647,7 @@ function registerIpcHandlers() {
         return { ok: false, error: `它装在 ${resolved.missingParent} 上面，那个还没装` }
       }
 
-      const candidate = javaUtil.findJava(resolved.json)
+      const candidate = javaUtil.findJava(resolved.json, { key: settings.versionKey(where, id) })
       if (!candidate) return { ok: false, error: '还没找到能用的 Java（启动时会自动补下）' }
 
       const probe = javaUtil.probeJava(candidate.path)
@@ -730,6 +730,9 @@ function registerIpcHandlers() {
       windowWidth: Number(config.launch.windowWidth) || 854,
       windowHeight: Number(config.launch.windowHeight) || 480,
       isolation: Boolean(config.launch.isolation),
+      // Java 那两样（M20）：自动检测并下载 / 全局用哪个
+      autoJava: config.launch.autoJava !== false,
+      javaPath: String(config.launch.javaPath || ''),
       downloadSource: settings.downloadSource(),
       screenWidth: display.width,
       screenHeight: display.height,
@@ -772,6 +775,21 @@ function registerIpcHandlers() {
 
     if (patch.isolation !== undefined) {
       launchPatch.isolation = Boolean(patch.isolation)
+    }
+
+    // ——— Java（M20）———
+    if (patch.autoJava !== undefined) {
+      launchPatch.autoJava = Boolean(patch.autoJava)
+    }
+
+    if (patch.javaPath !== undefined) {
+      // 空字符串 = 自动选择；给路径的话要确认那个文件真的在，
+      // 不然用户会得到一个"设置看着好好的、启动就报错"的局面
+      const value = String(patch.javaPath || '')
+      if (value && !fs.existsSync(value)) {
+        return { ok: false, error: `这个文件不在了：${value}` }
+      }
+      launchPatch.javaPath = value
     }
 
     // 下载源是顶层配置（不是 launch 里的），单独存
@@ -1054,6 +1072,76 @@ function registerIpcHandlers() {
       paths.ensureDir(target)
       const message = await shell.openPath(target)
       return message ? { ok: false, error: message } : { ok: true, dir: target }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  // ——— Java 运行时管理（M20）———
+  //
+  // 【为什么要有这一块】以前 Java 是"用户看不见的黑盒"：哪来的、能不能用、
+  // 怎么换一个，界面上一个字都不说。碰到"Java 版本不对"只能靠启动时自动补下。
+  // 现在把本机的 Java 全列出来，让用户看得见、能自己挑、也能添自己装的。
+
+  /** 本机能用哪些 Java（设置页那个列表用） */
+  ipcMain.handle('java:list', async () => {
+    try {
+      return { ok: true, list: await javaUtil.listJavas() }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /**
+   * 让用户挑一个 java.exe，并且**真的跑一下**确认能用。
+   * 只是探测，不保存——保存是下面 java:add 的事。
+   */
+  ipcMain.handle('java:pick', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const result = await dialog.showOpenDialog(win, {
+      title: '挑一个 java.exe',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Java 程序', extensions: ['exe'] },
+        { name: '所有文件', extensions: ['*'] }
+      ]
+    })
+    if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true }
+
+    const picked = result.filePaths[0]
+    // 挑错了（比如挑成 javac.exe、或者挑成压缩包）当场说清楚，
+    // 别等用户"保存成功"了、启动时才发现用不了
+    if (path.basename(picked).toLowerCase() !== 'java.exe') {
+      return { ok: false, error: '这个不是 java.exe。去 Java 安装目录里的 bin 文件夹挑' }
+    }
+
+    const probe = await javaUtil.probeJavaAsync(picked)
+    if (!probe.ok) return { ok: false, error: `这个 java.exe 跑不起来：${probe.error}` }
+    return { ok: true, path: picked, version: probe.version, major: probe.major }
+  })
+
+  /** 把挑好的 Java 记进名单（**只是记个路径，不复制、不移动文件**） */
+  ipcMain.handle('java:add', (_event, exePath) => {
+    try {
+      const value = String(exePath || '')
+      if (!value || !fs.existsSync(value)) return { ok: false, error: '这个文件不在了' }
+      return { ok: true, list: settings.addExtraJava(value) }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 从名单里划掉（**不动硬盘上的文件**） */
+  ipcMain.handle('java:remove', (_event, exePath) => {
+    try {
+      const list = settings.removeExtraJava(String(exePath || ''))
+      const config = settings.readConfig()
+      // 划掉的正好是"当前用的那个"的话，把选择清回"自动"——
+      // 不然设置里指着一个已经不在名单里的 Java，看着莫名其妙
+      if (settings.sameJavaPath(config.launch.javaPath, exePath)) {
+        settings.writeConfig({ launch: { javaPath: '' } })
+      }
+      return { ok: true, list }
     } catch (error) {
       return { ok: false, error: String(error?.message ?? error) }
     }

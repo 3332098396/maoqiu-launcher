@@ -277,6 +277,20 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('content:progress', (_event, stats) => callback(stats))
   },
 
+  // ——— Java 运行时管理（M20）———
+
+  /** 本机能用哪些 Java（设置页那个列表用） */
+  listJavas: () => ipcRenderer.invoke('java:list'),
+
+  /** 弹系统文件框挑一个 java.exe，并且真的跑一下确认能用（只探测，不保存） */
+  pickJava: () => ipcRenderer.invoke('java:pick'),
+
+  /** 把挑好的 Java 记进名单（只记路径，不动文件） */
+  addJava: (exePath) => ipcRenderer.invoke('java:add', exePath),
+
+  /** 从名单里划掉（不动硬盘上的文件） */
+  removeJava: (exePath) => ipcRenderer.invoke('java:remove', exePath),
+
   // ——— Mod 加载器（M10）———
 
   /**

@@ -652,6 +652,32 @@
             <p class="panel__desc" id="set-memory-hint"></p>
           </section>
 
+          <!-- Java 运行时（M20，照 KAMUCL 那套做的：开关 + 本机 Java 列表 + 手动添加） -->
+          <section class="panel" id="panel-java">
+            <h3 class="panel__title">Java 运行时</h3>
+            <p class="panel__desc">
+              跑游戏用的运行环境。每个版本要的 Java 大版本不一样，毛球会按版本自己挑。
+            </p>
+
+            <label class="check">
+              <input type="checkbox" id="set-auto-java" />
+              <span>自动检测并下载所需 Java（推荐）</span>
+            </label>
+            <p class="panel__desc">
+              本机没有这个版本要的 Java 时，自动下载装好（一个大约 200 MB）。
+              <b>关掉之后就只在本机已有的里面找，一个字节都不下。</b>
+            </p>
+
+            <p class="field__label" style="margin-top: 14px">用哪个 Java</p>
+            <div id="java-list"></div>
+            <p class="panel__desc" id="java-hint"></p>
+
+            <div class="setrow">
+              <button class="btn btn--ghost btn--sm" type="button" id="java-add">添加 Java…</button>
+              <button class="btn btn--ghost btn--sm" type="button" id="java-refresh">重新检测</button>
+            </div>
+          </section>
+
           <section class="panel">
             <h3 class="panel__title">窗口大小</h3>
             <p class="panel__desc">
@@ -1073,6 +1099,25 @@
       </div>
     </div>
 
+    <!-- 给某一个版本单独挑 Java（M20）
+         选项和设置页里那份是同一份名单，只是这儿多一个"跟随全局设置" -->
+    <div class="modal modal--top" id="java-modal" hidden>
+      <div class="modal__box modal__box--form">
+        <div class="modal__head">
+          <span class="modal__title">选择 Java 运行环境</span>
+        </div>
+        <p class="panel__desc" id="java-modal-sub">—</p>
+        <div class="javalist" id="java-pick-list"></div>
+        <p class="delbox" id="java-pick-hint"></p>
+        <div class="modal__actions">
+          <button class="btn btn--ghost" type="button" id="java-manage">管理 Java</button>
+          <span class="modal__spacer"></span>
+          <button class="btn btn--ghost" type="button" id="java-pick-cancel">取消</button>
+          <button class="btn btn--primary" type="button" id="java-pick-save">保存选择</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 「还没开局域网就想建房」的提醒（M17.x）
          用户定的规矩：世界没对局域网开放，就不许建房。 -->
     <div class="modal" id="lan-modal" hidden>
@@ -1225,6 +1270,9 @@
           <div class="vermeta__row">
             <span class="vermeta__k">将会使用的 Java</span>
             <span class="vermeta__v" id="ver-java">正在看…</span>
+            <button class="btn btn--ghost btn--sm vermeta__go" type="button" id="ver-pick-java">
+              选择…
+            </button>
           </div>
         </div>
 

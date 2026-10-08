@@ -97,8 +97,20 @@ const DEFAULTS = {
   launch: {
     /** 给游戏多少内存（MB）。0 = 自动（本机内存的 1/4，上限 8 GB） */
     memoryMB: 0,
-    /** 手动指定的 Java 路径。空 = 自动找 */
+    /** 手动指定的 Java 路径。空 = 自动找（按版本要求挑） */
     javaPath: '',
+    /**
+     * 自动检测并下载所需 Java（默认开）。
+     * 关掉之后**绝不下那个 200 MB 的运行时**，只在本机已有的里面找——
+     * 有的用户的网按流量算、或者就是不想让启动器往硬盘里塞东西。
+     */
+    autoJava: true,
+    /**
+     * 用户自己"添加"进来的 Java。
+     * 【注意】"移除"只是把它从这份名单里划掉，**绝不动硬盘上的文件**——
+     * 那是人家自己装的 Java，可能别的程序还在用。
+     */
+    extraJavaPaths: [],
     /** 上次启动的版本，下次打开软件默认选它 */
     lastVersion: '',
     /**
@@ -136,7 +148,15 @@ function readConfig() {
     return {
       ...DEFAULTS,
       ...raw,
-      launch: { ...DEFAULTS.launch, ...(raw.launch || {}) },
+      launch: {
+        ...DEFAULTS.launch,
+        ...(raw.launch || {}),
+        // 数组这一项单独过一遍：配置文件是个文本文件，用户（或者别的什么程序）
+        // 可能把它改成别的类型，直接透传下去会让下面的 for...of 炸掉
+        extraJavaPaths: Array.isArray((raw.launch || {}).extraJavaPaths)
+          ? (raw.launch || {}).extraJavaPaths.filter((one) => typeof one === 'string' && one)
+          : []
+      },
       download: { ...DEFAULTS.download, ...(raw.download || {}) },
       gameDirs: {
         // 老配置文件里根本没有 gameDirs 这一项，读出来就是空的
@@ -325,6 +345,48 @@ function parseVersionKey(key) {
  * 只传要改的部分即可，比如 writeConfig({ launch: { lastVersion: '26.3' } })
  * @returns 保存后的完整配置
  */
+// ——————————————————————————————————————————————
+// Java 名单（M20）
+// ——————————————————————————————————————————————
+
+/** 两个"java.exe 的路径"是不是同一个（大小写、斜杠方向都不计较） */
+function sameJavaPath(a, b) {
+  if (!a || !b) return false
+  try {
+    return path.resolve(String(a)).toLowerCase() === path.resolve(String(b)).toLowerCase()
+  } catch {
+    return String(a).toLowerCase() === String(b).toLowerCase()
+  }
+}
+
+/**
+ * 把用户挑的 Java 记进名单（已经在名单里就不重复加）。
+ * @returns {string[]} 加完之后的整份名单
+ */
+function addExtraJava(exePath) {
+  const list = [...(readConfig().launch.extraJavaPaths || [])]
+  if (list.some((one) => sameJavaPath(one, exePath))) return list
+  list.push(String(exePath))
+  writeConfig({ launch: { extraJavaPaths: list } })
+  return list
+}
+
+/**
+ * 从名单里划掉一个。
+ *
+ * 【只是"划掉名字"，绝不动硬盘上的文件】那是用户自己装的 Java，
+ * 别的程序（甚至别的启动器）可能还在用它。顺手删掉就是闯祸。
+ *
+ * @returns {string[]} 划完之后的整份名单
+ */
+function removeExtraJava(exePath) {
+  const list = (readConfig().launch.extraJavaPaths || []).filter(
+    (one) => !sameJavaPath(one, exePath)
+  )
+  writeConfig({ launch: { extraJavaPaths: list } })
+  return list
+}
+
 function writeConfig(patch) {
   const config = readConfig()
   const next = {
@@ -479,5 +541,8 @@ module.exports = {
   validateGameDir,
   resolveChosenDir,
   versionKey,
-  parseVersionKey
+  parseVersionKey,
+  addExtraJava,
+  removeExtraJava,
+  sameJavaPath
 }

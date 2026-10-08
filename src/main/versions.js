@@ -288,6 +288,20 @@ function setVersionSettings(id, patch = {}, dir) {
     else current.isolation = Boolean(patch.isolation)
   }
 
+  // 这个版本单独用哪个 Java（M20）：
+  //   null  = 改回"跟随全局"
+  //   ''    = 自动选择（按这个版本的要求在本机挑，必要时自动下载）
+  //   路径  = 就用这个
+  if (patch.javaPath !== undefined) {
+    if (patch.javaPath === null) {
+      delete current.javaPath
+    } else {
+      const value = String(patch.javaPath || '')
+      if (value && !fs.existsSync(value)) return { ok: false, error: `这个文件不在了：${value}` }
+      current.javaPath = value
+    }
+  }
+
   // 一项都不剩就整条删掉，别在配置里留空壳
   if (Object.keys(current).length === 0) delete all[key]
   else all[key] = current

@@ -1116,10 +1116,11 @@ async function onFactClick(kind) {
     return
   }
 
-  // Java 那一行在「版本设置」弹窗里（那儿才看得到完整路径和来源）
+  // Java：直接开「选择 Java 运行环境」（M20 加的）。
+  // 以前是跳到版本设置里高亮那一行——但那行只是个"显示"，改不了，
+  // 用户点进去还得自己找下一步；现在一步到位。
   if (kind === 'java') {
-    openVersionSettings()
-    flashAt(verJavaEl.closest('.vermeta__row'))
+    openJavaPicker(selectedVersion, selectedDir)
     return
   }
 
@@ -2939,7 +2940,381 @@ async function loadSettingsPage() {
   for (const radio of document.querySelectorAll('input[name="set-source"]')) {
     radio.checked = radio.value === source
   }
+
+  // ——— Java 运行时（M20）———
+  setAutoJavaEl.checked = settingsInfo.autoJava !== false
+  renderJavaPanel()
 }
+
+// ——————————————————————————————————————————————
+// Java 运行时（M20）
+// ——————————————————————————————————————————————
+//
+// 【为什么要有这一块】以前 Java 对用户是个黑盒：本机有哪几个、游戏用的是哪个、
+// 想换一个怎么办，界面上一个字都不说。现在全列出来：能挑、能加自己装的、
+// 也能把"自动下载"关掉（网按流量算的人不需要毛球偷偷下 200 MB）。
+
+const javaListEl = document.getElementById('java-list')
+const javaHintEl = document.getElementById('java-hint')
+const setAutoJavaEl = document.getElementById('set-auto-java')
+const javaModalEl = document.getElementById('java-modal')
+const javaPickListEl = document.getElementById('java-pick-list')
+const javaPickHintEl = document.getElementById('java-pick-hint')
+const javaModalSubEl = document.getElementById('java-modal-sub')
+const verPickJavaEl = document.getElementById('ver-pick-java')
+
+/** 本机 Java 名单。两个列表共用一份——每次重读都要挨个试跑 java.exe，挺慢的 */
+let javaListCache = null
+
+/** 「选择 Java」弹窗正在给哪个版本挑（谁打开的谁说了算，别猜） */
+let javaPickTarget = { id: '', dir: '' }
+
+/** 「选择 Java」弹窗里暂选的那一项（点了「保存选择」才算数） */
+let javaPickChoice = ''
+
+/** 空字符串 = 自动选择（跟全局那个用的是同一套约定） */
+const JAVA_AUTO = ''
+/** 「跟随全局设置」——这个值不可能撞上真实路径，拿它当哨兵 */
+const JAVA_FOLLOW = '__follow_global__'
+
+/** 读名单。force = 重新检测（忽略缓存） */
+async function loadJavaList(force = false) {
+  if (javaListCache && !force) return javaListCache
+
+  let res
+  try {
+    res = await window.api.listJavas()
+  } catch (error) {
+    res = { ok: false, error: String(error?.message ?? error) }
+  }
+
+  if (!res.ok) {
+    saySettings(`读本机 Java 失败：${res.error}`, 'error')
+    return javaListCache || []
+  }
+  javaListCache = res.list
+  return javaListCache
+}
+
+/** Java 25.0.1 · x64 这行的前半截 */
+function javaRowTitle(one) {
+  if (!one.ok) return `${one.source}：不能用`
+  const bits = one.bits === 64 ? ' · x64' : one.bits === 32 ? ' · x86' : ''
+  return `Java ${one.version}${bits}`
+}
+
+/**
+ * 造一行单选。「自动选择」和每一个本机 Java 都用它，保证长得一样。
+ * @param {{name: string, value: string, title: string, help?: string,
+ *          checked?: boolean, bad?: boolean, onPick?: Function, onRemove?: Function}} opts
+ */
+function makeJavaOption(opts) {
+  const wrap = document.createElement('div')
+  wrap.className = 'java-row' + (opts.bad ? ' java-row--bad' : '')
+
+  const label = document.createElement('label')
+  label.className = 'check check--block'
+
+  const input = document.createElement('input')
+  input.type = 'radio'
+  input.name = opts.name
+  input.value = opts.value
+  input.checked = Boolean(opts.checked)
+  // 不能用的（文件没了/跑不起来）列出来但不给选——选了也是个坑
+  if (opts.bad) input.disabled = true
+  if (opts.onPick) input.addEventListener('change', () => opts.onPick(opts.value))
+
+  const box = document.createElement('span')
+  const title = document.createElement('b')
+  title.textContent = opts.title
+  box.appendChild(title)
+  if (opts.help) {
+    const help = document.createElement('em')
+    help.className = 'check__help'
+    help.textContent = opts.help
+    box.appendChild(help)
+  }
+
+  label.appendChild(input)
+  label.appendChild(box)
+  wrap.appendChild(label)
+
+  if (opts.onRemove) {
+    const del = document.createElement('button')
+    del.type = 'button'
+    del.className = 'linkbtn'
+    del.textContent = '移除'
+    del.title = '只是从名单里划掉，不会删掉硬盘上的 Java'
+    del.addEventListener('click', () => opts.onRemove())
+    wrap.appendChild(del)
+  }
+
+  return wrap
+}
+
+/** 设置页那块「用哪个 Java」 */
+async function renderJavaPanel(force = false) {
+  if (!settingsInfo) return
+  const list = await loadJavaList(force)
+  const chosen = String(settingsInfo.javaPath || '')
+
+  javaListEl.textContent = ''
+
+  // ① 自动选择
+  javaListEl.appendChild(
+    makeJavaOption({
+      name: 'set-java',
+      value: JAVA_AUTO,
+      title: '自动选择（推荐）',
+      help: '按每个版本的要求，在本机已有的里面挑一个最合适的',
+      checked: chosen === '',
+      onPick: () => saveSetting({ javaPath: '' }, () => { settingsInfo.javaPath = '' })
+    })
+  )
+
+  // ② 本机找到的
+  for (const one of list) {
+    javaListEl.appendChild(
+      makeJavaOption({
+        name: 'set-java',
+        value: one.path,
+        title: javaRowTitle(one),
+        help: one.ok ? one.path : `${one.path} —— ${one.error}`,
+        checked: samePath(chosen, one.path),
+        bad: !one.ok,
+        onPick: () =>
+          saveSetting({ javaPath: one.path }, () => { settingsInfo.javaPath = one.path }),
+        onRemove: one.added
+          ? async () => {
+              const res = await window.api.removeJava(one.path)
+              if (!res.ok) {
+                saySettings(`移除失败：${res.error}`, 'error')
+                return
+              }
+              javaListCache = null
+              javaListCache = await loadJavaList(true)
+              const fresh = await window.api.getSettings()
+              settingsInfo.javaPath = fresh.javaPath
+              renderJavaPanel()
+              saySettings('已经从名单里划掉了（硬盘上的文件没动）', 'ok', true)
+            }
+          : undefined
+      })
+    )
+  }
+
+  // ③ 选的那个后来被删了/移走了：也得列出来，不然四个单选框一个都不亮，
+  //    用户看着像"我的设置丢了"，其实是那个文件不在了
+  if (chosen && !list.some((one) => samePath(one.path, chosen))) {
+    javaListEl.appendChild(
+      makeJavaOption({
+        name: 'set-java',
+        value: chosen,
+        title: '你选的那个 Java：现在找不到了',
+        help: `${chosen} —— 文件被删了或者被移走了，重新挑一个吧`,
+        checked: true,
+        bad: true
+      })
+    )
+  }
+
+  // ——— 底下那行提示：说清楚"现在这个设置意味着什么" ———
+  const parts = []
+  if (list.length === 0) {
+    parts.push('本机还没找到 Java —— 装好一个游戏版本之后，毛球会连运行环境一起备好。')
+  } else {
+    parts.push(`本机找到 ${list.length} 个 Java。`)
+  }
+
+  const current = launchInfo?.java
+  if (current && selectedVersion) {
+    parts.push(
+      current.found
+        ? `当前选中的 ${selectedVersion} 会用它：Java ${current.version}（${shortJavaSource(current.source)}）`
+        : `当前选中的 ${selectedVersion} 还没有能用的 Java：${current.error || '还没找到'}`
+    )
+  }
+  javaHintEl.textContent = parts.join('')
+}
+
+/** 换哪个 Java 之后，两边（设置页 / 版本设置）都要跟着变 */
+function refreshJavaEverywhere() {
+  renderJavaPanel()
+  if (editingVersion && !verModalEl.hidden) renderVersionJava(editingVersion)
+  refreshLaunchFacts()
+}
+
+// ——— 上面那个开关：自动检测并下载 ———
+
+if (setAutoJavaEl) {
+  setAutoJavaEl.addEventListener('change', () => {
+    saveSetting({ autoJava: setAutoJavaEl.checked }, () => {
+      if (settingsInfo) settingsInfo.autoJava = setAutoJavaEl.checked
+    })
+  })
+}
+
+// ——— 添加 Java… / 重新检测 ———
+
+document.getElementById('java-add').addEventListener('click', async () => {
+  const picked = await window.api.pickJava()
+  if (picked.canceled) return
+  if (!picked.ok) {
+    saySettings(picked.error, 'error')
+    return
+  }
+
+  const added = await window.api.addJava(picked.path)
+  if (!added.ok) {
+    saySettings(`加不进去：${added.error}`, 'error')
+    return
+  }
+
+  javaListCache = null
+  const list = await loadJavaList(true)
+  const mine = list.find((one) => one.added && samePath(one.path, picked.path))
+
+  // 毛球本来就能自己找到的（游戏目录里那几个），添加了也不会多出一行——
+  // 得说清楚，不然用户会以为"点了添加怎么什么都没变"
+  if (!mine) {
+    await renderJavaPanel()
+    saySettings(`这个 Java 毛球本来就能找到，已经在名单里了：Java ${picked.version}`, 'ok')
+    return
+  }
+
+  // 加完直接把它选上——用户点"添加"的意图就是"我要用它"
+  await saveSetting({ javaPath: picked.path }, () => { settingsInfo.javaPath = picked.path })
+  await renderJavaPanel(true)
+  saySettings(`加好了：Java ${picked.version}`, 'ok', true)
+})
+
+document.getElementById('java-refresh').addEventListener('click', async () => {
+  javaListCache = null
+  await renderJavaPanel(true)
+  saySettings('重新检测完了', 'ok', true)
+})
+
+// ——— 「选择 Java 运行环境」弹窗（给单个版本挑）———
+
+/**
+ * 打开「选择 Java 运行环境」。
+ *
+ * 【为什么把 id/dir 当参数传进来】这个弹窗有两个入口：版本设置里那个「选择…」，
+ * 和启动页那张 Java 卡片。要是靠 editingVersion 这种"当前正在编辑谁"的全局变量，
+ * 从启动页点进来时会用到上一次编辑过的版本，改错人——这种错还特别难发现。
+ * 谁打开的，谁把目标说清楚。
+ */
+async function openJavaPicker(id, dir) {
+  const target = id || selectedVersion
+  if (!target) return
+  javaPickTarget = { id: target, dir: dir === undefined ? selectedDir : dir }
+  javaPickChoice = JAVA_FOLLOW
+  javaModalSubEl.textContent = `${target} · 只对这个版本生效，别的版本不受影响`
+  javaModalEl.hidden = false
+  await renderJavaPicker()
+}
+
+async function renderJavaPicker() {
+  const list = await loadJavaList()
+  const config = await window.api.getVersionSettings(javaPickTarget.id, javaPickTarget.dir)
+  const own = config?.override?.javaPath
+
+  // 这个版本自己挑过没有？挑过就是具体的值（'' = 它自己选了"自动选择"）
+  const hasOwn = typeof own === 'string'
+  const globalLabel = settingsInfo?.javaPath ? '用你指定的那个' : '自动选择'
+
+  javaPickListEl.textContent = ''
+
+  // ① 跟随全局设置
+  javaPickListEl.appendChild(
+    makeJavaOption({
+      name: 'pick-java',
+      value: JAVA_FOLLOW,
+      title: '跟随全局设置',
+      help: `当前全局：${globalLabel}`,
+      checked: !hasOwn,
+      onPick: (value) => { javaPickChoice = value }
+    })
+  )
+
+  // ② 自动选择（不看全局）
+  javaPickListEl.appendChild(
+    makeJavaOption({
+      name: 'pick-java',
+      value: JAVA_AUTO,
+      title: '自动选择',
+      help: '按这个版本的要求在本机挑一个最合适的；设置里允许的话，缺了会自动下',
+      checked: hasOwn && own === '',
+      onPick: (value) => { javaPickChoice = value }
+    })
+  )
+
+  // ③ 本机找到的
+  for (const one of list) {
+    javaPickListEl.appendChild(
+      makeJavaOption({
+        name: 'pick-java',
+        value: one.path,
+        title: javaRowTitle(one),
+        help: one.ok ? one.path : `${one.path} —— ${one.error}`,
+        checked: hasOwn && samePath(own, one.path),
+        bad: !one.ok,
+        onPick: (value) => { javaPickChoice = value }
+      })
+    )
+  }
+
+  javaPickHintEl.textContent =
+    list.length === 0
+      ? '本机还没找到 Java。可以点左下角「管理 Java」去添加一个。'
+      : '拿不准就用「跟随全局设置」——那是最省心的那个。'
+}
+
+document.getElementById('java-pick-cancel').addEventListener('click', () => {
+  javaModalEl.hidden = true
+})
+javaModalEl.addEventListener('click', (event) => {
+  if (event.target === javaModalEl) javaModalEl.hidden = true
+})
+
+document.getElementById('java-pick-save').addEventListener('click', async () => {
+  const id = javaPickTarget.id
+  const dir = javaPickTarget.dir
+  if (!id) return
+
+  const patch =
+    javaPickChoice === JAVA_FOLLOW
+      ? { javaPath: null }
+      : { javaPath: javaPickChoice === JAVA_AUTO ? '' : javaPickChoice }
+
+  const result = await window.api.setVersionSettings(id, patch, dir)
+  if (!result.ok) {
+    javaPickHintEl.textContent = result.error
+    return
+  }
+
+  javaModalEl.hidden = true
+  if (!verModalEl.hidden && editingVersion) renderVersionJava(editingVersion)
+  refreshLaunchFacts()
+  setNotice('Java 选择存好了，下次启动这个版本就按它来', 'ok')
+})
+
+// 「管理 Java」：关掉弹窗，跳到设置页那块 Java，并让它闪一下
+document.getElementById('java-manage').addEventListener('click', () => {
+  javaModalEl.hidden = true
+  showPage('settings')
+  showSettingsTab('launch')
+  showJavaPanel()
+})
+
+/** 跳到设置页并高亮"Java 运行时"那块（几个地方都要用，抽出来） */
+function showJavaPanel() {
+  const panel = document.getElementById('panel-java')
+  if (panel) panel.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  flashAt(panel)
+}
+
+verPickJavaEl.addEventListener('click', () => openJavaPicker(editingVersion, editingDir))
 
 /** 把一项设置存下去，顺手刷新提示 */
 async function saveSetting(patch, after) {
