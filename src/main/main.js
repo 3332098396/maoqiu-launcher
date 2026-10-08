@@ -816,7 +816,10 @@ function registerIpcHandlers() {
       if (look.bgmVolume !== undefined) {
         lookPatch.bgmVolume = Math.min(100, Math.max(0, Math.round(Number(look.bgmVolume) || 0)))
       }
-      if (typeof look.theme === 'string' && ['blue', 'dark', 'matcha', 'sunset', 'sakura'].includes(look.theme)) {
+      // 【原来这里是列举式白名单】只认开头那 5 套——后来加的主题（霓虹紫青等）
+      // 一律被挡在门外，界面上切了也存不下来，重启就弹回默认（2026-10-08 发现）。
+      // 改成只校验"长得像个主题名"：小写字母加连字符。以后加主题不用再来改这里。
+      if (typeof look.theme === 'string' && /^[a-z][a-z0-9-]{1,23}$/.test(look.theme)) {
         lookPatch.theme = look.theme
       }
 

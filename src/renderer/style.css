@@ -10,82 +10,22 @@
  */
 
 :root {
-  /* —— 渐变（顶栏 / 页面底 / 主按钮）—— */
-  --topbar-gradient: linear-gradient(120deg, #3d86d8, #2f6fb5);
-  --page-veil: linear-gradient(rgba(214, 234, 255, 0.62), rgba(232, 244, 255, 0.74));
-  --page-image: url('../../assets/hero-landscape.jpg');
-  --primary-gradient: linear-gradient(135deg, #3d86d8, #2f6fb5);
-  --page-tint: #eaf4ff;
-
-  /* —— 面（卡片、输入框、选中态）—— */
-  --card-bg: rgba(240, 248, 255, 0.84);
-  --surface: rgba(240, 247, 255, 0.8);
-  --surface-soft: rgba(247, 251, 255, 0.72);
-  --surface-accent: rgba(238, 246, 255, 0.8);
-  --surface-accent-2: rgba(230, 242, 255, 0.86);
-  --card-border: #dcebff;
-  --card-border-hover: #b8dbff;
-  --accent-line: #e3f0ff;
+  /* 【这里只放不跟主题走的东西】颜色变量全搬到 body[data-theme=...] 块里了。
+   * 用户把亮色主题全删了，默认主题是「霓虹紫青」——见下面那条
+   * `:root, body[data-theme='neon']` 那一块（它同时兼作默认值）。
+   * 2026-10-08 之前这里躺着一整套“渐变淡蓝”的亮色值，现在清了：
+   * 留着会让人以为默认还是亮色。 */
   --card-radius: 12px;
-  /* 左边导航"选中项"的样子。默认各主题沿用自己那套（浅底 + 强调色字）；
-     霓虹主题照设计稿改成"浅色胶囊 + 深色字"，在它那一块里覆盖。 */
-  --rail-on-bg: var(--surface-accent);
-  --rail-on-fg: var(--accent-strong);
+
   /* 四格状态卡（M17.3 照设计稿：白底 + 深字。深色主题里也用它，所以单独一组变量） */
   --fact-bg: #ffffff;
   --fact-border: #dfe9f7;
   --fact-shadow: 0 4px 14px rgba(31, 45, 61, 0.12);
   --fact-k: #6b7688;
   --fact-v: #1f2d3d;
-  --card-shadow: 0 2px 8px rgba(74, 155, 255, 0.08);
-  --card-shadow-hover: 0 6px 18px rgba(74, 155, 255, 0.18);
-  --accent-shadow: rgba(74, 155, 255, 0.28);
-  --accent-shadow-strong: rgba(74, 155, 255, 0.32);
-  --accent-shadow-soft: rgba(74, 155, 255, 0.08);
-  --accent-ring: rgba(74, 155, 255, 0.18);
-  --accent-ring-soft: rgba(74, 155, 255, 0.12);
 
-  /* —— 强调色（按钮、选中、链接）—— */
-  --accent: #4a9bff;
-  --accent-strong: #3373bd;
-  --accent-soft: #7cc0ff;
-
-  /* —— 状态色 —— */
-  --ok: #4caf72;
-  --ok-soft: #eafaf0;
-  --ok-line: #cfefdc;
-  --ok-text: #2f8f52;
-  --warn: #ffb020;
-  --warn-soft: #fff6e6;
-  --warn-text: #a8620f;
-  --danger: #ff6b6b;
-  --danger-soft: #ffeeee;
-  --danger-strong: #d9736f;
-  --danger-ring: rgba(242, 109, 109, 0.28);
-
-  /* —— 字 —— */
-  /* 灰阶按对比度挑的：白底上 dim 5.0、muted 4.3（原来 4.3 / 2.4，后者看不清） */
-  --text: #1f2d3d;
-  --text-dim: #5f7186;
-  --text-muted: #66788c;
-
-  /* —— 叠层（弹窗灰底、顶栏上的高光）—— */
-  --overlay: rgba(31, 45, 61, 0.3);
-  --overlay-strong: rgba(31, 45, 61, 0.35);
-  --overlay-soft: rgba(31, 45, 61, 0.12);
-  --surface-a95: rgba(255, 255, 255, 0.95);
-  --surface-a82: rgba(255, 255, 255, 0.82);
-  --surface-a72: rgba(255, 255, 255, 0.72);
-  --surface-a55: rgba(255, 255, 255, 0.55);
-  /* —— 顶栏上的字（M14.2：这几个必须是跟顶栏走的变量，
-     不能拿 --surface 顶——深色主题下 --surface 是深色，字会消失。实测踩过）—— */
-  --on-topbar: #ffffff;
-  --on-topbar-dim: rgba(255, 255, 255, 0.82);
-  --on-topbar-hover: rgba(255, 255, 255, 0.18);
-  --pill-bg: #ffffff;
-  --pill-text: #2f6fb5;
-
-  --on-accent: #fff;
+  /* 顶栏上的字（M14.2：这几个必须是跟顶栏走的变量，
+     不能拿 --surface 顶——深色主题下 --surface 是深色，字会消失。实测踩过） */
   --on-accent-a35: rgba(255, 255, 255, 0.35);
   --on-accent-a25: rgba(255, 255, 255, 0.25);
   --on-accent-a22: rgba(255, 255, 255, 0.22);
@@ -168,6 +108,10 @@ body[data-theme='dark'] {
  * 这种缺位的值（图被放大弄花了），所以这几个数是我对着图调的。
  * 等用户拿到**文本规范**（准确色值）之后，改这一段就行——别处一行都不用动。
  */
+/* 【这块同时是默认值】用户把亮色主题全删了，默认主题不能再是亮色，
+   所以让霓虹紫青这一块**同时挂在 :root 上**——没设置过主题时就是它。
+   一份定义两处生效，别拆成两份（拆了早晚改漏一处）。 */
+:root,
 body[data-theme='neon'] {
   /* 顶栏也半透明（不然左边导航是一整块死黑，跟磨砂玻璃对不上） */
   --topbar-gradient: linear-gradient(120deg, rgba(27, 32, 54, 0.68), rgba(21, 26, 45, 0.68));

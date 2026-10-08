@@ -3470,20 +3470,13 @@ const HIDEABLE_PAGES = [
 
 /** 顶栏样式 */
 const THEMES = [
-  { key: 'blue', label: '渐变淡蓝（亮色 · 默认）', colors: ['#8fcbff', '#4a9bff', '#eef6ff'] },
-  { key: 'dark', label: '深色（暗色）', colors: ['#2b2f45', '#8b7bff', '#1f2338'] },
-  // M17.1：按委托人做的设计稿加的一套（深底 + 紫→青品牌渐变）
-  // 【名字后面为什么要注明】用户翻这套主题找"图纸那种样子"，在「深色」和这套之间
-  // 挑错了——两套都是深底、大启动卡都带紫蓝渐变，光看那三个色点分不出来
-  // （2026-10-08 实测踩过）。所以每个主题都带上一句"长什么样"。
+  // M17.x：用户把之前那几套主题全删了，只留霓虹紫青 + 新加的 4 套深色。
+// 名字后面一律带上"亮色/暗色 · 什么色系"，不然几套深色主题光看色点分不出来。
   { key: 'neon', label: '霓虹紫青（暗色 · 图纸同款）', colors: ['#9a5cf7', '#2fd4e8', '#141a2e'] },
   { key: 'aurora', label: '冷色极光（暗色 · 紫蓝青）', colors: ['#9a5cf7', '#5b7cff', '#2fd4e8'] },
   { key: 'magenta', label: '品红霓虹（暗色 · 紫粉）', colors: ['#ff5eb3', '#b85cf0', '#7a5cff'] },
   { key: 'emerald', label: '翡翠夜（暗色 · 青绿）', colors: ['#2dd4a8', '#22c8d8', '#4a90ff'] },
   { key: 'amber', label: '琥珀夜（暗色 · 橙粉）', colors: ['#ff9a4d', '#f76a8b', '#a85cf0'] },
-  { key: 'matcha', label: '抹茶绿（亮色）', colors: ['#a8d8b9', '#56b57f', '#eaf7ef'] },
-  { key: 'sunset', label: '暖阳橙（亮色）', colors: ['#ffca8f', '#f79140', '#fff2e2'] },
-  { key: 'sakura', label: '樱花粉（亮色）', colors: ['#ffc2d8', '#f97fae', '#ffeef5'] }
 ]
 
 /**
@@ -3537,7 +3530,7 @@ function applyLook(look) {
   }
 
   // ④ 主题配色（M14.1：整个界面的配色都由这个属性决定，见 style.css 开头的主题块）
-  document.body.dataset.theme = settingsLook.theme || 'blue'
+  document.body.dataset.theme = settingsLook.theme || 'neon'
 }
 
 /** 用户第一次点页面时，把没放成的背景音乐补上（浏览器的自动播放限制） */
@@ -3595,7 +3588,7 @@ function renderLookTab() {
     const button = document.createElement('button')
     button.type = 'button'
     button.className =
-      (look.theme || 'blue') === one.key ? 'theme-card theme-card--on' : 'theme-card'
+      (look.theme || 'neon') === one.key ? 'theme-card theme-card--on' : 'theme-card'
 
     const dots = document.createElement('span')
     dots.className = 'theme-card__dots'

@@ -74,8 +74,8 @@ const DEFAULTS = {
     /** 背景音乐的完整路径（空 = 不设），还有音量 0-100 */
     bgm: '',
     bgmVolume: 40,
-    /** 顶栏样式：'blue'（默认渐变淡蓝）/ 'plain'（纯色）/ 'dark' */
-    theme: 'blue'
+    /** 界面主题名（对应 style.css 里的 body[data-theme=...]，默认霓虹紫青）*/
+    theme: 'neon'
   },
   /**
    * 联机（M12）。记着上次的房间码和用的组件版本，下次打开界面能直接接上。
