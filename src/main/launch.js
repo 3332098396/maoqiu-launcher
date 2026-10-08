@@ -321,35 +321,36 @@ async function ensureLogConfig(versionJson, gameDir) {
 // ——————————————————————————————————————————————
 
 /**
- * 第一次启动时，把游戏语言设成简体中文。
+ * 启动游戏前，把游戏语言设成简体中文。
  *
  * 【为什么要做】游戏装好默认是英文（options.txt 里写的 lang:en_us），
  * 对国内用户来说第一步就是一道坎。实测时用户当场就问了"英文的？"
  *
- * 【为什么只做一次】语言是用户的个人偏好，他完全可能特意改成英文。
- * 所以只在"他还没表过态"的时候设一次，设完在配置里记一笔，
- * **以后再也不碰 options.txt**——绝不和用户对着干。
+ * 【为什么改成"每次启动都看一眼"】原来是"这个目录设过就不管了"，配置里记一笔
+ * `languageAppliedDir`。2026-10-08 用户提要求："**就算用新版本进游戏也要是中文**"
+ * ——所以规矩改成：**每次启动都读一眼 options.txt，
+ * 发现是英文就改成中文，已经是中文就一个字不动**。
+ * 代价是他自己特意改成英文也会被改回来，但他要的就是这个效果。
+ * （旧配置里那个 languageAppliedDir 现在不用了，**留着不删**——
+ *   删了还得管老配置的兼容，留着又不占地方。）
  *
  * 【改的是哪个文件】游戏目录下的 options.txt（游戏自己的设置文件），
  * 只动 lang: 那一行，其他设置原样保留；先写临时文件再改名，中途断电不会写坏。
  */
 function ensureGameLanguage(gameDir, log) {
-  const config = settings.readConfig()
-
-  // 这个游戏目录已经设过了？那就不碰（用户自己改了就再也不管）
-  if (config.launch.languageAppliedDir === gameDir) return
-
   const file = paths.gameOptionsFile(gameDir)
 
   try {
     const exists = fs.existsSync(file)
     const text = exists ? fs.readFileSync(file, 'utf8') : ''
 
-    // 已经是中文了：不用改，只记一笔"这个目录做过了"
-    if (/^lang:zh_cn\s*$/m.test(text)) {
-      settings.writeConfig({ launch: { languageAppliedDir: gameDir } })
-      return
-    }
+    // 已经是中文：一个字都不动（绝大多数启动走的就是这条路，读完就返回）
+    //
+    // 【这里为什么用 [ \t] 而不是 \s】`\s` **会把行尾那个回车也吃掉**，
+    // 吃掉之后 `$`（多行模式下要求落在行尾）就匹配不上了——判断直接失效，
+    // 于是"已经是中文"也会走到下面重写一遍文件。因为写出来的内容一模一样，
+    // 光看结果是看不出来的：得看它有没有白写。
+    if (/^lang:zh_cn[ \t]*$/m.test(text)) return
 
     let next
     if (/^lang:/m.test(text)) {
@@ -364,8 +365,7 @@ function ensureGameLanguage(gameDir, log) {
     fs.writeFileSync(temp, next, 'utf8')
     fs.renameSync(temp, file)
 
-    settings.writeConfig({ launch: { languageAppliedDir: gameDir } })
-    if (log) log.line('[启动器] 第一次启动，已把游戏语言设成简体中文（你以后自己改了，就不会再动它）')
+    if (log) log.line('[启动器] 游戏语言不是中文，已经改成简体中文了')
   } catch (error) {
     // 设不上不该拦着玩游戏，记一笔就算了
     if (log) log.line(`[启动器] 想把游戏语言设成中文，但没成功：${error.message}`)
