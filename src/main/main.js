@@ -838,6 +838,12 @@ function registerIpcHandlers() {
       if (typeof look.background === 'string') lookPatch.background = look.background
       if (typeof look.bgm === 'string') lookPatch.bgm = look.bgm
       if (typeof look.skin === 'string') lookPatch.skin = look.skin
+      // 用账号上的皮肤，还是用本地那份（M17.5）。
+      // 【为什么要有这个开关】以前是"登了账号就自动盖掉你选的"——
+      // 用户自己挑了一张，登录之后发现被换掉了，还不知道为什么。
+      if (typeof look.useAccountSkin === 'boolean') {
+        lookPatch.useAccountSkin = look.useAccountSkin
+      }
       if (look.bgmVolume !== undefined) {
         lookPatch.bgmVolume = Math.min(100, Math.max(0, Math.round(Number(look.bgmVolume) || 0)))
       }
@@ -1060,6 +1066,54 @@ function registerIpcHandlers() {
 
     if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true }
     return { ok: true, path: result.filePaths[0] }
+  })
+
+  // ——— 本地皮肤库（M17.5）———
+  //
+  // 挑一张皮肤之后**复制一份到 `%APPDATA%\毛球\skins\`**：
+  // 用户把原来那张删了、挪走了，毛球这边照样有——也才有"我上传过的"这个列表可列。
+
+  /** 皮肤库里有哪些（最新传的排前面） */
+  ipcMain.handle('skin:list', () => {
+    try {
+      return { ok: true, list: skins.listLocal() }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 挑一张皮肤，检查尺寸，收进皮肤库 */
+  ipcMain.handle('skin:import', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const result = await dialog.showOpenDialog(win, {
+      title: '挑一张 Minecraft 皮肤（64×64 的 PNG）',
+      properties: ['openFile'],
+      filters: [{ name: '皮肤', extensions: ['png'] }]
+    })
+    if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true }
+
+    return skins.importFile(result.filePaths[0])
+  })
+
+  /** 从皮肤库里删一份（**只动我们自己复制进来的那份**，见 skins.removeLocal） */
+  ipcMain.handle('skin:remove', (_event, target) => {
+    try {
+      return skins.removeLocal(target)
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 在文件管理器里打开皮肤库（用户想自己往里丢图也行） */
+  ipcMain.handle('skin:openFolder', async () => {
+    try {
+      const dir = skins.skinsDir()
+      paths.ensureDir(dir)
+      const failed = await shell.openPath(dir)
+      return failed ? { ok: false, error: failed } : { ok: true, dir }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
   })
 
   /** 帮助页那三个"一键打开"：游戏目录 / 配置目录（日志那个早就有了） */

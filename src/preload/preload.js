@@ -374,6 +374,20 @@ contextBridge.exposeInMainWorld('api', {
   /** 挑一个皮肤文件（M14.4），只返回路径 */
   pickSkinFile: () => ipcRenderer.invoke('skin:pick'),
 
+  // ——— 本地皮肤库（M17.5）———
+
+  /** 皮肤库里有哪些（最新传的排前面） */
+  listSkins: () => ipcRenderer.invoke('skin:list'),
+
+  /** 挑一张皮肤，检查尺寸，**复制**一份进皮肤库（不动用户原来那张） */
+  importSkin: () => ipcRenderer.invoke('skin:import'),
+
+  /** 从皮肤库里删一份（只删我们自己复制进来的那份） */
+  removeSkin: (path) => ipcRenderer.invoke('skin:remove', path),
+
+  /** 在文件管理器里打开皮肤库 */
+  openSkinFolder: () => ipcRenderer.invoke('skin:openFolder'),
+
   /** 帮助页的一键打开：'game' 游戏目录 / 'config' 配置目录 */
   openAppFolder: (which) => ipcRenderer.invoke('app:openFolder', which),
 

@@ -69,6 +69,12 @@ const DEFAULTS = {
   look: {
     /** 要藏起来的页面（'online' / 'download' / 'help'） */
     hiddenPages: [],
+    /**
+     * 用账号上的皮肤（M17.5，默认用）。
+     * 关掉之后就用 skin 里那个本地文件——以前是登了账号就自动盖掉，
+     * 用户自己挑的那张被换了还不知道为什么。
+     */
+    useAccountSkin: true,
     /** 背景图的完整路径（空 = 不设） */
     background: '',
     /** 背景音乐的完整路径（空 = 不设），还有音量 0-100 */

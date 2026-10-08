@@ -32,6 +32,14 @@ function showPage(name) {
   if (name === 'launch') {
     loadLaunchPage()
     ensureSkinCard() // 3D 皮肤预览（M14.4）：第一次进来时挂上
+    moveSkinViewerTo(skinStageEl, 1) // 从皮肤页回来时把小人搬回来（M17.5）
+  }
+
+  // 皮肤页（M17.5）：把 3D 小人搬过来 + 重新画列表
+  if (name === 'skin') {
+    ensureSkinCard()
+    moveSkinViewerTo(skinStageMainEl, 1.15) // 大预览：相机拉远一点，不然脚会被裁掉
+    renderSkinPage()
   }
 
   // 设置页同理：设置可能被别处改过（比如改完内存回到启动页看信息卡）
@@ -4684,14 +4692,25 @@ function clearAvatar() {
   railAvatarEl.classList.remove('is-skin')
 }
 
+/**
+ * 现在这个小人身上贴的是哪张图（M17.5 加的）。
+ * 皮肤页那个头像圈要拿它现裁一个脑袋——
+ * 【为什么不能 cloneNode 现成的头像】canvas 被 cloneNode 复制出来是**空白**的
+ * （只复制标签属性，不复制画面），实测头像圈一直是个空圈。
+ * 所以这里记着原图，用谁就现裁谁。
+ */
+let currentSkinImage = null
+
 /** 换皮肤时**两个地方一起换**：右边那个 3D 小人 + 左边这个圆头像 */
 function applySkin(image) {
+  currentSkinImage = image
   window.skinViewer.setSkin(image)
   paintAvatar(image)
 }
 
 /** 换回默认皮肤时也一样，两个地方一起退 */
 function useDefaultSkinAndAvatar() {
+  currentSkinImage = window.skinViewer ? window.skinViewer.makeDefaultSkin() : null
   window.skinViewer.useDefaultSkin()
   clearAvatar()
 }
@@ -4714,16 +4733,20 @@ function ensureSkinCard() {
   whenSkinReady(async () => {
     window.skinViewer.mount(skinStageEl)
     skinMounted = true
-
-    const saved = settingsInfo?.look?.skin
-    if (saved) {
-      const okLoaded = await loadSkinFrom(saved)
-      if (!okLoaded) {
-        useDefaultSkinAndAvatar()
-        skinHintEl.textContent = '上次选的皮肤文件找不到了，先用默认的。'
-      }
-    }
+    await applyCurrentSkin()
   })
+}
+
+/**
+ * 把 3D 小人搬到这个容器里（M17.5）。
+ *
+ * 【为什么要搬】启动页和皮肤页都要看小人，但 WebGL 只开一个
+ * （开两个白烧一份显存，而且两边的"跟着鼠标转"会打架）。
+ * 画布跟着当前显示的页面走，见 skin3d.js 的 mount。
+ */
+function moveSkinViewerTo(container, zoom) {
+  if (!skinMounted || !window.skinViewer || !container) return
+  window.skinViewer.mount(container, zoom)
 }
 
 document.getElementById('skin-pick').addEventListener('click', async () => {
@@ -4763,38 +4786,351 @@ let skinAccountKey = ''
 async function refreshAccountSkin() {
   const account = launchInfo?.account
   const remote = account && (account.type === 'yggdrasil' || account.type === 'microsoft')
-  const key = remote ? `${account.type}:${account.uuid}` : ''
+  const useAccount = remote && settingsInfo?.look?.useAccountSkin !== false
+  const showAccount = Boolean(useAccount)
+  const key = showAccount ? `${account.type}:${account.uuid}` : ''
 
-  if (key === skinAccountKey) return
-  skinAccountKey = key
+  const saved = String(settingsInfo?.look?.skin || '')
+  const wanted = showAccount ? `account:${key}` : saved ? `file:${saved}` : 'default'
+  if (wanted === skinAccountKey) return
+  skinAccountKey = wanted
 
-  whenSkinReady(async () => {
-    if (!key) {
-      // 退回"你自己选的那张 / 默认"（比如刚退出登录）
-      const saved = settingsInfo?.look?.skin
-      if (saved && (await loadSkinFrom(saved))) return
-      useDefaultSkinAndAvatar()
-      return
-    }
+  whenSkinReady(() => applyCurrentSkin())
+}
 
+/**
+ * 按"用户选的那一项"把皮肤换上去（M17.5）。
+ *
+ * 三选一，优先级从高到低：
+ *   ① 账号上的（设置里"用账号上的皮肤"开着，而且账号确实有）
+ *   ② 你自己传的那张（皮肤页里点过「使用」）
+ *   ③ 系统默认
+ *
+ * 【为什么要有这个函数】以前是"登了账号就自动盖掉你自己挑的那张"——
+ * 用户完全不知道为什么自己选的皮肤不见了。现在这件事由用户说了算。
+ */
+async function applyCurrentSkin() {
+  const look = settingsInfo?.look || {}
+  const account = launchInfo?.account
+  const remote = account && (account.type === 'yggdrasil' || account.type === 'microsoft')
+
+  // ① 账号上的
+  if (look.useAccountSkin !== false && remote) {
     const result = await window.api.fetchAccountSkin()
-    if (!result.ok) {
-      skinHintEl.textContent = result.error
+    if (result.ok) {
+      const image = new Image()
+      image.onload = () => {
+        applySkin(image)
+        const from =
+          result.source === 'microsoft' ? '正版账号上的皮肤' : '皮肤站账号上的皮肤'
+        skinHintEl.textContent = `这是你${from}。`
+        skinBigFromEl.textContent = `来自：${from}`
+        skinBigNameEl.textContent = account.name || '我的角色'
+      }
+      image.onerror = () => {
+        skinHintEl.textContent = '皮肤下下来了但读不出来，先用默认的。'
+      }
+      image.src = result.dataUrl
       return
     }
+    // 取不到（没设皮肤/网络抖动）——说一句，然后退回下面那两种
+    skinHintEl.textContent = result.error
+  }
 
+  // ② 你自己传的那张
+  const saved = String(look.skin || '')
+  if (saved) {
+    const okLoaded = await loadSkinFrom(saved)
+    if (okLoaded) {
+      skinHintEl.textContent = '这是你自己传的皮肤。鼠标左右移动就能转。'
+      skinBigFromEl.textContent = '来自：我上传的'
+      skinBigNameEl.textContent = saved.split(/[\\/]/).pop().replace(/\.png$/i, '')
+      return
+    }
+    skinHintEl.textContent = '上次选的那张皮肤找不到了，先用默认的。'
+  }
+
+  // ③ 默认
+  useDefaultSkinAndAvatar()
+  skinBigFromEl.textContent = '来自：系统默认皮肤'
+  skinBigNameEl.textContent = 'Steve'
+  if (!saved) skinHintEl.textContent = '鼠标在卡片上左右移动，小人就跟着转。'
+}
+
+// ═══════════════════════════════════════
+// 皮肤页（M17.5）
+// ═══════════════════════════════════════
+//
+// 照设计稿的"皮肤与披风页"做的，**披风那块不做**（游戏本体不认本地披风文件，
+// 只有 Optifine 或某些 Mod 才显示，做出来是个空功能）。
+//
+// 和启动页那张卡的关系：**同一个 3D 小人**（切页面时把画布搬过去，见 moveSkinViewerTo），
+// 这里多了账号卡、我上传过的皮肤列表、上传和移除。
+
+const skinListEl = document.getElementById('skin-list')
+const skinBigNameEl = document.getElementById('skin-big-name')
+const skinBigFromEl = document.getElementById('skin-big-from')
+const skinStageMainEl = document.getElementById('skin-stage-main')
+const skinAccountAvatarEl = document.getElementById('skin-account-avatar')
+const skinAccountNameEl = document.getElementById('skin-account-name')
+const skinAccountHintEl = document.getElementById('skin-account-hint')
+const skinAccountBtnEl = document.getElementById('skin-account-btn')
+
+/** 皮肤库里有哪些（主进程读回来的；上传/删除后要重建） */
+let skinLibCache = null
+
+/** 现在到底在用哪个：'account' | 'default' | 具体路径 */
+function currentSkinChoice() {
+  const look = settingsInfo?.look || {}
+  const account = launchInfo?.account
+  const remote = account && (account.type === 'yggdrasil' || account.type === 'microsoft')
+  if (look.useAccountSkin !== false && remote) return 'account'
+  return look.skin || 'default'
+}
+
+/** 把皮肤图里的脑袋裁出来（列表里的小图、左上角头像都用它） */
+function headCanvas(image) {
+  const piece = document.createElement('canvas')
+  piece.width = 8
+  piece.height = 8
+  const brush = piece.getContext('2d')
+  brush.imageSmoothingEnabled = false
+  // 脑袋正面在 (8,8)，"帽子层"在 (40,8)——叠上去就对了（没有内容的皮肤这层是透明的）
+  brush.drawImage(image, 8, 8, 8, 8, 0, 0, 8, 8)
+  brush.drawImage(image, 40, 8, 8, 8, 0, 0, 8, 8)
+  return piece
+}
+
+/** 读一张本地皮肤图（读不出来返回 null，不抛） */
+function loadImageFile(path) {
+  return new Promise((resolve) => {
     const image = new Image()
-    image.onload = () => {
-      applySkin(image)
-      skinHintEl.textContent =
-        result.source === 'microsoft' ? '这是你正版账号上的皮肤。' : '这是你皮肤站账号上的皮肤。'
-    }
-    image.onerror = () => {
-      skinHintEl.textContent = '皮肤下下来了但读不出来，先用默认的。'
-    }
-    image.src = result.dataUrl
+    image.onload = () => resolve(image)
+    image.onerror = () => resolve(null)
+    image.src = toFileUrl(path)
   })
 }
+
+/**
+ * 画皮肤页：左边账号卡、右边皮肤列表。
+ * 列表里三项都是有出处的：账号上的 / 我传过的每一个 / 系统默认。
+ */
+async function renderSkinPage() {
+  if (!settingsInfo) {
+    // 设置还没读回来（比如一开机直接点皮肤页）——先读一遍再说
+    try {
+      settingsInfo = await window.api.getSettings()
+    } catch {
+      // 读不到就画个空列表，不影响别处
+    }
+  }
+
+  const current = currentSkinChoice()
+  const account = launchInfo?.account
+  const remote = account && (account.type === 'yggdrasil' || account.type === 'microsoft')
+
+  // ——— 左：账号卡（头像用"当前正在用的那张皮肤"的脑袋）———
+  // 【为什么不是"账号上的那个脑袋"】离线账号压根没有，卡片上会是个空圈看着像坏了。
+  // 这一栏要说的是"你现在长什么样"，那用当前皮肤的脑袋最合适。
+  // 【为什么是现裁一个而不是复制现成的】见 currentSkinImage 那段注释：canvas 复制出来是空的
+  skinAccountAvatarEl.textContent = ''
+  if (currentSkinImage) skinAccountAvatarEl.appendChild(headCanvas(currentSkinImage))
+  skinAccountNameEl.textContent = account ? account.name || '已登录' : '未登录'
+  if (remote) {
+    skinAccountHintEl.textContent =
+      account.type === 'microsoft' ? '正版账号，能直接用账号上的皮肤' : '皮肤站账号，能直接用账号上的皮肤'
+    skinAccountBtnEl.hidden = true
+  } else {
+    skinAccountHintEl.textContent = account
+      ? '离线账号没有网上的皮肤——可以上传一张自己的'
+      : '登录之后能直接用账号上的皮肤'
+    skinAccountBtnEl.hidden = false
+  }
+
+  // ——— 右：皮肤列表 ———
+  if (!skinLibCache) skinLibCache = await loadSkinLib()
+  skinListEl.textContent = ''
+
+  const addItem = (opts) => {
+    const row = document.createElement('div')
+    row.className = 'skin-item' + (opts.on ? ' skin-item--on' : '')
+
+    const thumb = document.createElement('div')
+    thumb.className = 'skin-item__thumb'
+    if (opts.image) thumb.appendChild(headCanvas(opts.image))
+    row.appendChild(thumb)
+
+    const main = document.createElement('div')
+    main.className = 'skin-item__main'
+    const name = document.createElement('div')
+    name.className = 'skin-item__name'
+    name.textContent = opts.name
+    const from = document.createElement('div')
+    from.className = 'skin-item__from'
+    from.textContent = opts.from
+    main.appendChild(name)
+    main.appendChild(from)
+    row.appendChild(main)
+
+    if (opts.on) {
+      const tag = document.createElement('span')
+      tag.className = 'skin-item__from'
+      tag.textContent = '当前使用'
+      row.appendChild(tag)
+    } else if (opts.canUse) {
+      const use = document.createElement('button')
+      use.className = 'btn btn--primary btn--sm'
+      use.type = 'button'
+      use.textContent = '使用'
+      use.addEventListener('click', () => opts.canUse())
+      row.appendChild(use)
+    }
+
+    if (opts.canRemove) {
+      const del = document.createElement('button')
+      del.className = 'skin-item__remove'
+      del.type = 'button'
+      del.textContent = '移除'
+      del.title = '只从皮肤库里删掉，不动你原来那张图'
+      del.addEventListener('click', () => opts.canRemove())
+      row.appendChild(del)
+    }
+
+    skinListEl.appendChild(row)
+  }
+
+  // ① 账号上的（只有账号支持才列）
+  if (remote) {
+    addItem({
+      name: account.name || '账号上的皮肤',
+      from: '来自：账号',
+      on: current === 'account',
+      canUse: current === 'account' ? null : () => chooseSkin('account')
+    })
+  }
+
+  // ② 我传过的
+  for (const one of skinLibCache) {
+    const image = await loadImageFile(one.path)
+    addItem({
+      name: one.name,
+      from: '来自：我上传的',
+      image,
+      on: samePath(current, one.path),
+      canUse: samePath(current, one.path) ? null : () => chooseSkin(one.path),
+      canRemove: () => removeSkinFromLib(one)
+    })
+  }
+
+  // ③ 系统默认
+  addItem({
+    name: 'Steve',
+    from: '来自：系统默认皮肤',
+    image: window.skinViewer ? window.skinViewer.makeDefaultSkin() : null,
+    on: current === 'default',
+    canUse: current === 'default' ? null : () => chooseSkin('default')
+  })
+
+  // ——— 中间那行名字/来源，跟着当前的选择走 ———
+  if (current === 'account') {
+    skinBigNameEl.textContent = account?.name || '我的角色'
+    skinBigFromEl.textContent = '来自：账号'
+  } else if (current === 'default') {
+    skinBigNameEl.textContent = 'Steve'
+    skinBigFromEl.textContent = '来自：系统默认皮肤'
+  } else {
+    const one = skinLibCache.find((x) => samePath(x.path, current))
+    skinBigNameEl.textContent = one ? one.name : String(current).split(/[\\/]/).pop()
+    skinBigFromEl.textContent = '来自：我上传的'
+  }
+}
+
+/** 读皮肤库（读不到就当空的，不拦着用户） */
+async function loadSkinLib() {
+  try {
+    const res = await window.api.listSkins()
+    return res.ok ? res.list : []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * 换成这一项。
+ * @param {'account'|'default'|string} choice 'account' = 用账号上的；'default' = 系统默认；其余当路径
+ */
+async function chooseSkin(choice) {
+  if (choice === 'account') {
+    await saveLook({ useAccountSkin: true })
+  } else if (choice === 'default') {
+    await saveLook({ skin: '', useAccountSkin: false })
+  } else {
+    await saveLook({ skin: choice, useAccountSkin: false })
+  }
+
+  // look 存完之后 settingsInfo 里还是旧的，得重读一遍，不然界面上"当前使用"标错人
+  try {
+    settingsInfo = await window.api.getSettings()
+  } catch {
+    // 读不到就用本地的乐观值（下面 applyCurrentSkin 也按它来）
+    if (settingsInfo) {
+      settingsInfo.look = { ...settingsInfo.look, useAccountSkin: choice === 'account', skin: choice === 'account' || choice === 'default' ? '' : choice }
+    }
+  }
+
+  skinAccountKey = '' // 强制重算（不然 refreshAccountSkin 会以为没变）
+  await applyCurrentSkin()
+  await renderSkinPage()
+  refreshLaunchFacts()
+}
+
+/** 从皮肤库里删一份（会先问一句） */
+async function removeSkinFromLib(one) {
+  const ok = window.confirm(`把「${one.name}」从皮肤库里删掉？\n\n只删毛球复制进来的那一份，你自己原来那张图不动。`)
+  if (!ok) return
+
+  const res = await window.api.removeSkin(one.path)
+  if (!res.ok) {
+    setNotice(`删不掉：${res.error}`, 'error')
+    return
+  }
+
+  // 删掉的正是在用的那张 → 退回默认
+  if (samePath(currentSkinChoice(), one.path)) {
+    await saveLook({ skin: '', useAccountSkin: false })
+    if (settingsInfo) settingsInfo.look = { ...settingsInfo.look, skin: '', useAccountSkin: false }
+    skinAccountKey = ''
+    await applyCurrentSkin()
+  }
+
+  skinLibCache = await loadSkinLib()
+  await renderSkinPage()
+  setNotice('已经从皮肤库里删掉了', 'ok', true)
+}
+
+// ——— 上传 / 打开文件夹 / 登录 ———
+
+document.getElementById('skin-upload').addEventListener('click', async () => {
+  const picked = await window.api.importSkin()
+  if (picked.canceled) return
+  if (!picked.ok) {
+    setNotice(`这张皮肤用不了：${picked.error}`, 'error')
+    return
+  }
+  skinLibCache = await loadSkinLib()
+  await chooseSkin(picked.path)
+  setNotice('皮肤传好了，已经给你换上了', 'ok', true)
+})
+
+document.getElementById('skin-open-folder').addEventListener('click', async () => {
+  const res = await window.api.openSkinFolder()
+  if (!res.ok) setNotice(`打不开文件夹：${res.error}`, 'error')
+})
+
+skinAccountBtnEl.addEventListener('click', () => {
+  // 复用启动页左上角头像那个弹窗——账号的事只有一处，别做第二套
+  openAccountModal()
+})
 
 // ——————————————————————————————————————————————
 // 最后一步：把启动页显示出来

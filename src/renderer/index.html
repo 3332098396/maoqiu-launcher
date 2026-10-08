@@ -130,6 +130,18 @@
           <span class="rail__label">下载</span>
         </button>
 
+        <button class="rail__btn" type="button" data-page="skin">
+          <span class="rail__icon">
+            <!-- 皮肤＝半身像（脑袋 + 肩膀）——图纸上"皮肤"那个位置画的是三个一模一样的
+                 定位针（AI 生图的老毛病），用那个反而看不懂，所以照整套的线条风格自己画了一个 -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="8.5" y="3.3" width="7" height="7" rx="1.6" />
+              <path d="M4.6 20.7v-2a4.2 4.2 0 0 1 4.2-4.2h6.4a4.2 4.2 0 0 1 4.2 4.2v2" />
+            </svg>
+          </span>
+          <span class="rail__label">皮肤</span>
+        </button>
+
         <button class="rail__btn" type="button" data-page="settings">
           <span class="rail__icon">
             <!-- 设置＝波浪边齿轮（10 个鼓包，每个鼓包正好是个半圆）+ 粗圆环，照设计稿描的 -->
@@ -604,6 +616,45 @@
                 <button class="linkbtn" type="button" id="install-hide">收起</button>
               </span>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════ 皮肤页（M17.5，照设计稿的"皮肤与披风页"，披风那块不做）═══════════ -->
+      <section class="page" data-page="skin" hidden>
+        <div class="content skin-page">
+          <div class="skin-head">
+            <div>
+              <h2 class="skin-head__title">皮肤</h2>
+              <p class="skin-head__sub">管理你的角色外观</p>
+            </div>
+            <button class="btn btn--primary" type="button" id="skin-upload">上传皮肤…</button>
+          </div>
+
+          <div class="skin-cols">
+            <!-- 左：当前账号 -->
+            <section class="panel skin-account" id="skin-account">
+              <div class="skin-account__avatar" id="skin-account-avatar"></div>
+              <div class="skin-account__name" id="skin-account-name">未登录</div>
+              <p class="skin-account__hint" id="skin-account-hint">登录之后能直接用账号上的皮肤</p>
+              <button class="btn btn--primary btn--sm" type="button" id="skin-account-btn">登录账户</button>
+            </section>
+
+            <!-- 中：大预览 -->
+            <section class="panel skin-big">
+              <div class="skin-stage skin-stage--big" id="skin-stage-main"></div>
+              <div class="skin-big__name" id="skin-big-name">Steve</div>
+              <div class="skin-big__from" id="skin-big-from">系统默认皮肤</div>
+            </section>
+
+            <!-- 右：皮肤列表 -->
+            <section class="panel skin-list-panel">
+              <h3 class="panel__title">我的皮肤</h3>
+              <div class="skin-list" id="skin-list"></div>
+              <div class="modal__actions">
+                <button class="linkbtn" type="button" id="skin-open-folder">打开皮肤文件夹</button>
+              </div>
+            </section>
           </div>
         </div>
       </section>

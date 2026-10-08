@@ -93,4 +93,148 @@ async function fetchFor(account) {
   }
 }
 
-module.exports = { hasRemoteSkin, fetchFor }
+// ——————————————————————————————————————————————
+// 本地皮肤库（M17.5）
+// ——————————————————————————————————————————————
+//
+// 【为什么要把用户挑的皮肤**复制**一份进来】
+// 以前只记了个路径：用户把那张图删了、挪走了，下次打开就变回默认皮肤，
+// 而他完全不知道发生了什么。复制到 `%APPDATA%\毛球\skins\` 之后，
+// 这份就是自己的了——也才有"本地保存"这个列表可列。
+//
+// 【绝不动用户原来的文件】复制，不是移动；「移除」删的也是我们复制进来的那份。
+
+const fs = require('node:fs')
+const path = require('node:path')
+const paths = require('./paths')
+
+/** 皮肤库的文件夹 */
+function skinsDir() {
+  return path.join(paths.configDir(), 'skins')
+}
+
+/**
+ * 看一眼这个 PNG 是不是 64×64（或 64×32 的老式皮肤）。
+ * 【为什么要看】皮肤必须是这个尺寸，别的图贴上去只会是一团马赛克。
+ * 直接读 PNG 文件头里的宽高，不用把整个图解出来——几行就够。
+ *
+ * @returns {{ok: boolean, width?: number, height?: number, error?: string}}
+ */
+function readPngSize(buffer) {
+  const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  if (!buffer || buffer.length < 24) return { ok: false, error: '这个文件太小了，不像是一张图' }
+  if (!buffer.subarray(0, 8).equals(PNG_SIGNATURE)) {
+    return { ok: false, error: '皮肤得是 PNG 格式的图（jpg 不行）' }
+  }
+  // PNG 的 IHDR 块固定在第 16 字节开始：宽 4 字节、高 4 字节
+  const width = buffer.readUInt32BE(16)
+  const height = buffer.readUInt32BE(20)
+  return { ok: true, width, height }
+}
+
+/** 把文件名里 Windows 不认的字符换掉（用户挑的文件名什么都可能有） */
+function safeFileName(name) {
+  const cleaned = String(name || 'skin')
+    .replace(/\.png$/i, '')
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .trim()
+    .slice(0, 40)
+  return cleaned || 'skin'
+}
+
+/** 列皮肤库里现有的皮肤（按放进去的时间倒序：最新传的排前面） */
+function listLocal() {
+  let names = []
+  try {
+    names = fs.readdirSync(skinsDir())
+  } catch {
+    return [] // 还没传过任何皮肤
+  }
+
+  const out = []
+  for (const name of names) {
+    if (!name.toLowerCase().endsWith('.png')) continue
+    const full = path.join(skinsDir(), name)
+    try {
+      const info = fs.statSync(full)
+      out.push({ name: name.replace(/\.png$/i, ''), path: full, mtime: info.mtimeMs })
+    } catch {
+      // 读不到就算了
+    }
+  }
+  out.sort((a, b) => b.mtime - a.mtime)
+  return out
+}
+
+/**
+ * 把用户挑的皮肤收进皮肤库。
+ * @returns {{ok: boolean, path?: string, name?: string, error?: string}}
+ */
+function importFile(sourcePath) {
+  let buffer
+  try {
+    buffer = fs.readFileSync(sourcePath)
+  } catch {
+    return { ok: false, error: '这个文件读不出来（可能被删了或者没权限）' }
+  }
+
+  const size = readPngSize(buffer)
+  if (!size.ok) return size
+  // 老式皮肤是 64×32，现在的是 64×64，两种都收
+  if (size.width !== 64 || (size.height !== 64 && size.height !== 32)) {
+    return {
+      ok: false,
+      error: `皮肤的尺寸得是 64×64（老式的是 64×32），这张是 ${size.width}×${size.height}`
+    }
+  }
+
+  const dir = skinsDir()
+  paths.ensureDir(dir)
+
+  // 重名就往后加数字：别覆盖用户之前传的那张
+  const base = safeFileName(path.basename(sourcePath))
+  let target = path.join(dir, `${base}.png`)
+  let n = 2
+  while (fs.existsSync(target)) {
+    target = path.join(dir, `${base}-${n}.png`)
+    n++
+  }
+
+  try {
+    fs.copyFileSync(sourcePath, target)
+  } catch (error) {
+    return { ok: false, error: `复制不过来：${error.message}` }
+  }
+
+  return { ok: true, path: target, name: path.basename(target, '.png') }
+}
+
+/**
+ * 从皮肤库里删一份。
+ *
+ * 【只删我们自己复制进来的那份】先卡一道"这个路径必须在皮肤库里"，
+ * 免得传进来别的路径把用户的文件删了（界面是我们自己写的，但这条规矩不靠它）。
+ */
+function removeLocal(target) {
+  const dir = path.resolve(skinsDir())
+  const full = path.resolve(String(target || ''))
+  if (!full.startsWith(dir + path.sep)) {
+    return { ok: false, error: '只能删皮肤库里的文件' }
+  }
+  try {
+    fs.rmSync(full, { force: true })
+  } catch (error) {
+    return { ok: false, error: `删不掉：${error.message}` }
+  }
+  return { ok: true }
+}
+
+module.exports = {
+  hasRemoteSkin,
+  fetchFor,
+  skinsDir,
+  listLocal,
+  importFile,
+  removeLocal,
+  readPngSize
+}

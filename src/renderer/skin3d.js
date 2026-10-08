@@ -243,17 +243,30 @@ let player = null
 let skinCanvas = makeDefaultSkin()
 let targetSpin = 0
 let spin = 0
+/** 取景比例：1 = 启动页那张小卡；皮肤页那个大预览用 1.3 左右 */
+let cameraZoom = 1
 /** 3D 挂上了没有 */
 let mounted = false
 let walkPhase = 0
 let raf = null
 
-function resize() {
+/**
+ * 按容器大小重新量一遍画布。
+ *
+ * 【为什么要重试】刚切到皮肤页的那一瞬间，容器还在排版（宽高是 0），
+ * 量出来 0 就啥也不做了——画布还留着上个页面的尺寸，CSS 又把它拉满，
+ * 结果小人被裁掉半截（实测：皮肤页那个大预览里脚看不见）。
+ * 所以量到 0 就等下一帧再量，试几次就放弃（别弄成死循环）。
+ */
+function resize(retry = 0) {
   if (!renderer) return
   const box = renderer.domElement.parentElement
   const w = box.clientWidth
   const h = box.clientHeight
-  if (w === 0 || h === 0) return
+  if (w === 0 || h === 0) {
+    if (retry < 12) requestAnimationFrame(() => resize(retry + 1))
+    return
+  }
   renderer.setSize(w, h, false)
   camera.aspect = w / h
   camera.updateProjectionMatrix()
@@ -300,9 +313,54 @@ function animate() {
   renderer.render(scene, camera)
 }
 
-/** 起一个 3D 预览，塞进指定的容器元素里 */
-function mount(container) {
-  if (renderer) return
+/**
+ * 按当前的取景比例摆放相机。
+ *
+ * 【为什么要有个比例】相机离得越远，小人在画面里越小。
+ * 启动页那张小卡（170px 高）用 1 正好；皮肤页那个大预览高得多，
+ * 用同一个距离小人会被裁掉半截（实测：脚看不见，正好卡在发光环那儿）。
+ * 所以两个地方各用各的比例。
+ */
+function applyCamera() {
+  const look = { x: 0, y: 16, z: 0 }
+  const base = { x: 0, y: 22, z: 52 } // 1 倍时的位置（见下面那段注释：52 是量出来的）
+  camera.position.set(
+    look.x + (base.x - look.x) * cameraZoom,
+    look.y + (base.y - look.y) * cameraZoom,
+    look.z + (base.z - look.z) * cameraZoom
+  )
+  camera.lookAt(look.x, look.y, look.z)
+}
+
+/**
+ * 起一个 3D 预览，塞进指定的容器元素里。
+ *
+ * 【能"搬"到别的容器】M17.5 之后有两个地方要看小人（启动页那张卡、皮肤页那个大预览）。
+ * 两个地方各起一个 WebGL 会白烧一份显存和电，所以只有一个 ——
+ * 换页面时把 canvas 从旧容器挪到新容器里（见下面 alreadyElsewhere 那段）。
+ *
+ * @param {HTMLElement} container
+ * @param {number} [zoom] 取景比例：1 = 启动页那张小卡；大预览用大一点（人小一点、别裁掉）
+ */
+function mount(container, zoom) {
+  const wanted = typeof zoom === 'number' && zoom > 0 ? zoom : 1
+
+  // 已经挂着了：如果换了容器，就把 canvas 搬过去，别重开一个
+  if (renderer) {
+    const current = renderer.domElement.parentElement
+    if (current !== container) {
+      if (current) current.removeChild(renderer.domElement)
+      container.appendChild(renderer.domElement)
+    }
+    if (wanted !== cameraZoom) {
+      cameraZoom = wanted
+      applyCamera()
+    }
+    resize()
+    return
+  }
+
+  cameraZoom = wanted
   mounted = true
 
   scene = new THREE.Scene()
@@ -311,8 +369,7 @@ function mount(container) {
   // 踩过两次：太远 → 小人小小的发虚；太近 → 头都出画了。
   camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100)
   // 相机在斜前方，稍微高一点——和 KAMUCL 那个视角差不多
-  camera.position.set(0, 22, 52)
-  camera.lookAt(0, 16, 0)
+  applyCamera()
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
