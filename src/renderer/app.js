@@ -3116,6 +3116,26 @@ document.getElementById('log-folder').addEventListener('click', async () => {
 const onlineNoticeEl = document.getElementById('online-notice')
 const onlineStartEl = document.getElementById('online-start')
 const onlineRoomEl = document.getElementById('online-room')
+const onlineStatusPanelEl = document.getElementById('online-status-panel')
+
+// ——— 联机页那两张入口卡片（M17.x）———
+// 用户说原来那页"太臃肿"：房间码 + 连接状态 + 樱花穿透竖着摞一大条，进来不知道看哪儿。
+// 现在上面两张正方形卡片当入口，点哪个、下面显示哪个（卡片一直留着，换另一个直接再点一下）。
+const onlineModeCards = document.querySelectorAll('[data-online-mode]')
+const onlineModePanes = document.querySelectorAll('[data-online-pane]')
+
+function showOnlineMode(name) {
+  for (const card of onlineModeCards) {
+    card.classList.toggle('mode-card--on', card.dataset.onlineMode === name)
+  }
+  for (const pane of onlineModePanes) {
+    pane.hidden = pane.dataset.onlinePane !== name
+  }
+}
+
+for (const card of onlineModeCards) {
+  card.addEventListener('click', () => showOnlineMode(card.dataset.onlineMode))
+}
 const onlineRoomTitleEl = document.getElementById('online-room-title')
 const onlineCodeEl = document.getElementById('online-code')
 const onlineMyIpEl = document.getElementById('online-myip')
@@ -3244,6 +3264,9 @@ function renderOnline() {
   const inRoom = onlineInfo.running
   onlineStartEl.hidden = inRoom
   onlineRoomEl.hidden = !inRoom
+  // 连接状态那块只在**真的开着房间**时露出来。
+  // 以前它一直摆着，没开房间也写"还没连接"——用户点名说那样太占地方。
+  onlineStatusPanelEl.hidden = !inRoom
 
   // 定时问状态的开关：在房间里才需要
   if (inRoom && !onlineTimer) {

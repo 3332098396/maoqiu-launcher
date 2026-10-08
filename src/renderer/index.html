@@ -327,6 +327,38 @@
         </aside>
 
         <div class="content">
+          <!-- 两种联机方式（M17.x）：两张正方形卡片并排当入口，点哪个下面显示哪个的内容。
+               原来是竖着摞一大条，又长又不知道从哪看起。 -->
+          <div class="online-modes">
+            <button class="mode-card mode-card--on" type="button" data-online-mode="room">
+              <span class="mode-card__icon" aria-hidden="true">
+                <!-- 联机＝大圆角方框 + 拐角连线（导航里那个图标）-->
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
+                  <path d="M9.05 15.1V11.6h6.55" />
+                </svg>
+              </span>
+              <span class="mode-card__name">房间码联机</span>
+              <span class="mode-card__desc">一个人建房拿到房间码，好友输码进来，就像坐在同一个 WiFi 下</span>
+            </button>
+
+            <button class="mode-card" type="button" data-online-mode="frp">
+              <span class="mode-card__icon" aria-hidden="true">
+                <!-- 樱花穿透＝两个节点中间一条线（隧道）-->
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2.4" y="8.6" width="6.4" height="6.8" rx="2" />
+                  <rect x="15.2" y="8.6" width="6.4" height="6.8" rx="2" />
+                  <path d="M8.8 12h6.4" stroke-dasharray="2.6 2.4" />
+                  <path d="M5.6 6.2V4.4M18.4 19.6v-1.8" />
+                </svg>
+              </span>
+              <span class="mode-card__name">樱花内网穿透</span>
+              <span class="mode-card__desc">自己配一条隧道，不用管理员权限；好友手动连你的地址</span>
+            </button>
+          </div>
+
+          <!-- ——— 房间码联机的内容 ——— -->
+          <div class="online-mode" data-online-pane="room">
           <div class="notice" id="online-notice">
             两个人不在一个地方也能一起玩：一个人「创建房间」拿到房间码，
             另一个人输码进来，之后就<b>像坐在同一个 WiFi 下</b>一样联机。
@@ -389,15 +421,19 @@
             </div>
           </section>
 
-          <section class="panel panel--full" id="online-status-panel">
+          <!-- 连接状态：**只在真的开着房间时才出现**（M17.x）。
+               以前它一直杵在那儿，明明没开房间还写"还没连接"，白占一块地方。 -->
+          <section class="panel panel--full" id="online-status-panel" hidden>
             <h3 class="panel__title">连接状态</h3>
             <p class="panel__desc" id="online-status-text">
               还没连接。创建或加入房间后，这里会显示：你是房主还是加入的人、
               连接方式（直连还是走了中转）、延迟多少。
             </p>
           </section>
+          </div>
 
-          <!-- ——— 樱花内网穿透（M15）：和房间码并列的另一种联机方式 ——— -->
+          <!-- ——— 樱花内网穿透（M15）：另一种联机方式，点上面那张卡片才看得到 ——— -->
+          <div class="online-mode" data-online-pane="frp" hidden>
           <section class="panel panel--full" id="frp-panel">
             <h3 class="panel__title">樱花内网穿透（FRP）</h3>
             <p class="panel__desc">
@@ -447,6 +483,7 @@
             <p class="delbox" id="frp-message"></p>
             <pre class="frp-log" id="frp-log"></pre>
           </section>
+          </div>
         </div>
       </section>
 

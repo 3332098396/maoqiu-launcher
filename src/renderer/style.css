@@ -1085,6 +1085,83 @@ button.acc__tab:hover {
   color: var(--danger);
 }
 
+/* ——— 联机页：两张入口卡片（M17.x）———
+ * 用户说原来那页"太臃肿"：房间码 + 连接状态 + 樱花穿透竖着摞一大条，进来不知道看哪儿。
+ * 改成两个正方形卡片当入口，点哪个、下面显示哪个。
+ * 【为什么用 aspect-ratio 而不是写死高度】写死高度的话，窄窗口下卡片会被压扁。 */
+.online-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.mode-card {
+  flex: 0 0 236px;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 18px 20px;
+  font-family: var(--font);
+  text-align: center;
+  color: var(--text-dim);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  box-shadow: var(--card-shadow);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease,
+    box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.mode-card:hover {
+  border-color: var(--card-border-hover);
+  color: var(--text);
+  box-shadow: var(--card-shadow-hover);
+  transform: translateY(-2px);
+}
+
+.mode-card--on,
+.mode-card--on:hover {
+  color: var(--text);
+  background: var(--surface-accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring-soft);
+}
+
+.mode-card__icon {
+  display: block;
+  width: 40px;
+  height: 40px;
+  color: var(--accent);
+}
+
+.mode-card__icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.mode-card__name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.mode-card__desc {
+  font-size: 12px;
+  line-height: 1.6;
+  opacity: 0.86;
+}
+
+/* 【跟 .online-grid 一个道理】将来要是给 .online-mode 也写了 display，
+   这条能保证 hidden 还压得住——现在它没写，属于保险 */
+.online-mode[hidden] {
+  display: none;
+}
+
 /* 联机页：房间里的人 */
 
 /* 【别删这一行】.online-grid 自己写了 display: grid，会**盖过** hidden 属性
