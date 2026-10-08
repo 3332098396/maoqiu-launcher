@@ -1362,6 +1362,13 @@ window.api.onLaunchState((payload) => {
     launching = false
     refreshLaunchUi()
     setNotice(payload.error, 'error')
+  } else if (payload.state === 'lan-closed') {
+    // 退出存档了（回到主菜单）——端口作废。
+    // 【为什么不顺手退房】用户换个世界重开、再按一次「对局域网开放」就会报个新端口上来，
+    // 房间还能接着用，退了反而要他重建。这里只把"发给好友的地址"收掉。
+    lanPort = 0
+    if (onlineInfo.running) renderOnline()
+    appendLog(['[启动器] 世界关掉了（退出存档），之前那个发给好友的地址作废了'])
   } else if (payload.state === 'lan') {
     // 游戏里点了「对局域网开放」——拿到端口号，把它变成"发给好友的地址"
     lanPort = payload.port
@@ -3331,8 +3338,8 @@ function renderOnline() {
     onlineTipEl.textContent = lanPort
       ? `世界已经开放了。把这个地址发给好友，让他在游戏里用「直接连接」填进去：` +
         `${HOST_VIRTUAL_IP}:${lanPort}（他的多人游戏列表里多半也会自动出现）`
-      : '世界好像关掉了（游戏退出了？）。重新进游戏、开一个世界、按 Esc 点「对局域网开放」，' +
-        '然后回来重新创建一次房间。'
+      : '世界现在是关着的。要联机的话：进游戏开一个世界，按 Esc 点「对局域网开放」' +
+        '——开了之后这里会自动出现发给好友的地址，房间不用重建。'
   } else {
     // 访客这边：房主既然能开出房间，就说明他那边世界已经开局域网了
     // （用户这轮定的规矩：没开局域网不许建房），所以别再说"等房主开好世界"。

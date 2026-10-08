@@ -1348,6 +1348,20 @@ app.whenReady().then(() => {
     console.warn('[启动器] 清理残留联机进程时出错：', error.message)
   }
 
+  // 房间还在、但**游戏早就退了** → 这是个空房间，收掉（M17.x）。
+  // 【为什么能这么判断】规矩是"必须先开局域网才让建房"，所以建房那一刻游戏一定在跑；
+  // 反过来"游戏没在跑、却还留着房间"就只能是上次没收干净的。
+  // 用户实测碰到过：一打开毛球就显示"你是房主"，房间码还是上次那个。
+  try {
+    const onlineCfg = settings.readConfig().online
+    if (onlineCfg.code && online.isRunning() && !launch.isRunning()) {
+      online.leave()
+      console.log('[启动器] 收掉了一个游戏已经退出的空房间')
+    }
+  } catch (error) {
+    console.warn('[启动器] 收空房间时出错：', error.message)
+  }
+
   // 顺手清掉"设过中文"记录里那些**目录已经不在了**的（M17.x）。
   // 用户手动删过 versions 目录时也能清到——不然新下的同名版本会被当成"设过了"，进游戏是英文。
   try {

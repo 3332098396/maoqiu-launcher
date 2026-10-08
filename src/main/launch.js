@@ -848,8 +848,23 @@ async function launch(versionId, options = {}) {
     logFile,
     onLine: (text) => {
       const match = text.match(lanPattern)
-      if (!match) return
-      state({ state: 'lan', port: Number(match[1]), versionId })
+      if (match) {
+        state({ state: 'lan', port: Number(match[1]), versionId })
+        return
+      }
+
+      // 退出存档（回到主菜单）时也会打一行，这时候**端口就作废了**——
+      // 得赶紧告诉界面，不然它还写着"把这个地址发给好友：xxx:57400"，
+      // 可那个世界早关了，好友连过来根本连不上（2026-10-08 用户实测）。
+      // 【文案哪来的】翻用户那次游戏日志看到的：
+      //   `[Server thread/INFO]: Stopping server`
+      //   `[Server thread/INFO]: Stopping singleplayer server as player logged out`
+      // 认"Stopping server"这一句就够；它是集成服务端停下来的标志。
+      // 【注意】这里**只是把端口作废，不退出房间**——用户换个世界重开、
+      // 再按一次「对局域网开放」就会报一个新的端口上来，房间不用重建。
+      if (/Stopping server|Stopping singleplayer server/i.test(text)) {
+        state({ state: 'lan-closed', versionId })
+      }
     }
   })
   log.line(`[启动器] 版本 ${versionId} · Java ${probe.version}（${javaExe.source}）· 内存 ${memoryMB} MB`)
