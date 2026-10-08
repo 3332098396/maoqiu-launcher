@@ -75,6 +75,63 @@ migrateDataDirFromOldName()
 /** 主窗口 */
 let mainWindow = null
 
+// ——————————————————————————————————————————————
+// 开场动画（M17.4）
+// ——————————————————————————————————————————————
+
+/** 那个小窗口 */
+let splashWindow = null
+/** 它是什么时候出现的（用来算"至少显示多久"） */
+let splashShownAt = 0
+
+/**
+ * 开场动画**最少**显示多久。
+ * 【为什么要设个下限】机器快的话主窗口几百毫秒就画好了，
+ * 动画"啪"地闪一下反而像出了故障。宁可让它稳稳当当待够，再切过去。
+ */
+const SPLASH_MIN_MS = 1400
+
+function createSplash() {
+  splashWindow = new BrowserWindow({
+    width: 360,
+    height: 240,
+    frame: false,
+    transparent: true, // 圆角和阴影要靠它；不透明就是个方角黑框
+    resizable: false,
+    movable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true, // 别在任务栏里多出一个窗口
+    center: true,
+    show: false,
+    webPreferences: { contextIsolation: true, nodeIntegration: false }
+  })
+
+  splashShownAt = Date.now()
+  splashWindow.loadFile(path.join(__dirname, '..', 'renderer', 'splash.html'))
+  splashWindow.once('ready-to-show', () => {
+    splashShownAt = Date.now() // 从"真的显示出来"开始算，别把加载时间算进去
+    try {
+      splashWindow.show()
+    } catch {
+      // 窗口已经没了就算了
+    }
+  })
+  splashWindow.on('closed', () => {
+    splashWindow = null
+  })
+}
+
+/** 收掉开场动画（主窗口要出来的时候调） */
+function closeSplash() {
+  if (!splashWindow) return
+  try {
+    splashWindow.close()
+  } catch {
+    // 已经没了
+  }
+  splashWindow = null
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     // 左边现在有个导航栏（M14.2），窗口宽一点内容才不挤
@@ -98,7 +155,14 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))
 
-  mainWindow.once('ready-to-show', () => mainWindow.show())
+  mainWindow.once('ready-to-show', () => {
+    // 开场动画至少待够 SPLASH_MIN_MS 再切——太快了像闪了一下故障
+    const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashShownAt))
+    setTimeout(() => {
+      closeSplash()
+      mainWindow.show()
+    }, wait)
+  })
 
   return mainWindow
 }
@@ -1192,6 +1256,7 @@ function countSharedWorlds() {
 
 app.whenReady().then(() => {
   registerIpcHandlers()
+  createSplash() // 开场动画（M17.4）——先盖着，主窗口画好了再收
   createWindow()
 
   app.on('activate', () => {
