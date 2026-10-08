@@ -157,21 +157,31 @@ body[data-theme='dark'] {
  * 等用户拿到**文本规范**（准确色值）之后，改这一段就行——别处一行都不用动。
  */
 body[data-theme='neon'] {
-  --topbar-gradient: linear-gradient(120deg, #1b2036, #151a2d);
-  --page-gradient: linear-gradient(160deg, #0f1220, #141a2e 45%, #0d101c);
-  --page-tint: #141a2e;
+  /* 顶栏也半透明（不然左边导航是一整块死黑，跟磨砂玻璃对不上） */
+  --topbar-gradient: linear-gradient(120deg, rgba(27, 32, 54, 0.68), rgba(21, 26, 45, 0.68));
+  /* 整页背景 = 那张风景图 + 一层压暗。图是 M17.2 从设计稿里切出来的
+     （assets/hero-landscape.jpg，挑的是没有字的那块）。
+     【压多少是试出来的】一开始压到 86%~90%，结果背景图几乎看不见——
+     半透明的面板下面没东西可"磨"，磨砂玻璃就成了个摆设。调到 58%~70%：
+     风景能认出来了，字也照样清楚（面板本身还有 62% 的不透明度兜底）。 */
+  --page-gradient: linear-gradient(rgba(8, 10, 20, 0.58), rgba(8, 10, 20, 0.7)),
+    url('../../assets/hero-landscape.jpg') center / cover no-repeat;
+  --page-tint: rgba(20, 26, 46, 0.72);
   --primary-gradient: linear-gradient(135deg, #9a5cf7, #2fd4e8);
 
-  --card-bg: #181d30;
-  --surface: #1c2238;
-  --surface-soft: #141930;
-  --surface-accent: #232b4a;
-  --surface-accent-2: #2a3357;
-  --card-border: #2a3150;
-  --card-border-hover: #3f4877;
-  --accent-line: #2b3355;
-  --card-shadow: 0 2px 12px rgba(0, 0, 0, 0.34);
-  --card-shadow-hover: 0 8px 26px rgba(0, 0, 0, 0.46);
+  /* —— 面：半透明（磨砂玻璃的底）—— */
+  /* 【色相一个没动】用户要求"主题颜色不变"，这儿只把不透明度降下去， */
+  /* 颜色还是原来那几个（#181d30 那一族），所以看着还是同一个主题。 */
+  --card-bg: rgba(24, 29, 48, 0.62);
+  --surface: rgba(28, 34, 56, 0.6);
+  --surface-soft: rgba(20, 25, 48, 0.45);
+  --surface-accent: rgba(35, 43, 74, 0.55);
+  --surface-accent-2: rgba(42, 51, 87, 0.62);
+  --card-border: rgba(138, 156, 214, 0.22);
+  --card-border-hover: rgba(160, 180, 240, 0.4);
+  --accent-line: rgba(120, 136, 196, 0.2);
+  --card-shadow: 0 4px 18px rgba(0, 0, 0, 0.36);
+  --card-shadow-hover: 0 10px 30px rgba(0, 0, 0, 0.48);
   --accent-shadow: rgba(154, 92, 247, 0.34);
   --accent-shadow-strong: rgba(154, 92, 247, 0.38);
   --accent-shadow-soft: rgba(154, 92, 247, 0.12);
@@ -196,21 +206,55 @@ body[data-theme='neon'] {
 
   --text: #eaeefb;
   --text-dim: #c4ccdf;
-  --text-muted: #98a2c0;
+  --text-muted: #a9b2cd;
 
   --overlay: rgba(0, 0, 0, 0.55);
   --overlay-strong: rgba(0, 0, 0, 0.68);
   --overlay-soft: rgba(0, 0, 0, 0.28);
-  --surface-a95: rgba(24, 29, 48, 0.96);
-  --surface-a82: rgba(24, 29, 48, 0.85);
-  --surface-a72: rgba(24, 29, 48, 0.75);
-  --surface-a55: rgba(24, 29, 48, 0.6);
+  /* 浮层（弹窗、下拉）要**更不透明**——它们飘在半透明的东西上面，
+     太透就糊成一片看不清字了 */
+  --surface-a95: rgba(20, 24, 42, 0.95);
+  --surface-a82: rgba(20, 24, 42, 0.88);
+  --surface-a72: rgba(20, 24, 42, 0.78);
+  --surface-a55: rgba(20, 24, 42, 0.62);
   --on-accent: #ffffff;
   --on-topbar: #ffffff;
   --on-topbar-dim: rgba(255, 255, 255, 0.7);
   --on-topbar-hover: rgba(255, 255, 255, 0.14);
-  --pill-bg: #2b3155;
+  --pill-bg: rgba(43, 49, 85, 0.7);
   --pill-text: #d9ccff;
+}
+
+/* ── 磨砂玻璃：把这套主题里所有"面"都加上背景模糊（M17.2）
+ *
+ * 【只在这套主题上开】别的五套一点不动——这是用户点名要的风格，不是全局改动。
+ * 【为什么列这么一长串】项目里没有"面"这个统一 class，
+ * 每个部件各写各的（.panel / .fact / .input …）。上面那份清单是**扫出来的**
+ * （找所有用到 --card-bg / --surface* 的选择器），不是拍脑袋列的。
+ * 【性能】背景模糊比较费显卡，但这些都是静态面板、数量有限，实测不卡。
+ */
+body[data-theme='neon'] .panel,
+body[data-theme='neon'] .acc,
+body[data-theme='neon'] .acc__tabs,
+body[data-theme='neon'] .acc__warn,
+body[data-theme='neon'] .fact,
+body[data-theme='neon'] .faq,
+body[data-theme='neon'] .notice,
+body[data-theme='neon'] .input,
+body[data-theme='neon'] .chip,
+body[data-theme='neon'] .log,
+body[data-theme='neon'] .install,
+body[data-theme='neon'] .peer,
+body[data-theme='neon'] .frp-log,
+body[data-theme='neon'] .mr__icon,
+body[data-theme='neon'] .pick__cat,
+body[data-theme='neon'] .pick__dir,
+body[data-theme='neon'] .pick__item,
+body[data-theme='neon'] .pick__toggle,
+body[data-theme='neon'] .btn--ghost,
+body[data-theme='neon'] .icon-picker__item {
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
 }
 
 /* 抹茶绿 */
