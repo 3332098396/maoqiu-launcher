@@ -3477,6 +3477,10 @@ const THEMES = [
   // 挑错了——两套都是深底、大启动卡都带紫蓝渐变，光看那三个色点分不出来
   // （2026-10-08 实测踩过）。所以每个主题都带上一句"长什么样"。
   { key: 'neon', label: '霓虹紫青（暗色 · 图纸同款）', colors: ['#9a5cf7', '#2fd4e8', '#141a2e'] },
+  { key: 'aurora', label: '冷色极光（暗色 · 紫蓝青）', colors: ['#9a5cf7', '#5b7cff', '#2fd4e8'] },
+  { key: 'magenta', label: '品红霓虹（暗色 · 紫粉）', colors: ['#ff5eb3', '#b85cf0', '#7a5cff'] },
+  { key: 'emerald', label: '翡翠夜（暗色 · 青绿）', colors: ['#2dd4a8', '#22c8d8', '#4a90ff'] },
+  { key: 'amber', label: '琥珀夜（暗色 · 橙粉）', colors: ['#ff9a4d', '#f76a8b', '#a85cf0'] },
   { key: 'matcha', label: '抹茶绿（亮色）', colors: ['#a8d8b9', '#56b57f', '#eaf7ef'] },
   { key: 'sunset', label: '暖阳橙（亮色）', colors: ['#ffca8f', '#f79140', '#fff2e2'] },
   { key: 'sakura', label: '樱花粉（亮色）', colors: ['#ffc2d8', '#f97fae', '#ffeef5'] }

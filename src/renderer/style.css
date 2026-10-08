@@ -2728,3 +2728,251 @@ body[data-theme='neon'] .skin-stage::after {
 .frp-log:empty {
   display: none;
 }
+
+
+/* ══════════════════════════════════════════════
+   额外几套深色主题（M17.x）
+   来源：用户在「D:\毛球启动器干净版 - 副本」里让人做的主题改造，
+   只把**颜色定义**搬过来，并且把那边 `--page-gradient: 压色, 图` 的写法
+   拆成我们现在的 --page-veil + --page-image 两层（见文件开头 body 那段注释）。
+   ══════════════════════════════════════════════ */
+
+body[data-theme='aurora'] {
+  --topbar-gradient: linear-gradient(120deg, rgba(13, 16, 32, 0.68), rgba(11, 14, 28, 0.68));
+  --page-veil: linear-gradient(rgba(8, 10, 20, 0.62), rgba(8, 10, 20, 0.74));
+  --page-image: url('../../assets/hero-landscape.jpg');
+  --page-tint: rgba(18, 22, 42, 0.72);
+  --primary-gradient: linear-gradient(135deg, #9a5cf7 0%, #5b7cff 48%, #2fd4e8 100%);
+
+  --card-bg: rgba(20, 25, 46, 0.62);
+  --surface: rgba(26, 32, 56, 0.60);
+  --surface-soft: rgba(16, 21, 42, 0.45);
+  --surface-accent: rgba(38, 46, 80, 0.55);
+  --surface-accent-2: rgba(46, 56, 94, 0.62);
+  --card-border: rgba(120, 150, 220, 0.22);
+  --card-border-hover: rgba(140, 190, 255, 0.45);
+  --accent-line: rgba(110, 140, 200, 0.2);
+  --card-shadow: 0 4px 18px rgba(0, 0, 0, 0.36);
+  --card-shadow-hover: 0 10px 30px rgba(0, 0, 0, 0.48);
+  --accent-shadow: rgba(120, 130, 255, 0.36);
+  --accent-shadow-strong: rgba(90, 200, 255, 0.42);
+  --accent-shadow-soft: rgba(120, 130, 255, 0.12);
+  --accent-ring: rgba(90, 200, 255, 0.28);
+  --accent-ring-soft: rgba(120, 130, 255, 0.16);
+
+  --accent: #8b7bff;
+  --accent-strong: #7dd3fc;
+  --accent-soft: #6a5ae0;
+
+  --ok: #4fdc9b;
+  --ok-soft: #17332a;
+  --ok-line: #235041;
+  --ok-text: #7de8b4;
+  --warn: #ffc861;
+  --warn-soft: #362c17;
+  --warn-text: #ffd98a;
+  --danger: #ff6f8b;
+  --danger-soft: #3a1f2c;
+  --danger-strong: #ff9db3;
+  --danger-ring: rgba(255, 111, 139, 0.3);
+
+  --text: #eaeefb;
+  --text-dim: #c4ccdf;
+  --text-muted: #9aa3c4;
+
+  --overlay: rgba(0, 0, 0, 0.55);
+  --overlay-strong: rgba(0, 0, 0, 0.68);
+  --overlay-soft: rgba(0, 0, 0, 0.28);
+  --surface-a95: rgba(18, 22, 40, 0.95);
+  --surface-a82: rgba(18, 22, 40, 0.88);
+  --surface-a72: rgba(18, 22, 40, 0.78);
+  --surface-a55: rgba(18, 22, 40, 0.62);
+  --on-accent: #ffffff;
+  --on-topbar: #ffffff;
+  --on-topbar-dim: rgba(255, 255, 255, 0.7);
+  --on-topbar-hover: rgba(255, 255, 255, 0.14);
+  --pill-bg: rgba(40, 52, 92, 0.7);
+  --pill-text: #a8e6ff;
+  --rail-on-bg: rgba(125, 211, 252, 0.16);
+  --rail-on-fg: #7dd3fc;
+}
+
+body[data-theme='magenta'] {
+  --topbar-gradient: linear-gradient(120deg, rgba(28, 16, 38, 0.68), rgba(24, 12, 34, 0.68));
+  --page-veil: linear-gradient(rgba(14, 6, 22, 0.62), rgba(14, 6, 22, 0.74));
+  --page-image: url('../../assets/hero-landscape.jpg');
+  --page-tint: rgba(32, 18, 44, 0.72);
+  --primary-gradient: linear-gradient(135deg, #ff5eb3 0%, #b85cf0 50%, #7a5cff 100%);
+
+  --card-bg: rgba(38, 20, 52, 0.62);
+  --surface: rgba(46, 26, 62, 0.60);
+  --surface-soft: rgba(30, 16, 44, 0.45);
+  --surface-accent: rgba(64, 36, 84, 0.55);
+  --surface-accent-2: rgba(76, 44, 98, 0.62);
+  --card-border: rgba(210, 140, 220, 0.22);
+  --card-border-hover: rgba(255, 150, 220, 0.45);
+  --accent-line: rgba(200, 130, 220, 0.2);
+  --card-shadow: 0 4px 18px rgba(0, 0, 0, 0.36);
+  --card-shadow-hover: 0 10px 30px rgba(0, 0, 0, 0.48);
+  --accent-shadow: rgba(255, 94, 179, 0.36);
+  --accent-shadow-strong: rgba(184, 92, 240, 0.42);
+  --accent-shadow-soft: rgba(255, 94, 179, 0.12);
+  --accent-ring: rgba(255, 150, 220, 0.28);
+  --accent-ring-soft: rgba(255, 94, 179, 0.16);
+
+  --accent: #e066d0;
+  --accent-strong: #ff9ad5;
+  --accent-soft: #a84fc8;
+
+  --ok: #4fdc9b;
+  --ok-soft: #17332a;
+  --ok-line: #235041;
+  --ok-text: #7de8b4;
+  --warn: #ffc861;
+  --warn-soft: #3a2c17;
+  --warn-text: #ffd98a;
+  --danger: #ff6f8b;
+  --danger-soft: #3a1f2c;
+  --danger-strong: #ff9db3;
+  --danger-ring: rgba(255, 111, 139, 0.3);
+
+  --text: #f8eefb;
+  --text-dim: #e2c9e2;
+  --text-muted: #bd9cc4;
+
+  --overlay: rgba(0, 0, 0, 0.55);
+  --overlay-strong: rgba(0, 0, 0, 0.68);
+  --overlay-soft: rgba(0, 0, 0, 0.28);
+  --surface-a95: rgba(30, 16, 44, 0.95);
+  --surface-a82: rgba(30, 16, 44, 0.88);
+  --surface-a72: rgba(30, 16, 44, 0.78);
+  --surface-a55: rgba(30, 16, 44, 0.62);
+  --on-accent: #ffffff;
+  --on-topbar: #ffffff;
+  --on-topbar-dim: rgba(255, 255, 255, 0.7);
+  --on-topbar-hover: rgba(255, 255, 255, 0.14);
+  --pill-bg: rgba(80, 40, 100, 0.7);
+  --pill-text: #ffc8e8;
+  --rail-on-bg: rgba(255, 154, 213, 0.16);
+  --rail-on-fg: #ff9ad5;
+}
+
+body[data-theme='emerald'] {
+  --topbar-gradient: linear-gradient(120deg, rgba(12, 28, 28, 0.68), rgba(10, 24, 26, 0.68));
+  --page-veil: linear-gradient(rgba(4, 16, 16, 0.62), rgba(4, 16, 16, 0.74));
+  --page-image: url('../../assets/hero-landscape.jpg');
+  --page-tint: rgba(14, 34, 36, 0.72);
+  --primary-gradient: linear-gradient(135deg, #2dd4a8 0%, #22c8d8 50%, #4a90ff 100%);
+
+  --card-bg: rgba(16, 36, 38, 0.62);
+  --surface: rgba(20, 44, 46, 0.60);
+  --surface-soft: rgba(12, 30, 32, 0.45);
+  --surface-accent: rgba(28, 58, 60, 0.55);
+  --surface-accent-2: rgba(34, 70, 72, 0.62);
+  --card-border: rgba(120, 220, 200, 0.22);
+  --card-border-hover: rgba(120, 255, 220, 0.45);
+  --accent-line: rgba(110, 210, 190, 0.2);
+  --card-shadow: 0 4px 18px rgba(0, 0, 0, 0.36);
+  --card-shadow-hover: 0 10px 30px rgba(0, 0, 0, 0.48);
+  --accent-shadow: rgba(45, 212, 168, 0.36);
+  --accent-shadow-strong: rgba(34, 200, 216, 0.42);
+  --accent-shadow-soft: rgba(45, 212, 168, 0.12);
+  --accent-ring: rgba(120, 255, 220, 0.28);
+  --accent-ring-soft: rgba(45, 212, 168, 0.16);
+
+  --accent: #2dd4a8;
+  --accent-strong: #7ff0d0;
+  --accent-soft: #1ea88a;
+
+  --ok: #4fdc9b;
+  --ok-soft: #17332a;
+  --ok-line: #235041;
+  --ok-text: #7de8b4;
+  --warn: #ffc861;
+  --warn-soft: #362c17;
+  --warn-text: #ffd98a;
+  --danger: #ff6f8b;
+  --danger-soft: #3a1f2c;
+  --danger-strong: #ff9db3;
+  --danger-ring: rgba(255, 111, 139, 0.3);
+
+  --text: #eafbf4;
+  --text-dim: #c4dfd8;
+  --text-muted: #9ab8b2;
+
+  --overlay: rgba(0, 0, 0, 0.55);
+  --overlay-strong: rgba(0, 0, 0, 0.68);
+  --overlay-soft: rgba(0, 0, 0, 0.28);
+  --surface-a95: rgba(12, 28, 30, 0.95);
+  --surface-a82: rgba(12, 28, 30, 0.88);
+  --surface-a72: rgba(12, 28, 30, 0.78);
+  --surface-a55: rgba(12, 28, 30, 0.62);
+  --on-accent: #ffffff;
+  --on-topbar: #ffffff;
+  --on-topbar-dim: rgba(255, 255, 255, 0.7);
+  --on-topbar-hover: rgba(255, 255, 255, 0.14);
+  --pill-bg: rgba(24, 60, 60, 0.7);
+  --pill-text: #a0f0d8;
+  --rail-on-bg: rgba(127, 240, 208, 0.16);
+  --rail-on-fg: #7ff0d0;
+}
+
+body[data-theme='amber'] {
+  --topbar-gradient: linear-gradient(120deg, rgba(32, 20, 14, 0.68), rgba(28, 14, 14, 0.68));
+  --page-veil: linear-gradient(rgba(20, 10, 8, 0.62), rgba(20, 10, 8, 0.74));
+  --page-image: url('../../assets/hero-landscape.jpg');
+  --page-tint: rgba(44, 26, 20, 0.72);
+  --primary-gradient: linear-gradient(135deg, #ff9a4d 0%, #f76a8b 50%, #a85cf0 100%);
+
+  --card-bg: rgba(46, 26, 26, 0.62);
+  --surface: rgba(56, 32, 30, 0.60);
+  --surface-soft: rgba(38, 22, 22, 0.45);
+  --surface-accent: rgba(76, 44, 40, 0.55);
+  --surface-accent-2: rgba(90, 54, 48, 0.62);
+  --card-border: rgba(230, 160, 130, 0.22);
+  --card-border-hover: rgba(255, 180, 140, 0.45);
+  --accent-line: rgba(220, 150, 120, 0.2);
+  --card-shadow: 0 4px 18px rgba(0, 0, 0, 0.36);
+  --card-shadow-hover: 0 10px 30px rgba(0, 0, 0, 0.48);
+  --accent-shadow: rgba(255, 154, 77, 0.36);
+  --accent-shadow-strong: rgba(247, 106, 139, 0.42);
+  --accent-shadow-soft: rgba(255, 154, 77, 0.12);
+  --accent-ring: rgba(255, 180, 140, 0.28);
+  --accent-ring-soft: rgba(255, 154, 77, 0.16);
+
+  --accent: #ff9a4d;
+  --accent-strong: #ffc28a;
+  --accent-soft: #d86a30;
+
+  --ok: #4fdc9b;
+  --ok-soft: #17332a;
+  --ok-line: #235041;
+  --ok-text: #7de8b4;
+  --warn: #ffc861;
+  --warn-soft: #3a2c17;
+  --warn-text: #ffd98a;
+  --danger: #ff6f8b;
+  --danger-soft: #3a1f2c;
+  --danger-strong: #ff9db3;
+  --danger-ring: rgba(255, 111, 139, 0.3);
+
+  --text: #fff1e8;
+  --text-dim: #e8cdbc;
+  --text-muted: #c4a492;
+
+  --overlay: rgba(0, 0, 0, 0.55);
+  --overlay-strong: rgba(0, 0, 0, 0.68);
+  --overlay-soft: rgba(0, 0, 0, 0.28);
+  --surface-a95: rgba(38, 22, 22, 0.95);
+  --surface-a82: rgba(38, 22, 22, 0.88);
+  --surface-a72: rgba(38, 22, 22, 0.78);
+  --surface-a55: rgba(38, 22, 22, 0.62);
+  --on-accent: #ffffff;
+  --on-topbar: #ffffff;
+  --on-topbar-dim: rgba(255, 255, 255, 0.7);
+  --on-topbar-hover: rgba(255, 255, 255, 0.14);
+  --pill-bg: rgba(90, 50, 40, 0.7);
+  --pill-text: #ffd8b8;
+  --rail-on-bg: rgba(255, 194, 138, 0.16);
+  --rail-on-fg: #ffc28a;
+}
