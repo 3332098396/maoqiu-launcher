@@ -4839,13 +4839,25 @@ async function applyCurrentSkin() {
     skinHintEl.textContent = result.error
   }
 
-  // ② 你自己传的那张
+  // ② 自己定下来的那张（点过"换一张"、或者在皮肤页点过「使用」）
   const saved = String(look.skin || '')
-  if (saved) {
+
+  // 定下来的是官方那两张之一（它们不是硬盘上的文件，所以存的是记号 @steve / @alex）
+  if (saved === '@steve' || saved === '@alex') {
+    const image = await getOfficialSkin(saved.slice(1))
+    if (image) {
+      applySkin(image)
+      skinHintEl.textContent = '官方原版皮肤，已经记住了。想换就点小人脚下那个圈。'
+      skinBigFromEl.textContent = '来自：官方默认皮肤'
+      return
+    }
+  }
+
+  if (saved && !saved.startsWith('@')) {
     const okLoaded = await loadSkinFrom(saved)
     if (okLoaded) {
-      skinHintEl.textContent = '这是你自己传的皮肤。鼠标左右移动就能转。'
-      skinBigFromEl.textContent = '来自：我上传的'
+      skinHintEl.textContent = '这张已经记住了——以后打开都是它。想换就点小人脚下那个圈。'
+      skinBigFromEl.textContent = '来自：我选的'
       return
     }
     skinHintEl.textContent = '上次选的那张皮肤找不到了，先用默认的。'
@@ -5318,21 +5330,71 @@ document.getElementById('skin-open-folder').addEventListener('click', async () =
 
 const skinRandomEl = document.getElementById('skin-random')
 const skinShuffleEl = document.getElementById('skin-shuffle')
+const skinShuffleCardEl = document.getElementById('skin-shuffle-card')
+
+/**
+ * 换一张随机皮肤，**并且记住它**（M21）。
+ *
+ * 【用户要的就是这个】"点一下随机换一张，选完的皮肤就是以后默认皮肤，除非登录账号"。
+ * 所以不只是"预览一下"——会把选择存进配置（`look.skin`），
+ * 以后每次打开都是它，直到用户再点一次、或者登录了账号。
+ *
+ * 存文件路径；随机到官方那两张时存个记号（@steve / @alex），
+ * 因为那不是硬盘上的文件（是从游戏文件里读出来的）。
+ */
+async function shuffleAndKeep() {
+  // 【"除非登录账号"】登着号的时候皮肤以账号上的为准，点了也白点——说清楚，别让用户以为坏了
+  const account = launchInfo?.account
+  const remote = account && (account.type === 'yggdrasil' || account.type === 'microsoft')
+  if (remote && settingsInfo?.look?.useAccountSkin !== false) {
+    setNotice('你现在登录着账号，皮肤以账号上的为准 —— 想穿自己挑的，去「皮肤」页选一张。', 'info')
+    return
+  }
+
+  randomPick = null
+  await pickRandomSkin(true)
+  if (!randomPick) return
+
+  const mark = randomPick.path || (randomPick.official === 'alex' ? '@alex' : '@steve')
+  await saveLook({ skin: mark, randomSkin: false })
+  if (settingsInfo) {
+    settingsInfo.look = { ...settingsInfo.look, skin: mark, randomSkin: false }
+  }
+
+  try {
+    settingsInfo = await window.api.getSettings()
+  } catch {
+    // 读不到就用上面那份乐观值
+  }
+  skinAccountKey = ''
+  await applyCurrentSkin()
+  if (!document.querySelector('[data-page="skin"]').hidden) await renderSkinPage()
+  refreshLaunchFacts()
+}
+
+// 启动页那张卡脚下正中的圆按钮（用户点名要的那个）
+skinShuffleCardEl.addEventListener('click', shuffleAndKeep)
+
+// 皮肤页那个「换一张」：做同一件事（换一张并记住）
+skinShuffleEl.addEventListener('click', shuffleAndKeep)
 
 skinRandomEl.addEventListener('change', async () => {
-  await saveLook({ randomSkin: skinRandomEl.checked })
-  if (settingsInfo) settingsInfo.look = { ...settingsInfo.look, randomSkin: skinRandomEl.checked }
+  // 【开 = 回到"每次打开随机穿"】把固定的那张清掉（不然定了之后随机就没意义了）
+  const patch = { randomSkin: skinRandomEl.checked }
+  if (skinRandomEl.checked) patch.skin = ''
+
+  await saveLook(patch)
+  if (settingsInfo) {
+    settingsInfo.look = {
+      ...settingsInfo.look,
+      randomSkin: skinRandomEl.checked,
+      skin: skinRandomEl.checked ? '' : settingsInfo.look?.skin
+    }
+  }
   if (skinRandomEl.checked) randomPick = null // 立刻换一张给用户看看
   await applyCurrentSkin()
   await renderSkinPage()
-})
-
-/** 现在穿的这张是随机的 → 换一张 */
-skinShuffleEl.addEventListener('click', async () => {
-  randomPick = null
-  await pickRandomSkin(true)
-  await applyCurrentSkin()
-  await renderSkinPage()
+  refreshLaunchFacts()
 })
 
 skinAccountBtnEl.addEventListener('click', () => {

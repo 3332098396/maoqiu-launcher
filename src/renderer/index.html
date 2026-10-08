@@ -312,7 +312,16 @@
               <!-- 3D 皮肤预览（M14.4）：能拖着转，带走路动画 -->
               <section class="panel skin-card">
                 <h3 class="panel__title">皮肤预览</h3>
-                <div class="skin-stage" id="skin-stage"></div>
+                <!-- 小人脚下正中那个"换一张"的圆按钮（M21）
+                     点一下随机换一张，**并且记住**——以后就是这张，除非登录账号 -->
+                <div class="skin-stage" id="skin-stage">
+                  <button class="skin-shuffle" type="button" id="skin-shuffle-card" title="随机换一张，以后就用这张">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M20.2 12a8.2 8.2 0 1 1-2.4-5.8" />
+                      <path d="M20.6 4.1v4.4h-4.4" />
+                    </svg>
+                  </button>
+                </div>
                 <p class="delbox" id="skin-hint">鼠标在卡片上左右移动，小人就跟着转。</p>
                 <div class="modal__actions modal__actions--end">
                   <button class="btn btn--ghost btn--sm" type="button" id="skin-pick">
