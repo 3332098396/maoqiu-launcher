@@ -645,12 +645,19 @@
               <div class="skin-stage skin-stage--big" id="skin-stage-main"></div>
               <div class="skin-big__name" id="skin-big-name">毛球小人</div>
               <div class="skin-big__from" id="skin-big-from">系统默认皮肤</div>
+              <button class="btn btn--ghost btn--sm" type="button" id="skin-shuffle" hidden>
+                换一张
+              </button>
             </section>
 
             <!-- 右：皮肤列表 -->
             <section class="panel skin-list-panel">
               <h3 class="panel__title">我的皮肤</h3>
               <div class="skin-list" id="skin-list"></div>
+              <label class="check" style="margin-top: 10px">
+                <input type="checkbox" id="skin-random" />
+                <span>没登录时每次打开随机穿一张</span>
+              </label>
               <div class="modal__actions">
                 <button class="linkbtn" type="button" id="skin-open-folder">打开皮肤文件夹</button>
               </div>

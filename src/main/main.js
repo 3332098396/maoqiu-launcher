@@ -844,6 +844,13 @@ function registerIpcHandlers() {
       if (typeof look.useAccountSkin === 'boolean') {
         lookPatch.useAccountSkin = look.useAccountSkin
       }
+      // 没登录时随机穿一张（M21）：开关 + "示例皮肤已经存过了"的标记
+      if (typeof look.randomSkin === 'boolean') {
+        lookPatch.randomSkin = look.randomSkin
+      }
+      if (typeof look.builtinsSeeded === 'boolean') {
+        lookPatch.builtinsSeeded = look.builtinsSeeded
+      }
       if (look.bgmVolume !== undefined) {
         lookPatch.bgmVolume = Math.min(100, Math.max(0, Math.round(Number(look.bgmVolume) || 0)))
       }
@@ -1112,6 +1119,15 @@ function registerIpcHandlers() {
   ipcMain.handle('skin:official', () => {
     try {
       return skins.officialDefault()
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 把界面画好的示例皮肤存进皮肤库（M21，同名不覆盖） */
+  ipcMain.handle('skin:saveBuiltin', (_event, name, dataUrl) => {
+    try {
+      return skins.saveBuiltin(name, dataUrl)
     } catch (error) {
       return { ok: false, error: String(error?.message ?? error) }
     }

@@ -388,6 +388,9 @@ contextBridge.exposeInMainWorld('api', {
   /** 在文件管理器里打开皮肤库 */
   openSkinFolder: () => ipcRenderer.invoke('skin:openFolder'),
 
+  /** 把界面画好的示例皮肤存进皮肤库（同名不覆盖） */
+  saveBuiltinSkin: (name, dataUrl) => ipcRenderer.invoke('skin:saveBuiltin', name, dataUrl),
+
   /** 官方的默认皮肤 Steve（从玩家自己的游戏文件里读出来的） */
   getOfficialSkin: () => ipcRenderer.invoke('skin:official'),
 

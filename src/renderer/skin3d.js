@@ -83,8 +83,47 @@ function faceRects(w, h, d) {
   }
 }
 
-/** 画一张 64×64 的皮肤：默认的"毛球"小人（不依赖任何外部图片） */
-function makeDefaultSkin() {
+/**
+ * 毛球自带的几套配色（M21）。
+ *
+ * 【为什么自备几套】没登录的时候，每次打开软件随机穿一套，软件看着是"活"的。
+ * 这几套是**我们自己配的色**，不是从哪个皮肤站搬的——不联网、不欠谁、
+ * 也不会有"人家改版就坏掉"的问题。
+ * 【头发】head 的上/后/侧 三面刷头发色，前面留出脸——这是 MC 皮肤最基本的画法。
+ */
+const BUILTIN_STYLES = [
+  {
+    name: '毛球·小蓝',
+    skin: '#f0c8a0', hair: '#5a3a24', shirt: '#4a9bff', pants: '#2f4a6b', eye: '#2b3a4a'
+  },
+  {
+    name: '毛球·小红帽',
+    skin: '#f3d0ae', hair: '#c0342b', shirt: '#e0524a', pants: '#4a3b2f', eye: '#2b3a4a'
+  },
+  {
+    name: '毛球·林子里',
+    skin: '#e8c39a', hair: '#3f2d1e', shirt: '#3f9c5a', pants: '#2f4a3a', eye: '#20301f'
+  },
+  {
+    name: '毛球·紫夜',
+    skin: '#c98f66', hair: '#1f1a2e', shirt: '#8a5cf0', pants: '#2a2340', eye: '#f0f0f0'
+  },
+  {
+    name: '毛球·金发',
+    skin: '#f6d9b8', hair: '#e8c03a', shirt: '#f08a2a', pants: '#4a3524', eye: '#2b3a4a'
+  },
+  {
+    name: '毛球·石头人',
+    skin: '#c8c8c8', hair: '#3a3a3a', shirt: '#6b7280', pants: '#33383f', eye: '#111111'
+  }
+]
+
+/**
+ * 画一张 64×64 的皮肤。
+ * @param {number} [index] 用第几套配色（不给就用第 0 套，也就是原来那张"毛球小人"）
+ */
+function makeBuiltinSkin(index = 0) {
+  const style = BUILTIN_STYLES[index % BUILTIN_STYLES.length]
   const canvas = document.createElement('canvas')
   canvas.width = 64
   canvas.height = 64
@@ -111,26 +150,36 @@ function makeDefaultSkin() {
     }
   }
 
-  // 毛球配色：蓝衣服、深蓝裤子、皮肤色的头
-  const skin = '#f0c8a0'
-  const skinDark = '#d8ae86'
-  const shirt = '#4a9bff'
-  const shirtDark = '#3d86d8'
-  const pants = '#2f4a6b'
+  const { skin, hair, shirt, pants, eye } = style
 
-  drawPart([0, 0], 8, 8, 8, { top: '#5aa9ff', bottom: skinDark, front: skin, back: skinDark, side: skin })
-  drawPart([16, 16], 8, 12, 4, { top: shirtDark, bottom: pants, front: shirt, back: shirtDark, side: shirtDark })
-  drawPart([40, 16], 4, 12, 4, { top: shirtDark, bottom: skin, front: shirt, back: shirtDark, side: shirt })
-  drawPart([32, 48], 4, 12, 4, { top: shirtDark, bottom: skin, front: shirt, back: shirtDark, side: shirt })
+  // 头：顶上是头发，正面是脸。帽子那层（外套层）刷成头发色，就有个发型了
+  drawPart([0, 0], 8, 8, 8, { top: hair, bottom: skin, front: skin, back: hair, side: skin })
+  drawPart([16, 16], 8, 12, 4, { top: shirt, bottom: pants, front: shirt, back: shirt, side: shirt })
+  drawPart([40, 16], 4, 12, 4, { top: shirt, bottom: skin, front: shirt, back: shirt, side: shirt })
+  drawPart([32, 48], 4, 12, 4, { top: shirt, bottom: skin, front: shirt, back: shirt, side: shirt })
   drawPart([0, 16], 4, 12, 4, { top: pants, bottom: '#2a2a2a', front: pants, back: pants, side: pants })
   drawPart([16, 48], 4, 12, 4, { top: pants, bottom: '#2a2a2a', front: pants, back: pants, side: pants })
 
-  // 脸上画两个眼睛（在"前"那一面的坐标里）
-  ctx.fillStyle = '#2b3a4a'
+  // 帽子层（head 的外套层在 (32,0)）：盖住头顶和两侧，看着像有头发
+  ctx.fillStyle = hair
+  ctx.fillRect(40, 0, 8, 4) // 帽子层正面：只盖上面那几行 → 像刘海
+  ctx.fillRect(32, 0, 8, 8) // 帽子层顶面：整块
+  ctx.fillRect(32, 8, 4, 3) // 侧面（左）
+  ctx.fillRect(52, 8, 4, 3) // 侧面（右）
+
+  // 脸：两只眼睛 + 一张嘴（都在"前"那一面的坐标里）
+  ctx.fillStyle = eye
   ctx.fillRect(9, 12, 2, 1)
   ctx.fillRect(13, 12, 2, 1)
+  ctx.fillStyle = skin
+  ctx.fillRect(8, 15, 8, 1) // 下巴那一行留白，脸别顶到边
 
   return canvas
+}
+
+/** 原来那张默认皮肤（第 0 套配色），老代码还在用它 */
+function makeDefaultSkin() {
+  return makeBuiltinSkin(0)
 }
 
 /** 把 canvas 上的一块切出来当纹理 */
@@ -454,5 +503,14 @@ function unmount() {
 }
 
 
-window.skinViewer = { mount, setSkin, useDefaultSkin, unmount, makeDefaultSkin }
+window.skinViewer = {
+  mount,
+  setSkin,
+  useDefaultSkin,
+  unmount,
+  makeDefaultSkin,
+  makeBuiltinSkin,
+  builtinCount: BUILTIN_STYLES.length,
+  builtinNames: BUILTIN_STYLES.map((one) => one.name)
+}
 

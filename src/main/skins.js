@@ -210,6 +210,49 @@ function importFile(sourcePath) {
 }
 
 /**
+ * 把界面画好的一张皮肤存进皮肤库（M21）。
+ *
+ * 【干什么用的】"没登录时随机穿一张"那几张示例皮肤，是界面用 canvas 画出来的；
+ * 存成文件之后，它们就跟用户自己传的皮肤一个待遇：列表里看得见、能挑、能删，
+ * 而且**不联网也一直在**。
+ *
+ * 【绝不覆盖】同名文件已经在了就跳过——用户可能自己有个同名的，或者他删过一张
+ * 不想它再回来（删过的靠 look.builtinsSeeded 那个标记挡住重来）。
+ *
+ * @param {string} name 皮肤名（会做文件名安全处理）
+ * @param {string} dataUrl data:image/png;base64,... 形式
+ */
+function saveBuiltin(name, dataUrl) {
+  const match = /^data:image\/png;base64,(.+)$/i.exec(String(dataUrl || ''))
+  if (!match) return { ok: false, error: '不是 PNG 数据' }
+
+  let buffer
+  try {
+    buffer = Buffer.from(match[1], 'base64')
+  } catch {
+    return { ok: false, error: '数据解不开' }
+  }
+
+  const size = readPngSize(buffer)
+  if (!size.ok) return size
+  if (size.width !== 64 || (size.height !== 64 && size.height !== 32)) {
+    return { ok: false, error: `尺寸不对：${size.width}×${size.height}` }
+  }
+
+  const dir = skinsDir()
+  paths.ensureDir(dir)
+  const target = path.join(dir, `${safeFileName(name)}.png`)
+  if (fs.existsSync(target)) return { ok: true, path: target, skipped: true }
+
+  try {
+    fs.writeFileSync(target, buffer)
+  } catch (error) {
+    return { ok: false, error: `存不下来：${error.message}` }
+  }
+  return { ok: true, path: target }
+}
+
+/**
  * 从皮肤库里删一份。
  *
  * 【只删我们自己复制进来的那份】先卡一道"这个路径必须在皮肤库里"，
@@ -344,6 +387,7 @@ module.exports = {
   listLocal,
   importFile,
   removeLocal,
+  saveBuiltin,
   readPngSize,
   officialDefault
 }
