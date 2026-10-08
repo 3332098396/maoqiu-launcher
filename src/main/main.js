@@ -157,6 +157,16 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))
 
+  // 窗口关掉时把"盯着光标"那个计时器也停了。
+  // 【为什么要专门停】窗口没了以后计时器还往界面发消息，Electron 会在控制台
+  // 刷一堆 "Render frame was disposed" 的红色报错——看着像软件坏了，其实不是。
+  mainWindow.on('closed', () => {
+    if (cursorWatcher) {
+      clearInterval(cursorWatcher)
+      cursorWatcher = null
+    }
+  })
+
   mainWindow.once('ready-to-show', () => {
     // 开场动画至少待够 SPLASH_MIN_MS 再切——太快了像闪了一下故障
     const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashShownAt))
@@ -939,7 +949,16 @@ function registerIpcHandlers() {
     if (!on) return { ok: true }
 
     cursorWatcher = setInterval(() => {
-      if (event.sender.isDestroyed()) {
+      // 【光看 isDestroyed() 不够】窗口正在关的那一瞬间，webContents 还在、
+      // 但里面的"渲染帧"已经释放了，这时候 send 会让 Electron 往控制台喷红字。
+      // 所以要顺着 mainFrame.detached 一起看，而且读它本身也可能抛。
+      let alive = false
+      try {
+        alive = !event.sender.isDestroyed() && !event.sender.mainFrame.detached
+      } catch {
+        alive = false
+      }
+      if (!alive) {
         clearInterval(cursorWatcher)
         cursorWatcher = null
         return

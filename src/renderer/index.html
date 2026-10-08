@@ -14,8 +14,48 @@
   </head>
   <body>
     <div class="shell">
-      <!-- ——— 左侧导航（M14.2：原来在顶栏，挪到左边了，学 KAMUCL 的做法）——— -->
-      <nav class="rail" id="nav">
+      <!-- 顶栏（M17.2 照设计稿）：它横跨整个窗口，左边那栏导航在它下面开始。
+           名字摆正中间，右边挂两个图标。
+           图纸右上角一共四个，另外两个是最小化/最大化——那是系统标题栏的活儿，
+           得把窗口改成无边框才轮得到我们画，这轮先不动（见开发日志） -->
+      <header class="topbar">
+        <span class="topbar__title" id="topbar-title">毛球</span>
+        <div class="topbar__tools">
+          <button
+            class="topbar__icon"
+            type="button"
+            id="top-search"
+            title="搜 Mod / 资源包 / 光影"
+            aria-label="搜 Mod / 资源包 / 光影"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="10.6" cy="10.6" r="7" />
+              <path d="m15.8 15.8 4.5 4.5" stroke-width="2.1" />
+            </svg>
+          </button>
+          <button class="topbar__icon" type="button" id="top-bell" title="看运行记录" aria-label="看运行记录">
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="2.9" r="1.4" fill="currentColor" />
+              <path
+                d="M12 4.9a5.4 5.4 0 0 0-5.4 5.4v3.2L5.1 16.1h13.8l-1.5-2.6V10.3A5.4 5.4 0 0 0 12 4.9Z"
+                fill="currentColor"
+              />
+              <circle cx="12" cy="18.2" r="1.6" fill="currentColor" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="shell__row">
+        <!-- ——— 左侧导航（M14.2：原来在顶栏，挪到左边了，学 KAMUCL 的做法）——— -->
+        <nav class="rail" id="nav">
         <!-- 顶上这一块（M17.5 照设计稿）：圆头像 + 「毛球」 + 小徽章 -->
         <div class="rail__brand">
           <span class="rail__avatar" aria-hidden="true">
@@ -34,9 +74,10 @@
         <!-- 每一项：一个线性图标 + 文字（图标是矢量图，颜色跟着文字走） -->
         <button class="rail__btn" type="button" data-page="launch">
           <span class="rail__icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3.2" y="3.2" width="17.6" height="17.6" rx="5" />
-              <rect x="8.7" y="8.7" width="6.6" height="6.6" rx="1.9" />
+            <!-- 启动＝小房子（尖顶五边形 + 实心方窗），照设计稿描的 -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2.95L20.6 9.55V19.15A1.9 1.9 0 0 1 18.7 21.05H5.3A1.9 1.9 0 0 1 3.4 19.15V9.55Z" />
+              <rect x="8.9" y="13.05" width="6.2" height="5.9" rx="0.9" fill="currentColor" stroke="none" />
             </svg>
           </span>
           <span class="rail__label">启动</span>
@@ -44,9 +85,10 @@
 
         <button class="rail__btn" type="button" data-page="online">
           <span class="rail__icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="4.4" width="18" height="15.2" rx="4.8" />
-              <circle cx="16.3" cy="15.7" r="2.5" fill="currentColor" stroke="none" />
+            <!-- 联机＝大圆角方框 + 拐角连线，照设计稿描的 -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
+              <path d="M9.05 15.1V11.6h6.55" />
             </svg>
           </span>
           <span class="rail__label">联机</span>
@@ -54,10 +96,11 @@
 
         <button class="rail__btn" type="button" data-page="download">
           <span class="rail__icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="8.8" />
-              <path d="M12 7.8v8.4" />
-              <path d="m8.6 12.6 3.4 3.6 3.4-3.6" />
+            <!-- 下载＝圆圈（顶上留个缺口）+ 穿进去的下箭头，照设计稿描的 -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.15 3.76A8.45 8.45 0 1 0 13.86 3.76" />
+              <path d="M12 3.6v10.3" />
+              <path d="m8.4 10.7 3.6 3.2 3.6-3.2" />
             </svg>
           </span>
           <span class="rail__label">下载</span>
@@ -65,9 +108,10 @@
 
         <button class="rail__btn" type="button" data-page="settings">
           <span class="rail__icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9.6 3.6a2 2 0 0 1 2-1.6h.8a2 2 0 0 1 2 1.6l.2 1.2a1.6 1.6 0 0 0 2.4 1l1-.6a2 2 0 0 1 2.5.5l.4.6a2 2 0 0 1-.2 2.5l-.9.8a1.6 1.6 0 0 0 0 2.4l.9.8a2 2 0 0 1 .2 2.5l-.4.6a2 2 0 0 1-2.5.5l-1-.6a1.6 1.6 0 0 0-2.4 1l-.2 1.2a2 2 0 0 1-2 1.6h-.8a2 2 0 0 1-2-1.6l-.2-1.2a1.6 1.6 0 0 0-2.4-1l-1 .6a2 2 0 0 1-2.5-.5l-.4-.6a2 2 0 0 1 .2-2.5l.9-.8a1.6 1.6 0 0 0 0-2.4l-.9-.8a2 2 0 0 1-.2-2.5l.4-.6a2 2 0 0 1 2.5-.5l1 .6a1.6 1.6 0 0 0 2.4-1l.2-1.2Z" />
-              <circle cx="12" cy="12" r="2.9" />
+            <!-- 设置＝波浪边齿轮（10 个鼓包，每个鼓包正好是个半圆）+ 粗圆环，照设计稿描的 -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 4.54A2.31 2.31 0 0 1 16.39 5.97A2.31 2.31 0 0 1 19.1 9.7A2.31 2.31 0 0 1 19.1 14.31A2.31 2.31 0 0 1 16.39 18.04A2.31 2.31 0 0 1 12 19.46A2.31 2.31 0 0 1 7.62 18.04A2.31 2.31 0 0 1 4.9 14.31A2.31 2.31 0 0 1 4.9 9.7A2.31 2.31 0 0 1 7.62 5.97A2.31 2.31 0 0 1 12 4.54Z" />
+              <circle cx="12" cy="12" r="2.35" />
             </svg>
           </span>
           <span class="rail__label">设置</span>
@@ -75,10 +119,10 @@
 
         <button class="rail__btn" type="button" data-page="help">
           <span class="rail__icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="8.8" />
-              <circle cx="12" cy="12" r="3.6" />
-              <path d="m5.8 5.8 3.5 3.5M14.7 14.7l3.5 3.5M14.7 9.3l3.5-3.5M9.3 14.7l-3.5 3.5" />
+            <!-- 帮助＝花瓣形（8 个圆鼓包，比设置的花瓣更大更圆）+ 小圆环，照设计稿描的 -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 4.65A2.82 2.82 0 0 1 17.2 6.8A2.82 2.82 0 0 1 19.35 12A2.82 2.82 0 0 1 17.2 17.2A2.82 2.82 0 0 1 12 19.35A2.82 2.82 0 0 1 6.8 17.2A2.82 2.82 0 0 1 4.65 12A2.82 2.82 0 0 1 6.8 6.8A2.82 2.82 0 0 1 12 4.65Z" />
+              <circle cx="12" cy="12" r="2" stroke-width="1.5" />
             </svg>
           </span>
           <span class="rail__label">帮助</span>
@@ -88,10 +132,10 @@
 
         <button class="rail__btn rail__btn--soft" type="button" id="log-btn">
           <span class="rail__icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14 3.2H7.4a2 2 0 0 0-2 2v13.6a2 2 0 0 0 2 2h9.2a2 2 0 0 0 2-2V7.8Z" />
-              <path d="M14 3.2v4.6h4.6" />
-              <path d="M8.6 12.4h6.8M8.6 15.8h4.4" />
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 3.4H7.6a2 2 0 0 0-2 2v13.2a2 2 0 0 0 2 2h8.8a2 2 0 0 0 2-2V7.8Z" />
+              <path d="M14 3.4v4.4h4.4" />
+              <path d="M8.8 12.6h6.4M8.8 15.9h4.2" />
             </svg>
           </span>
           <span class="rail__label">日志</span>
@@ -99,11 +143,6 @@
       </nav>
 
       <div class="shell__body">
-        <header class="topbar">
-          <span class="topbar__logo">⛏</span>
-          <span class="topbar__title" id="topbar-title">毛球</span>
-        </header>
-
         <main class="main">
       <!-- ═══════════ 启动页（M14.2 改成"大启动卡"布局）═══════════ -->
       <section class="page" data-page="launch">
@@ -143,11 +182,15 @@
                图标是内嵌的矢量图（SVG）——颜色跟着卡片走，放大也不糊 -->
           <div class="launch-facts">
             <div class="fact">
-              <span class="fact__icon fact__icon--cube" aria-hidden="true">
+              <!-- 草方块（M17.2 照设计稿换的，原来是块蓝立方体）：
+                   等距视角的小方块，顶面是草、两侧是土、土上面压一条草边 -->
+              <span class="fact__icon fact__icon--grass" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2.6 21 7v10l-9 4.4L3 17V7l9-4.4Z" fill="#6f8cff" />
-                  <path d="M12 2.6 21 7l-9 4.4L3 7l9-4.4Z" fill="#9db4ff" />
-                  <path d="M12 11.4V21.4L3 17V7l9 4.4Z" fill="#4f6ede" />
+                  <path d="M3.6 7.45 12 12.3v8.6l-8.4-4.85V7.45Z" fill="#8b5e3c" />
+                  <path d="M20.4 7.45 12 12.3v8.6l8.4-4.85V7.45Z" fill="#71482b" />
+                  <path d="M3.6 7.45 12 12.3v2.1L3.6 9.55V7.45Z" fill="#67a83a" />
+                  <path d="M20.4 7.45 12 12.3v2.1l8.4-4.85V7.45Z" fill="#578f31" />
+                  <path d="M12 2.6 20.4 7.45 12 12.3 3.6 7.45 12 2.6Z" fill="#7cc24c" />
                 </svg>
               </span>
               <span class="fact__text">

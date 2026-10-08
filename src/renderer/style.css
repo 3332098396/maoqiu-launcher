@@ -417,25 +417,59 @@ body {
    顶栏
    ═══════════════════════════════════════ */
 .topbar {
+  position: relative; /* 名字要靠它才能绝对居中（M17.2） */
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 16px;
-  height: 54px;
+  padding: 0 12px;
+  /* 设计稿顶栏 45 高，这里留宽一点，图标按钮才不挤 */
+  height: 48px;
   background: var(--topbar-gradient);
   color: var(--on-topbar);
   box-shadow: 0 2px 12px var(--accent-shadow);
 }
 
-.topbar__logo {
-  font-size: 19px;
-}
-
+/* 名字用绝对定位钉在正中间——这样右边图标多一个少一个都不会把它挤歪 */
 .topbar__title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.5px;
+}
+
+.topbar__tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.topbar__icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: var(--on-topbar-dim);
+  background: transparent;
+  border: none;
+  border-radius: 11px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.topbar__icon:hover {
+  color: var(--on-topbar);
+  background: var(--on-topbar-hover);
+}
+
+.topbar__icon svg {
+  display: block;
+  width: 18px;
+  height: 18px;
 }
 
 /* 三个页面按钮，居中摆放 */
@@ -2158,10 +2192,20 @@ body.has-bg {
    学 KAMUCL 的做法：横向能省出一大块给内容。
    ══════════════════════════════════════════════ */
 
+/* 窗口分三层：顶栏横跨一整条 → 下面左边导航、右边内容（M17.2 照设计稿） */
 .shell {
   flex: 1 1 auto;
   display: flex;
+  flex-direction: column;
   min-height: 0;
+}
+
+/* 顶栏下面那一条：左边导航栏 + 右边内容区 */
+.shell__row {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
 }
 
 .rail {
@@ -2169,10 +2213,12 @@ body.has-bg {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 4px;
+  /* 项与项之间留的空档（M17.2 照设计稿量的：项高 36、中心距 54，所以空 18） */
+  gap: 18px;
   /* 设计稿的导航是"图标 + 文字"横排，所以比原来那种窄图标条宽得多 */
   width: 196px;
-  padding: 16px 12px;
+  /* 上面这段留白照设计稿留的：头像跟顶栏之间空一大截 */
+  padding: 34px 12px 16px;
   background: var(--surface-a72);
   border-right: 1px solid var(--card-border);
 }
@@ -2182,7 +2228,9 @@ body.has-bg {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 4px 6px 16px;
+  padding: 2px 6px;
+  /* 名字块和第一个导航项之间要空得多一些（照设计稿量的距离） */
+  margin-bottom: 11px;
 }
 
 .rail__avatar {
@@ -2222,8 +2270,8 @@ body.has-bg {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: 10px;
+  padding: 6px 14px;
   font-family: var(--font);
   font-size: 15px;
   color: var(--text-dim);
@@ -2252,17 +2300,20 @@ body.has-bg {
   position: absolute;
   left: -12px;
   top: 50%;
-  width: 3px;
-  height: 22px;
-  border-radius: 0 3px 3px 0;
+  width: 4px;
+  /* 设计稿里那道竖条跟整个胶囊一样高 */
+  height: 100%;
+  border-radius: 99px;
   transform: translateY(-50%);
   background: linear-gradient(180deg, #9a5cf7, #2fd4e8);
 }
 
+/* 24 是照设计稿定的：图标画在 24×24 的格子里，1 格正好 1 像素，
+   这样图纸上量出来多宽，屏幕上就是多宽 */
 .rail__icon {
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
 }
 
 .rail__icon svg {
@@ -2545,7 +2596,7 @@ body.has-bg {
 /* ── 霓虹紫青：小人脚下那圈发光（M17.3，设计稿里的）──
  * 【怎么实现的】一个压扁的圆 + 径向渐变 + 模糊，放在画布**下面**。
  * 画布本身是透明的，所以光能透上来，看着就是"人站在光里"。 */
-body[data-theme='neon'] .skin-stage::after {
+body[data-theme='neon'] .skin-stage::before {
   content: '';
   position: absolute;
   z-index: 0;
@@ -2562,6 +2613,27 @@ body[data-theme='neon'] .skin-stage::after {
     rgba(0, 0, 0, 0) 100%
   );
   filter: blur(12px);
+  pointer-events: none;
+}
+
+/* 光晕里还要有一圈**看得见的**椭圆环：左边紫、右边青。
+ * 【怎么做出"渐变色的圈"】底色铺一条紫→青的线性渐变，再用 mask 把中间挖空，
+ * 剩下的就是一圈；直接给 border 上渐变是做不到的（CSS 不支持）。 */
+body[data-theme='neon'] .skin-stage::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  left: 50%;
+  bottom: 5%;
+  width: 62%;
+  height: 17%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: linear-gradient(90deg, #a865f8, #2fd4e8);
+  -webkit-mask: radial-gradient(closest-side, rgba(0, 0, 0, 0) 0 60%, #000 76%, #000 88%, rgba(0, 0, 0, 0) 100%);
+  mask: radial-gradient(closest-side, rgba(0, 0, 0, 0) 0 60%, #000 76%, #000 88%, rgba(0, 0, 0, 0) 100%);
+  filter: blur(1.2px);
+  opacity: 0.92;
   pointer-events: none;
 }
 

@@ -3045,6 +3045,19 @@ function closeLogModal() {
 document.getElementById('log-btn').addEventListener('click', openLogModal)
 document.getElementById('log-close').addEventListener('click', closeLogModal)
 
+// ——— 顶栏那两个图标（M17.2 照设计稿加的）———
+// 放大镜：直接把你送到下载页的"搜资源"那一栏，光标落进输入框，抬手就能打字
+document.getElementById('top-search').addEventListener('click', () => {
+  showPage('download')
+  showDownloadTab('community')
+  document.getElementById('mr-search').focus()
+})
+
+// 铃铛：就是"运行记录"的另一个入口（跟左下角那个「日志」是同一件事）
+document.getElementById('top-bell').addEventListener('click', () => {
+  document.getElementById('log-btn').click()
+})
+
 // 点弹窗外面（灰底）也能关
 logModalEl.addEventListener('click', (event) => {
   if (event.target === logModalEl) closeLogModal()
