@@ -12,16 +12,17 @@
 :root {
   /* —— 渐变（顶栏 / 页面底 / 主按钮）—— */
   --topbar-gradient: linear-gradient(120deg, #3d86d8, #2f6fb5);
-  --page-gradient: linear-gradient(160deg, #eaf4ff, #f7fbff 45%, #e6f1ff);
+  --page-veil: linear-gradient(rgba(214, 234, 255, 0.62), rgba(232, 244, 255, 0.74));
+  --page-image: url('../../assets/hero-landscape.jpg');
   --primary-gradient: linear-gradient(135deg, #3d86d8, #2f6fb5);
   --page-tint: #eaf4ff;
 
   /* —— 面（卡片、输入框、选中态）—— */
-  --card-bg: #ffffff;
-  --surface: #ffffff;
-  --surface-soft: #f7fbff;
-  --surface-accent: #eef6ff;
-  --surface-accent-2: #e6f2ff;
+  --card-bg: rgba(240, 248, 255, 0.84);
+  --surface: rgba(240, 247, 255, 0.8);
+  --surface-soft: rgba(247, 251, 255, 0.72);
+  --surface-accent: rgba(238, 246, 255, 0.8);
+  --surface-accent-2: rgba(230, 242, 255, 0.86);
   --card-border: #dcebff;
   --card-border-hover: #b8dbff;
   --accent-line: #e3f0ff;
@@ -105,15 +106,16 @@
 /* 深色（学 KAMUCL 那种感觉：深底 + 亮强调色） */
 body[data-theme='dark'] {
   --topbar-gradient: linear-gradient(120deg, #2b2f45, #232741);
-  --page-gradient: linear-gradient(160deg, #1b1e2e, #1f2335 45%, #191c2b);
+  --page-veil: linear-gradient(rgba(16, 19, 32, 0.66), rgba(14, 17, 28, 0.78));
+  --page-image: url('../../assets/hero-landscape.jpg');
   --page-tint: #1f2335;
   --primary-gradient: linear-gradient(135deg, #8b7bff, #6a5ae0);
 
-  --card-bg: #232741;
-  --surface: #262a45;
-  --surface-soft: #1f2338;
-  --surface-accent: #2c3252;
-  --surface-accent-2: #313861;
+  --card-bg: rgba(35, 39, 65, 0.72);
+  --surface: rgba(38, 42, 69, 0.7);
+  --surface-soft: rgba(31, 35, 56, 0.55);
+  --surface-accent: rgba(44, 50, 82, 0.68);
+  --surface-accent-2: rgba(49, 56, 97, 0.72);
   --card-border: #333a5c;
   --card-border-hover: #4a548a;
   --accent-line: #383f66;
@@ -174,8 +176,8 @@ body[data-theme='neon'] {
      【压多少是试出来的】一开始压到 86%~90%，结果背景图几乎看不见——
      半透明的面板下面没东西可"磨"，磨砂玻璃就成了个摆设。调到 58%~70%：
      风景能认出来了，字也照样清楚（面板本身还有 62% 的不透明度兜底）。 */
-  --page-gradient: linear-gradient(rgba(8, 10, 20, 0.58), rgba(8, 10, 20, 0.7)),
-    url('../../assets/hero-landscape.jpg') center / cover no-repeat;
+  --page-veil: linear-gradient(rgba(8, 10, 20, 0.58), rgba(8, 10, 20, 0.7));
+  --page-image: url('../../assets/hero-landscape.jpg');
   --page-tint: rgba(20, 26, 46, 0.72);
   --primary-gradient: linear-gradient(135deg, #9a5cf7, #2fd4e8);
 
@@ -238,34 +240,35 @@ body[data-theme='neon'] {
   --rail-on-fg: #1a2130;
 }
 
-/* ── 磨砂玻璃：把这套主题里所有"面"都加上背景模糊（M17.2）
+/* ── 磨砂玻璃：所有"面"都加上背景模糊（M17.2 先做在霓虹紫青上，M17.x 铺开到全部主题）
  *
- * 【只在这套主题上开】别的五套一点不动——这是用户点名要的风格，不是全局改动。
+ * 【为什么现在全主题都开】用户要求"每套主题的背景都铺风景图"——
+ * 卡片不半透明的话，风景全被挡在卡片外面那几条缝里，等于白铺。
  * 【为什么列这么一长串】项目里没有"面"这个统一 class，
- * 每个部件各写各的（.panel / .fact / .input …）。上面那份清单是**扫出来的**
+ * 每个部件各写各的（.panel / .fact / .input …）。这份清单是**扫出来的**
  * （找所有用到 --card-bg / --surface* 的选择器），不是拍脑袋列的。
  * 【性能】背景模糊比较费显卡，但这些都是静态面板、数量有限，实测不卡。
  */
-body[data-theme='neon'] .panel,
-body[data-theme='neon'] .acc,
-body[data-theme='neon'] .acc__tabs,
-body[data-theme='neon'] .acc__warn,
-body[data-theme='neon'] .fact,
-body[data-theme='neon'] .faq,
-body[data-theme='neon'] .notice,
-body[data-theme='neon'] .input,
-body[data-theme='neon'] .chip,
-body[data-theme='neon'] .log,
-body[data-theme='neon'] .install,
-body[data-theme='neon'] .peer,
-body[data-theme='neon'] .frp-log,
-body[data-theme='neon'] .mr__icon,
-body[data-theme='neon'] .pick__cat,
-body[data-theme='neon'] .pick__dir,
-body[data-theme='neon'] .pick__item,
-body[data-theme='neon'] .pick__toggle,
-body[data-theme='neon'] .btn--ghost,
-body[data-theme='neon'] .icon-picker__item {
+.panel,
+.acc,
+.acc__tabs,
+.acc__warn,
+.fact,
+.faq,
+.notice,
+.input,
+.chip,
+.log,
+.install,
+.peer,
+.frp-log,
+.mr__icon,
+.pick__cat,
+.pick__dir,
+.pick__item,
+.pick__toggle,
+.btn--ghost,
+.icon-picker__item {
   backdrop-filter: blur(16px) saturate(140%);
   -webkit-backdrop-filter: blur(16px) saturate(140%);
 }
@@ -273,16 +276,10 @@ body[data-theme='neon'] .icon-picker__item {
 /* ── 霓虹紫青：大启动卡铺风景图（M17.3，设计稿就是这么画的）
  * 【为什么上面还要压一层渐变】不压的话白字压在亮风景上会看不清；
  * 这层是"上浅下深"——上半截留着看清风景，下半截压暗好放按钮和字。 */
-body[data-theme='neon'] .hero {
-  background: linear-gradient(
-      180deg,
-      rgba(6, 8, 16, 0.26) 0%,
-      rgba(6, 8, 16, 0.62) 55%,
-      rgba(6, 8, 16, 0.9) 100%
-    ),
-    url('../../assets/hero-landscape.jpg') center 42% / cover no-repeat;
-  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.5);
-}
+/* （大启动卡铺风景图那条搬到下面 .hero 主规则里去了）
+ * 【为什么】那条规则写在这里（主规则前面），被后面 2400 多行处的
+ * `.hero { background: var(--primary-gradient) }` 直接盖掉了——同特异性看先后，
+ * 后面的赢。写在前面的那条等于白写（2026-10-08 实测：大卡一直显示纯色渐变）。 */
 
 /* 启动按钮：设计稿里它是"紫→青渐变的胶囊 + 光晕"，不是白底 */
 body[data-theme='neon'] .btn--hero {
@@ -297,14 +294,17 @@ body[data-theme='neon'] .btn--hero:hover:not(:disabled) {
 
 /* 抹茶绿 */
 body[data-theme='matcha'] {
+  --card-bg: rgba(238, 250, 243, 0.84);
+  --surface: rgba(239, 249, 243, 0.8);
   --topbar-gradient: linear-gradient(120deg, #3d8a5c, #2f7048);
-  --page-gradient: linear-gradient(160deg, #eef9f1, #f8fdf9 45%, #e7f5ec);
+  --page-veil: linear-gradient(rgba(214, 242, 224, 0.62), rgba(233, 249, 239, 0.74));
+  --page-image: url('../../assets/hero-landscape.jpg');
   --page-tint: #e7f5ec;
   --primary-gradient: linear-gradient(135deg, #3d8a5c, #2f7048);
 
-  --surface-soft: #f6fcf8;
-  --surface-accent: #eaf7ef;
-  --surface-accent-2: #ddf1e5;
+  --surface-soft: rgba(246, 252, 248, 0.72);
+  --surface-accent: rgba(234, 247, 239, 0.8);
+  --surface-accent-2: rgba(221, 241, 229, 0.86);
   --card-border: #d5ebdd;
   --card-border-hover: #b0dcc1;
   --accent-line: #ddf0e5;
@@ -329,14 +329,17 @@ body[data-theme='matcha'] {
 
 /* 暖阳橙 */
 body[data-theme='sunset'] {
+  --card-bg: rgba(255, 246, 234, 0.84);
+  --surface: rgba(255, 246, 236, 0.8);
   --topbar-gradient: linear-gradient(120deg, #c97a1e, #a85f10);
-  --page-gradient: linear-gradient(160deg, #fff5e9, #fffbf6 45%, #ffefe0);
+  --page-veil: linear-gradient(rgba(255, 234, 209, 0.62), rgba(255, 245, 232, 0.74));
+  --page-image: url('../../assets/hero-landscape.jpg');
   --page-tint: #ffefe0;
   --primary-gradient: linear-gradient(135deg, #c97a1e, #a85f10);
 
-  --surface-soft: #fffaf4;
-  --surface-accent: #fff2e2;
-  --surface-accent-2: #ffe8d1;
+  --surface-soft: rgba(255, 250, 244, 0.72);
+  --surface-accent: rgba(255, 242, 226, 0.8);
+  --surface-accent-2: rgba(255, 232, 209, 0.86);
   --card-border: #f6e2cc;
   --card-border-hover: #eec9a3;
   --accent-line: #f8e6d3;
@@ -361,14 +364,17 @@ body[data-theme='sunset'] {
 
 /* 樱花粉 */
 body[data-theme='sakura'] {
+  --card-bg: rgba(255, 243, 249, 0.84);
+  --surface: rgba(255, 243, 248, 0.8);
   --topbar-gradient: linear-gradient(120deg, #cc6489, #ad4a6e);
-  --page-gradient: linear-gradient(160deg, #fff2f7, #fffafc 45%, #ffeaf3);
+  --page-veil: linear-gradient(rgba(255, 227, 240, 0.62), rgba(255, 242, 248, 0.74));
+  --page-image: url('../../assets/hero-landscape.jpg');
   --page-tint: #ffeaf3;
   --primary-gradient: linear-gradient(135deg, #cc6489, #ad4a6e);
 
-  --surface-soft: #fff8fb;
-  --surface-accent: #ffeef5;
-  --surface-accent-2: #ffe1ec;
+  --surface-soft: rgba(255, 248, 251, 0.72);
+  --surface-accent: rgba(255, 238, 245, 0.8);
+  --surface-accent-2: rgba(255, 225, 236, 0.86);
   --card-border: #f7dbe7;
   --card-border-hover: #efbcd1;
   --accent-line: #f9e3ec;
@@ -406,8 +412,19 @@ body {
   flex-direction: column;
   font-family: var(--font);
   color: var(--text);
-  background: var(--page-gradient);
-  background-attachment: fixed;
+  /* 整页背景 = 一层"压色" + 一张图（M17.x）
+   * 【为什么拆成两层】以前是 `background: var(--page-gradient)`，而用户自己挑的
+   * 背景图是**行内样式**直接盖在 body 上的——顺手把那层压色也顶掉了，
+   * 结果亮图上面的白字根本看不清（2026-10-08 用户实测）。
+   * 拆开之后：压色走 --page-veil、图走 --page-image，
+   * 换图只动 --page-image，压色一直在。
+   * 压色的浓淡各主题自己定：浅色主题压白（风景看得清、字也清楚），深色主题压暗。 */
+  background-color: var(--page-tint);
+  background-image: var(--page-veil), var(--page-image);
+  background-size: auto, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+  background-attachment: fixed, fixed;
   /* 界面禁止整页选中，避免拖拽时到处反白 */
   user-select: none;
   cursor: default;
@@ -2155,14 +2172,10 @@ button.acc__tab:hover {
 
 /* ——— 个性化：背景图 / 顶栏样式 ——— */
 
-/* 设了背景图时，把原来那层渐变让出来（图和渐变叠在一起会花） */
-body.has-bg {
-  background-image: none !important;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
-}
+/* （M17.x 拆掉了 .has-bg 那条规则）
+ * 以前"用户自己设了背景图"是往 body 盖一条行内 backgroundImage，
+ * 再用 `background-image: none !important` 把主题那层渐变顶掉——顺带把压色也顶没了。
+ * 现在换成"只改 --page-image 这一个变量"，压色留着，图自动铺在压色下面。 */
 
 /* （M13 那两个"顶栏样式"的规则已经拆掉——M14.1 起的主题系统统一管配色，
    见文件开头的主题块。留着两套会打架。） */
@@ -2403,8 +2416,17 @@ body.has-bg {
   margin-bottom: 12px;
   border-radius: 18px;
   overflow: hidden;
-  background: var(--primary-gradient);
-  box-shadow: 0 14px 40px var(--accent-shadow);
+  /* 大启动卡铺风景图（M17.2 先做在霓虹紫青上，M17.x 铺开到全部主题——用户要求统一）
+   * 【为什么还要压一层渐变】不压的话白字压在亮风景上看不清；
+   * 这层是"上浅下深"——上半截留着看清风景，下半截压暗好放按钮和字。 */
+  background: linear-gradient(
+      180deg,
+      rgba(6, 8, 16, 0.3) 0%,
+      rgba(6, 8, 16, 0.62) 55%,
+      rgba(6, 8, 16, 0.9) 100%
+    ),
+    url('../../assets/hero-landscape.jpg') center 42% / cover no-repeat;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.3);
   color: var(--on-accent);
 }
 

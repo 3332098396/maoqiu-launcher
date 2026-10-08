@@ -3504,10 +3504,17 @@ function applyLook(look) {
   if (current && hidden.includes(current.dataset.page)) showPage('launch')
 
   // ② 背景图（Windows 的路径是反斜杠，塞进 url() 里必须换成正斜杠）
-  document.body.style.backgroundImage = settingsLook.background
-    ? `url("${toFileUrl(settingsLook.background)}")`
-    : ''
-  document.body.classList.toggle('has-bg', Boolean(settingsLook.background))
+  //
+  // 【只换图，不碰压色】整页背景在 CSS 里是两层：压色（--page-veil）+ 图（--page-image）。
+  // 压色按主题定好（浅色主题压一层白、深色主题压一层暗），所以换成什么图，
+  // 上面的字都看得清。以前是直接往 body 盖 backgroundImage——顺手把那层压色也顶掉了，
+  // 亮图上的字当场看不清（2026-10-08 用户踩过）。没选图就 removeProperty，
+  // 自动回落到主题自带的那张风景图。
+  if (settingsLook.background) {
+    document.body.style.setProperty('--page-image', `url("${toFileUrl(settingsLook.background)}")`)
+  } else {
+    document.body.style.removeProperty('--page-image')
+  }
 
   // ③ 背景音乐：换一首就重放（同一个文件别打断）
   if (bgmEl.dataset.src !== (settingsLook.bgm || '')) {
