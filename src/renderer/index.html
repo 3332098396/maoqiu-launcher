@@ -312,7 +312,19 @@
               <!-- 3D 皮肤预览（M14.4）：能拖着转，带走路动画 -->
               <section class="panel skin-card">
                 <h3 class="panel__title">皮肤预览</h3>
-                <div class="skin-stage" id="skin-stage"></div>
+                <div class="skin-card__row">
+                  <div class="skin-stage" id="skin-stage"></div>
+                  <!-- 【必须跟用户说清楚的事】(2026-10-09 用户要求，放在预览右边)
+                       游戏里的皮肤是**问账号服务器要的**，离线账号没人可问，
+                       就穿自带的默认皮肤。不说明白，用户会以为"我挑了半天怎么进游戏不是这张"。 -->
+                  <div class="notice notice--skin" id="skin-notice">
+                    <b>这里的皮肤 ≠ 游戏里的皮肤</b>
+                    <span>
+                      游戏里的皮肤问的是账号服务器，跟这儿挑的没关系；<b>离线账号</b>进游戏只会穿官方默认皮肤。
+                      想换皮肤：<b>登录账号</b>（皮肤站 / 正版）在网站上上传，或者<b>给这个版本装皮肤 Mod</b>。
+                    </span>
+                  </div>
+                </div>
                 <div class="modal__actions modal__actions--end">
                   <!-- 换一张的圈（M21）：放在「打开皮肤文件」左边那道
                        点一下随机换一张，**并且记住**——以后就是这张，除非登录账号 -->
@@ -639,19 +651,6 @@
               <button class="btn btn--ghost" type="button" id="skin-site">去皮肤站找皮肤</button>
               <button class="btn btn--primary" type="button" id="skin-upload">上传皮肤…</button>
             </div>
-          </div>
-
-          <!-- 【必须跟用户说清楚的事】(2026-10-09 用户要求)
-               "这里的皮肤 ≠ 游戏里的皮肤"：游戏里的皮肤是**问账号服务器要的**，
-               离线账号没人可问，就穿自带的默认皮肤。不说明白，用户会以为
-               "我在这儿挑了半天，怎么进游戏不是这张"。
-               放在三栏**上面**（不是页面最底下）——这是要先看见的话，
-               不能让人往下滚才看得到。 -->
-          <div class="notice notice--skin" id="skin-notice">
-            <b>这里的皮肤 ≠ 游戏里显示的皮肤</b>
-            <span>
-              游戏里的皮肤问的是账号服务器，跟这儿挑的没关系；<b>离线账号</b>进游戏只会穿官方默认皮肤。想换皮肤：<b>登录账号</b>（皮肤站 / 正版）在网站上上传，或者<b>给这个版本装皮肤 Mod</b>。
-            </span>
           </div>
 
           <div class="skin-cols">

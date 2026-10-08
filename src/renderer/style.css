@@ -956,24 +956,39 @@ button.acc__tab:hover {
   color: var(--accent-strong);
 }
 
+/* 皮肤卡里那两栏：左预览、右提示（M21，用户要求提示放在预览右边） */
+.skin-card__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 250px;
+  gap: 12px;
+  align-items: stretch;
+}
+
+/* 窗口拉窄了就上下堆，别挤成两条缝。
+   【断点别写 1180】主窗口默认就是 1180 宽，写 1180 等于永远命中、两栏永远塌成一列 */
+@media (max-width: 1020px) {
+  .skin-card__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* 皮肤页那条"先说清楚"的说明（M21）
    内容比一般提示长，用一栏一栏的排法，别挤成一大坨 */
 .notice--skin {
   display: flex;
-  flex-direction: row;
-  align-items: baseline;
-  gap: 10px;
+  flex-direction: column;
+  gap: 4px;
   margin-top: 0;
   /* 【高度是量过的】这一条以前有 127px 高，把下面三栏顶到要滚动（用户说"界面比例不对了"）。
      收紧成两行、内边距也小一点，现在约 60px——三栏正好站得下 */
-  padding: 8px 14px;
-  font-size: 12.5px;
+  padding: 8px 12px;
+  font-size: 11.5px;
   line-height: 1.5;
   color: var(--text-dim);
 }
 
 .notice--skin > b {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--accent-strong);
 }
 

@@ -5111,7 +5111,7 @@ async function renderSkinPage() {
     skinAccountBtnEl.hidden = true
   } else {
     skinAccountHintEl.textContent = account
-      ? '离线账号进游戏只会穿官方默认皮肤（想换皮肤请看下面那段）'
+      ? '离线账号进游戏只会穿官方默认皮肤'
       : '登录之后能直接用账号上的皮肤'
     skinAccountBtnEl.hidden = false
   }
