@@ -3058,6 +3058,27 @@ document.getElementById('top-bell').addEventListener('click', () => {
   document.getElementById('log-btn').click()
 })
 
+// ——— 窗口那三个键（M17.4：系统标题栏被我们去掉了，这三个只能自己接）———
+document.getElementById('win-min').addEventListener('click', () => window.api.minimizeWindow())
+document.getElementById('win-max').addEventListener('click', () => window.api.toggleMaximizeWindow())
+document.getElementById('win-close').addEventListener('click', () => window.api.closeWindow())
+
+/**
+ * 最大化的时候，那个按钮要换成"还原"的样子（两个叠起来的方框）。
+ * 【为什么用监听、不只在点击时改】双击顶栏、Win+↑、任务栏右键都能最大化，
+ * 那时候界面这边是被动知道的，只能靠主进程推过来。
+ */
+function paintMaxButton(isMax) {
+  document.getElementById('ico-max').classList.toggle('ico-off', Boolean(isMax))
+  document.getElementById('ico-restore').classList.toggle('ico-off', !isMax)
+  const button = document.getElementById('win-max')
+  button.title = isMax ? '还原' : '最大化'
+  button.setAttribute('aria-label', button.title)
+}
+
+window.api.onMaximizeChange(paintMaxButton)
+window.api.isWindowMaximized().then(paintMaxButton).catch(() => {})
+
 // 点弹窗外面（灰底）也能关
 logModalEl.addEventListener('click', (event) => {
   if (event.target === logModalEl) closeLogModal()

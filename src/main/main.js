@@ -144,6 +144,10 @@ function createWindow() {
     title: '毛球',
     icon: path.join(__dirname, '..', '..', 'assets', 'app-256.png'),
     backgroundColor: '#F2F8FF',
+    // M17.4：标题栏自己画（设计稿右上角画了最小化/最大化），所以不要系统那一条。
+    // 【别忘了】去掉系统边框后，能拖窗口的只剩界面里标了 -webkit-app-region: drag 的那块，
+    // 三个按钮在顶栏右边（见 index.html / style.css）。
+    frame: false,
     show: false, // 先不显示，等页面画好再显示，避免白屏闪烁
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'preload.js'),
@@ -156,6 +160,16 @@ function createWindow() {
   mainWindow.removeMenu()
 
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))
+
+  // 最大化/还原的时候告诉界面一声（双击标题栏、Win+↑ 也能最大化，
+  // 界面不通知就不知道，那个按钮的图标会一直停在错的样式上）
+  const tellMax = (isMax) => () => {
+    if (!mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+      mainWindow.webContents.send('win:maximized', isMax)
+    }
+  }
+  mainWindow.on('maximize', tellMax(true))
+  mainWindow.on('unmaximize', tellMax(false))
 
   // 窗口关掉时把"盯着光标"那个计时器也停了。
   // 【为什么要专门停】窗口没了以后计时器还往界面发消息，Electron 会在控制台
@@ -182,6 +196,30 @@ function createWindow() {
 // ——————————————————————————————————————————————
 // 界面能调用的接口（与 preload 里列出的方法一一对应）
 // ——————————————————————————————————————————————
+
+// ——— 窗口按钮（M17.4：标题栏是自己画的，这三个动作也得自己接）———
+//
+// 【为什么不用 event.sender 里那个窗口】界面送来的东西不能全信；
+// 这里只拿"发消息的那个界面所属的窗口"，不认界面报上来的任何 id。
+
+ipcMain.handle('win:minimize', (event) => {
+  BrowserWindow.fromWebContents(event.sender)?.minimize()
+})
+
+ipcMain.handle('win:toggleMaximize', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win) return
+  if (win.isMaximized()) win.unmaximize()
+  else win.maximize()
+})
+
+ipcMain.handle('win:close', (event) => {
+  BrowserWindow.fromWebContents(event.sender)?.close()
+})
+
+ipcMain.handle('win:isMaximized', (event) =>
+  Boolean(BrowserWindow.fromWebContents(event.sender)?.isMaximized())
+)
 
 /** 当前正在跑的安装任务（同时只允许一个） */
 let currentInstall = null

@@ -50,6 +50,33 @@
               <circle cx="12" cy="18.2" r="1.6" fill="currentColor" />
             </svg>
           </button>
+          <!-- 窗口那三个键（M17.4）：设计稿右上角画的就是最小化/最大化，
+               这里再补一个关闭——不给关闭按钮用户就关不掉窗口了 -->
+          <button class="topbar__icon topbar__icon--win" type="button" id="win-min" title="最小化" aria-label="最小化">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+              <path d="M6 12h12" />
+            </svg>
+          </button>
+          <button class="topbar__icon topbar__icon--win" type="button" id="win-max" title="最大化" aria-label="最大化">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
+              <g id="ico-max"><rect x="5" y="5" width="14" height="14" rx="2.5" /></g>
+              <g id="ico-restore" class="ico-off">
+                <path d="M8.6 8.4V5.4A2.4 2.4 0 0 1 11 3h7.6A2.4 2.4 0 0 1 21 5.4V13a2.4 2.4 0 0 1-2.4 2.4h-3.1" />
+                <rect x="3" y="8.4" width="12.6" height="12.6" rx="2.4" />
+              </g>
+            </svg>
+          </button>
+          <button
+            class="topbar__icon topbar__icon--win topbar__icon--close"
+            type="button"
+            id="win-close"
+            title="关闭"
+            aria-label="关闭"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+              <path d="m7.5 7.5 9 9M16.5 7.5l-9 9" />
+            </svg>
+          </button>
         </div>
       </header>
 

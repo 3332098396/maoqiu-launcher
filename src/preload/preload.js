@@ -13,6 +13,27 @@ contextBridge.exposeInMainWorld('api', {
   /** 界面可以读取自己的版本号，用来显示在页脚 */
   appVersion: '0.1.0',
 
+  // ——— 窗口按钮（M17.4：标题栏是自己画的，最小化/最大化/关闭也得自己来）———
+
+  minimizeWindow: () => ipcRenderer.invoke('win:minimize'),
+  toggleMaximizeWindow: () => ipcRenderer.invoke('win:toggleMaximize'),
+  closeWindow: () => ipcRenderer.invoke('win:close'),
+
+  /** 现在是不是最大化的状态（界面上那个按钮要换图标）*/
+  isWindowMaximized: () => ipcRenderer.invoke('win:isMaximized'),
+
+  /**
+   * 窗口最大化/还原时通知界面一声。
+   * 【为什么要通知】双击标题栏、或者按系统的快捷键（Win+↑）也能最大化，
+   * 那时候界面不知道，按钮图标就会停在错的样式上。
+   * @returns {() => void} 取消订阅
+   */
+  onMaximizeChange: (callback) => {
+    const listener = (_event, isMax) => callback(isMax)
+    ipcRenderer.on('win:maximized', listener)
+    return () => ipcRenderer.removeListener('win:maximized', listener)
+  },
+
   // ——— 版本清单（M2）———
 
   /**

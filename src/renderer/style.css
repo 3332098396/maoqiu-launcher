@@ -428,6 +428,9 @@ body {
   background: var(--topbar-gradient);
   color: var(--on-topbar);
   box-shadow: 0 2px 12px var(--accent-shadow);
+  /* 系统边框去掉了（M17.4），所以"能拖着窗口走"这件事得顶栏自己声明。
+     这一整条都能拖，连双击最大化也是系统给的。 */
+  -webkit-app-region: drag;
 }
 
 /* 名字用绝对定位钉在正中间——这样右边图标多一个少一个都不会把它挤歪 */
@@ -459,6 +462,9 @@ body {
   border-radius: 11px;
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease;
+  /* 【必须写】顶栏整条是"拖动区"，拖动区里的鼠标事件是被系统吃掉的——
+     不声明 no-drag 的话这几个按钮点不动。 */
+  -webkit-app-region: no-drag;
 }
 
 .topbar__icon:hover {
@@ -470,6 +476,21 @@ body {
   display: block;
   width: 18px;
   height: 18px;
+}
+
+/* 窗口那三个键：圆角小一点、关掉键悬停变红（跟系统标题栏一个习惯）*/
+.topbar__icon--win {
+  border-radius: 8px;
+}
+
+.topbar__icon--close:hover {
+  color: #fff;
+  background: #e5484d;
+}
+
+/* 切换用的：两个图标叠在一个 svg 里，显示哪个由这个类说了算 */
+.ico-off {
+  display: none;
 }
 
 /* 三个页面按钮，居中摆放 */
