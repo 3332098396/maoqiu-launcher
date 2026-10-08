@@ -1065,8 +1065,20 @@ function registerIpcHandlers() {
 
   /** 挑一个皮肤文件（M14.4：3D 预览用）。只返回路径，不复制文件 */
   ipcMain.handle('skin:pick', async () => {
+    // 【从皮肤文件夹开始】（用户 2026-10-09 反馈：点"打开皮肤文件"跳到了下载文件夹）
+    // 这个按钮叫"打开皮肤文件"，那打开的时候就该站在皮肤文件堆里——
+    // 随包发的那几张、用户自己传的，都在这个文件夹。
+    // （皮肤页那个「上传皮肤…」不设起始目录，那是"从别处导入"，让 Windows 记住上次的位置更顺手）
+    const start = skins.skinsDir()
+    try {
+      paths.ensureDir(start)
+    } catch {
+      // 建不出来就让系统自己决定开在哪
+    }
+
     const result = await dialog.showOpenDialog({
       title: '挑一张 Minecraft 皮肤（64×64 的 PNG）',
+      defaultPath: fs.existsSync(start) ? start : undefined,
       properties: ['openFile'],
       filters: [{ name: '皮肤', extensions: ['png'] }]
     })
