@@ -370,6 +370,8 @@
               <h3 class="panel__title">创建房间</h3>
               <p class="panel__desc">
                 建一个房间，会生成一串房间码。把它发给好友，他们输进来就能和你联机。
+                <b>建之前得先在游戏里把世界「对局域网开放」</b>——毛球要先知道端口，
+                才知道该把哪个地址发给好友。
               </p>
               <button class="btn btn--primary btn--block" type="button" id="online-create">
                 创建房间
@@ -1048,6 +1050,28 @@
     <audio id="bgm" loop preload="none"></audio>
 
     <!-- 顶栏「日志」按钮点开的窗口 -->
+    <!-- 「还没开局域网就想建房」的提醒（M17.x）
+         用户定的规矩：世界没对局域网开放，就不许建房。 -->
+    <div class="modal" id="lan-modal" hidden>
+      <div class="modal__box modal__box--form">
+        <div class="modal__head">
+          <span class="modal__title">还差一步：先去游戏里开局域网</span>
+        </div>
+        <p class="panel__desc">
+          毛球得先从游戏那儿拿到端口号，才知道该把哪个地址发给好友。
+          所以<b>建房间之前，先在游戏里做这三步</b>：
+        </p>
+        <ol class="frp-steps">
+          <li>在毛球里点「开始游戏」，进一个世界（专门新开一个也行）</li>
+          <li>按 <b>Esc</b> → 点「<b>对局域网开放</b>」→ 再点「开放局域网世界」</li>
+          <li>回到这个页面，点「创建房间」——这时候就能建了</li>
+        </ol>
+        <div class="modal__actions modal__actions--end">
+          <button class="btn btn--primary" type="button" id="lan-modal-ok">知道了</button>
+        </div>
+      </div>
+    </div>
+
     <div class="modal" id="log-modal" hidden>
       <div class="modal__box">
         <div class="modal__head">

@@ -1306,7 +1306,10 @@ button.acc__tab:hover {
   width: min(880px, 100%);
   height: min(560px, 100%);
   padding: 16px 18px;
-  background: var(--surface);
+  /* 【为什么不用 --surface】M17.x 把各主题的面都调成半透明了（好让整页背景图透出来），
+     弹窗要是也跟着透，背后那些字会和弹窗内容叠在一起，看着糊。
+     所以弹窗单独用 0.95 那一档。 */
+  background: var(--surface-a95);
   border-radius: var(--card-radius);
   box-shadow: 0 18px 50px var(--overlay);
 }

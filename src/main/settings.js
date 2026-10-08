@@ -108,6 +108,8 @@ const DEFAULTS = {
      * versions\<版本号>\，"设过了"这件事要按目录各算各的，
      * 否则隔离后的新目录会被漏掉，游戏又变回英文
      */
+    languageAppliedDirs: [],
+    /** 老配置里那个单值字段，读的时候还认，不再写 */
     languageAppliedDir: '',
     /** 游戏窗口多大（像素）。默认就是游戏自己的标准尺寸 */
     windowWidth: 854,

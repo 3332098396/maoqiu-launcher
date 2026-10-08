@@ -1322,6 +1322,11 @@ window.api.onLaunchState((payload) => {
     setNotice('游戏已经启动了。这个窗口可以最小化，不影响游戏。', 'ok')
   } else if (payload.state === 'exited') {
     launching = false
+    // 游戏一退，"世界对局域网开放"这件事就没了——端口清零。
+    // 【为什么必须清】"有没有开局域网"就是靠 lanPort 判断的（用户定的规矩：
+    // 没开局域网不许建房）。不清的话，上次玩剩的端口号会让判断一直为真，
+    // 用户明明没开也能建房，那个提醒就形同虚设。
+    lanPort = 0
     refreshLaunchUi()
     if (payload.ok) {
       setNotice('游戏正常退出了。可以再点「开始游戏」重新玩。', 'ok')
@@ -3146,6 +3151,8 @@ const onlineStatusTextEl = document.getElementById('online-status-text')
 const onlineCodeInputEl = document.getElementById('online-code-input')
 const onlineJoinHintEl = document.getElementById('online-join-hint')
 const onlineCreateEl = document.getElementById('online-create')
+/** "还没开局域网就想建房"时弹的那个提醒（M17.x）*/
+const lanModalEl = document.getElementById('lan-modal')
 const onlineJoinEl = document.getElementById('online-join')
 const onlineCopyEl = document.getElementById('online-copy')
 const onlineLeaveEl = document.getElementById('online-leave')
@@ -3290,11 +3297,14 @@ function renderOnline() {
   // 房主和访客要做的事不一样，提示也分开写。
   // 房主那边还分两种情况：世界还没对局域网开放 / 已经开了（抓到端口了）
   if (isHost) {
+    // 【为什么不再提醒"去开局域网"】用户定的规矩是"世界没对局域网开放就不许建房"
+    // （见下面 onlineCreateEl 的点击处理），所以能走到这一步就说明已经开好了——直接给地址。
+    // 剩下这条兜底是给"建房以后游戏退了"（lanPort 会被清零）准备的。
     onlineTipEl.textContent = lanPort
       ? `世界已经开放了。把这个地址发给好友，让他在游戏里用「直接连接」填进去：` +
         `${HOST_VIRTUAL_IP}:${lanPort}（他的多人游戏列表里多半也会自动出现）`
-      : '让好友在毛球里「加入房间」，把这个房间码填进去。然后你进游戏开一个世界，' +
-        '按 Esc 点「对局域网开放」——开了之后这里会显示要发给好友的地址。'
+      : '世界好像关掉了（游戏退出了？）。重新进游戏、开一个世界、按 Esc 点「对局域网开放」，' +
+        '然后回来重新创建一次房间。'
   } else {
     onlineTipEl.textContent =
       '已经进房间了。等房主开好世界，去游戏里点「多人游戏」——列表里应该能看到；' +
@@ -3408,7 +3418,24 @@ async function startOnline(role) {
   }
 }
 
-onlineCreateEl.addEventListener('click', () => startOnline('host'))
+// 「创建房间」：**世界没对局域网开放就不让建**（用户 2026-10-08 定的规矩）。
+// 【怎么判断"开了没"】看 lanPort —— 它是从游戏日志里抓到的端口号
+// （游戏里点「对局域网开放」时会打一行 `Started serving on 54321`）。
+// 游戏一退出，主进程会推 exited，那边把 lanPort 清零。
+onlineCreateEl.addEventListener('click', () => {
+  if (!lanPort) {
+    lanModalEl.hidden = false
+    return
+  }
+  startOnline('host')
+})
+document.getElementById('lan-modal-ok').addEventListener('click', () => {
+  lanModalEl.hidden = true
+})
+lanModalEl.addEventListener('click', (event) => {
+  // 点弹窗外面（灰底）也能关
+  if (event.target === lanModalEl) lanModalEl.hidden = true
+})
 onlineJoinEl.addEventListener('click', () => startOnline('guest'))
 onlineCodeInputEl.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') startOnline('guest')
