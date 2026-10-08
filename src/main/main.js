@@ -621,7 +621,12 @@ function registerIpcHandlers() {
     if (launch.isRunning()) {
       return { ok: false, error: '游戏正在运行，先关掉游戏再删' }
     }
-    return versions.deleteVersion(id, known(dir))
+    const result = versions.deleteVersion(id, known(dir))
+    // 删完顺手清掉"这些目录设过中文"的记录（M17.x）。
+    // 【为什么】用户"删掉版本重新下"之后，目录还是同一个名字，记录却还留着——
+    // 新版本会被当成"设过了"，进去是英文（用户 2026-10-08 实测碰到）。
+    if (result && result.ok) launch.forgetLanguageForMissingDirs()
+    return result
   })
 
   /**
@@ -1341,6 +1346,14 @@ app.whenReady().then(() => {
     }
   } catch (error) {
     console.warn('[启动器] 清理残留联机进程时出错：', error.message)
+  }
+
+  // 顺手清掉"设过中文"记录里那些**目录已经不在了**的（M17.x）。
+  // 用户手动删过 versions 目录时也能清到——不然新下的同名版本会被当成"设过了"，进游戏是英文。
+  try {
+    launch.forgetLanguageForMissingDirs()
+  } catch {
+    // 清不掉不影响用，下次启动还会再试
   }
 
   createSplash() // 开场动画（M17.4）——先盖着，主窗口画好了再收

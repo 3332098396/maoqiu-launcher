@@ -350,19 +350,24 @@ function ensureGameLanguage(gameDir, log) {
       ? [config.launch.languageAppliedDir]
       : []
 
-  // 这个游戏目录已经设过了？那就不碰（用户自己改了就再也不管）
-  if (done.includes(gameDir)) return
-
   const file = paths.gameOptionsFile(gameDir)
 
   try {
     const exists = fs.existsSync(file)
     const text = exists ? fs.readFileSync(file, 'utf8') : ''
 
+    // 【选项文件都不在了，就当没设过】用户"把版本删了重新下"的时候，
+    // 目录还是那个目录（`versions/26.3`），配置里也还记着"设过了"，
+    // 但 options.txt 早跟着版本一起被删了——这时候必须重新设一次，
+    // 不然新下下来的版本进去就是英文（用户 2026-10-08 实测碰到）。
+    // 所以"记过没"这个判断要**和文件在不在一起看**，光看记录不行。
+    if (exists && done.includes(gameDir)) return
+
     // 已经是中文了：不用改，只记一笔"这个目录做过了"
     // （用 [ \t] 而不是 \s：\s 会把行尾换行也吃掉，语义不干净）
     if (/^lang:zh_cn[ \t]*$/m.test(text)) {
-      settings.writeConfig({ launch: { languageAppliedDirs: [...done, gameDir] } })
+      // 用 Set 去个重：同一个目录被设两次的话，列表里会攒重复项，越攒越长
+      settings.writeConfig({ launch: { languageAppliedDirs: [...new Set([...done, gameDir])] } })
       return
     }
 
@@ -379,7 +384,8 @@ function ensureGameLanguage(gameDir, log) {
     fs.writeFileSync(temp, next, 'utf8')
     fs.renameSync(temp, file)
 
-    settings.writeConfig({ launch: { languageAppliedDirs: [...done, gameDir] } })
+    // 用 Set 去个重（同一个目录可能被走到两次，不然列表会攒重复项）
+    settings.writeConfig({ launch: { languageAppliedDirs: [...new Set([...done, gameDir])] } })
     if (log) log.line('[启动器] 第一次用这个目录，已把游戏语言设成简体中文（你以后自己改了，就不会再动它）')
   } catch (error) {
     // 设不上不该拦着玩游戏，记一笔就算了
@@ -823,10 +829,19 @@ async function launch(versionId, options = {}) {
   // 抓到这个端口号，联机那边就能算出"把这个地址发给好友：10.126.126.1:54321"——
   // 省得用户自己去日志里翻。
   //
-  // 【这两句是怎么确认的】没靠记忆：直接把游戏的 jar 解开，
-  // 在里面的类文件里搜文本，找到了 `Started serving on {}`（1.20.1 用的就是它）。
-  // 另一句是别的版本用的，一起认着，反正匹配不上也没有副作用。
-  const lanPattern = /(?:Started serving on|Local game hosted on port)\s*[:：]?\s*(\d+)/i
+  // 【这些文案是哪来的】没靠记忆，一条条摸出来的：
+  //   `Started serving on {}`          1.20.1 —— 解开游戏 jar、在类文件里搜字符串搜到的
+  //   `Local game hosted on port {}`    另一个版本用的
+  //   `Published LAN server on port {}` **26.3** —— 2026-10-08 用户实测：
+  //       他明明开了局域网，毛球就是不认。翻他的游戏日志才看到文案换了
+  //       （`[Render thread/INFO]: Published LAN server on port 57003`）。
+  // 【为什么要写后面那条兜底】这文案每个大版本都可能换一次，一条条加迟早又漏。
+  // 兜底那条只要同一行里同时出现"LAN"和"port"、后头跟个 2~5 位数字就认——
+  // 限制够严，不至于误伤别的日志行。
+  // 【只能有一个捕获组】下面直接取 match[1]，写成好几个分支（每个带一个组）的话
+  // 没命中的那些组是 undefined，取出来就是 NaN
+  const lanPattern =
+    /(?:(?:Started serving on|Local game hosted on|Published LAN server on)\s+(?:port\s*)?|LAN[^\d\n]{0,40}port[^\d\n]{0,20})(\d{2,5})/i
 
   const log = createLogCollector({
     onLog,
@@ -930,4 +945,31 @@ async function launch(versionId, options = {}) {
   }
 }
 
-module.exports = { launch, isRunning, buildCommand, explainExit, ensureGameLanguage }
+/**
+ * 把"这个目录设过中文"的记录里、**目录已经不在了**的那些剔掉。
+ *
+ * 【为什么要做】那份记录是按目录存的。用户"删掉版本重新下"之后，目录还是同一个名字
+ * （`versions/26.3`），记录却还留着——于是新下下来的版本被当成"设过了"，进去是英文
+ * （用户 2026-10-08 实测碰到）。删版本时顺手清一遍，或者毛球启动时清一遍。
+ */
+function forgetLanguageForMissingDirs() {
+  const config = settings.readConfig()
+  const done = Array.isArray(config.launch.languageAppliedDirs)
+    ? config.launch.languageAppliedDirs
+    : []
+  if (!done.length) return false
+
+  const alive = done.filter((one) => {
+    try {
+      return fs.existsSync(one)
+    } catch {
+      return false
+    }
+  })
+  if (alive.length === done.length) return false
+
+  settings.writeConfig({ launch: { languageAppliedDirs: alive } })
+  return true
+}
+
+module.exports = { launch, isRunning, buildCommand, explainExit, ensureGameLanguage, forgetLanguageForMissingDirs }
