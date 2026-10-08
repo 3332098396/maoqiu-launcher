@@ -14,6 +14,7 @@
 //
 // 当前进度：M9。
 
+const fs = require('node:fs')
 const path = require('node:path')
 const paths = require('./paths')
 const versions = require('./versions')
@@ -37,25 +38,101 @@ function canInstall(type) {
  *
  * 【dir 别漏】漏了就会"在 A 目录的版本上点了下载，文件落进 B 目录"，
  * 而界面上一路都是成功的——最难查的那种错。
+ *
+ * @param {string} [saveFolder] 数据包专用：存档文件夹的完整路径（见下面 listSaves 的说明）
  */
-function targetDir(versionId, type, dir) {
+function targetDir(versionId, type, dir, saveName, saveFolder) {
+  // 数据包比别的多一层：它得放进**某一个存档**里才生效（`saves\<存档名>\datapacks\`），
+  // 不像 Mod 那样扔进公共文件夹就行。
+  if (type === 'datapack') {
+    // 界面挑存档的时候会把它所在的文件夹一起带回来——因为存档可能在
+    // "版本自己的 saves"里，也可能在公共的 `.minecraft\saves` 里（见 listSaves）。
+    // 但**仍然卡一道**：必须在这个游戏目录里面，别让它指到别处去。
+    if (saveFolder) {
+      const target = path.resolve(String(saveFolder))
+      const root = path.resolve(paths.gameDir(dir))
+      if (target === root || !target.startsWith(root + path.sep)) {
+        return null
+      }
+      return path.join(target, saveName, 'datapacks')
+    }
+    if (!saveName) return null
+    return path.join(versions.folderFor(versionId, 'saves', dir), saveName, 'datapacks')
+  }
+
+  // 整合包装完的结果是**一个完整的版本**（不像别的是"扔进某个文件夹"），
+  // 所以它的"文件夹"就是那个版本自己的目录
+  if (type === 'modpack') {
+    if (!versionId) return null
+    return versions.folderFor(versionId, 'version', dir)
+  }
+
   const folder = CONTENT_FOLDER[type]
   if (!folder) return null
   return versions.folderFor(versionId, folder, dir)
 }
 
 /**
+ * 列出这个版本能看见的存档（数据包要往里装，得先让用户挑一个）。
+ * 【怎么认】存档文件夹里有个 `level.dat` —— 游戏就是这么认的。
+ *
+ * 【为什么两处都找】开了版本隔离（**默认就是开的**）之后，存档在这个版本自己的
+ * 文件夹里（`versions\<版本>\saves`）；可用户以前用别的启动器建的、或者关了隔离
+ * 的版本用的存档，在公共的 `.minecraft\saves` 里。只找一处的话，用户天天玩的那个
+ * 世界根本不出现在列表里，他会以为"毛球把我存档弄丢了"。
+ *
+ * @returns {Array<{name: string, mtime: number, folder: string, where: string}>}
+ *   folder 是存档所在的文件夹（装的时候要原样带回去）
+ */
+function listSaves(versionId, dir) {
+  const roots = []
+  const own = versions.folderFor(versionId || '', 'saves', dir)
+  if (own) roots.push({ path: own, where: '这个版本' })
+  const shared = paths.savesDir(dir)
+  if (shared && !roots.some((one) => paths.sameDir(one.path, shared))) {
+    roots.push({ path: shared, where: '公共' })
+  }
+
+  const out = []
+  const seen = new Set()
+  for (const root of roots) {
+    let names = []
+    try {
+      names = fs.readdirSync(root.path)
+    } catch {
+      continue // 这个文件夹还不存在 = 那边一个存档都没有
+    }
+    for (const name of names) {
+      if (seen.has(name)) continue
+      const level = path.join(root.path, name, 'level.dat')
+      let info
+      try {
+        info = fs.statSync(level)
+      } catch {
+        continue // 没有 level.dat 的不算存档（可能是备份、或者建了一半）
+      }
+      seen.add(name)
+      out.push({ name, mtime: info.mtimeMs, folder: root.path, where: root.where })
+    }
+  }
+  // 最近玩过的排前面
+  out.sort((a, b) => b.mtime - a.mtime)
+  return out
+}
+
+/**
  * 下载一个文件并放到该放的地方。
  *
- * @param {{versionId: string, type: string,
+ * @param {{versionId: string, type: string, saveName?: string,
  *          file: {url: string, filename: string, sha1?: string, size?: number},
  *          onProgress?: Function}} options
  * @returns {Promise<{ok: boolean, path?: string, dir?: string, skipped?: boolean, error?: string}>}
  */
 async function installFile(options) {
-  const { versionId, type, file, onProgress, dir: gameDir } = options
+  const { versionId, type, file, onProgress, dir: gameDir, saveName, saveFolder } = options
 
-  const dir = targetDir(versionId, type, gameDir)
+  // saveName / saveFolder 只有数据包用得上（要指定装进哪个存档）
+  const dir = targetDir(versionId, type, gameDir, saveName, saveFolder)
   if (!dir) {
     return { ok: false, error: `「${type}」这种内容还不能自动放好` }
   }
@@ -96,4 +173,4 @@ async function installFile(options) {
   return { ok: true, path: saveTo, dir, skipped: stats.skipped > 0 }
 }
 
-module.exports = { installFile, targetDir, canInstall, CONTENT_FOLDER }
+module.exports = { installFile, targetDir, canInstall, listSaves, CONTENT_FOLDER }

@@ -3000,3 +3000,48 @@ body[data-theme='amber'] {
   --rail-on-bg: rgba(255, 194, 138, 0.16);
   --rail-on-fg: #ffc28a;
 }
+
+/* ——— 装数据包时的"选世界"列表（M17.x）——— */
+.savelist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.save-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  font-family: var(--font);
+  font-size: 13px;
+  text-align: left;
+  color: var(--text-dim);
+  background: var(--surface-soft);
+  border: 1px solid var(--card-border);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.save-item:hover {
+  color: var(--text);
+  background: var(--surface-accent);
+  border-color: var(--card-border-hover);
+}
+
+.save-item__name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.save-item__when {
+  flex: 0 0 auto;
+  font-size: 12px;
+  opacity: 0.75;
+}

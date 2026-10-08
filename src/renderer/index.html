@@ -497,8 +497,8 @@
             <span class="menu__item" data-dl-tab="installed">已安装</span>
             <span class="menu__divider">社区资源（来自 Modrinth）</span>
             <span class="menu__item" data-dl-cat="mod">Mod</span>
-            <span class="menu__item menu__item--off" title="下一步就做">整合包</span>
-            <span class="menu__item menu__item--off" title="下一步就做">数据包</span>
+            <span class="menu__item" data-dl-cat="modpack">整合包</span>
+            <span class="menu__item" data-dl-cat="datapack">数据包</span>
             <span class="menu__item" data-dl-cat="resourcepack">资源包</span>
             <span class="menu__item" data-dl-cat="shader">光影包</span>
           </nav>
@@ -1050,6 +1050,25 @@
     <audio id="bgm" loop preload="none"></audio>
 
     <!-- 顶栏「日志」按钮点开的窗口 -->
+    <!-- 装数据包前先挑一个存档（M17.x）。
+         数据包跟单个世界走（放 saves\<世界>\datapacks\），不像 Mod 扔进公共文件夹就行。 -->
+    <div class="modal" id="save-modal" hidden>
+      <div class="modal__box modal__box--form">
+        <div class="modal__head">
+          <span class="modal__title">装到哪个世界？</span>
+        </div>
+        <p class="panel__desc">
+          数据包是<b>跟着单个世界走的</b>——装进去之后，只有那个世界能用它。
+          挑一个吧（最近玩过的排在最前面）：
+        </p>
+        <div class="savelist" id="save-list"></div>
+        <p class="delbox" id="save-hint"></p>
+        <div class="modal__actions modal__actions--end">
+          <button class="btn btn--ghost" type="button" id="save-cancel">取消</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 「还没开局域网就想建房」的提醒（M17.x）
          用户定的规矩：世界没对局域网开放，就不许建房。 -->
     <div class="modal" id="lan-modal" hidden>

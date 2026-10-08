@@ -15,6 +15,7 @@
 
 const { app, BrowserWindow, ipcMain, shell, screen, dialog } = require('electron')
 const fs = require('node:fs')
+const os = require('node:os')
 const path = require('node:path')
 const mojang = require('./mojang')
 const install = require('./install')
@@ -32,6 +33,7 @@ const cleanup = require('./cleanup')
 const backup = require('./backup')
 const modrinth = require('./modrinth')
 const content = require('./content')
+const downloader = require('./downloader')
 const pack = require('./pack')
 const online = require('./online')
 const frp = require('./frp')
@@ -1235,6 +1237,37 @@ function registerIpcHandlers() {
    * 下载一个项目，放到该放的地方。
    * 自动挑一个合适的文件：优先正式版、优先支持这个游戏版本的。
    */
+  /**
+   * 这个版本能看见的存档（装数据包时要挑一个）。
+   * 【为什么让主进程列】存档目录在游戏目录里，界面那边碰不到文件系统。
+   */
+  ipcMain.handle('saves:list', (_event, versionId, dir) => {
+    try {
+      return { ok: true, saves: content.listSaves(versionId || '', known(dir)) }
+    } catch (error) {
+      return { ok: false, error: error.message }
+    }
+  })
+
+  /**
+   * 打开"刚下好的东西"所在的那个文件夹（「下载」页那个按钮）。
+   * 【为什么不复用 versions:openFolder】数据包藏在某个世界的里面，
+   * 而且那个世界可能在公共 saves 里、也可能在版本自己的 saves 里——
+   * 这里直接拿**当初算出来的那条路径**（同一段代码），保证跟装进去的位置一致。
+   */
+  ipcMain.handle('content:openFolder', async (_event, options) => {
+    try {
+      const { versionId, type, saveName, saveFolder } = options || {}
+      const dir = content.targetDir(versionId || '', type, known(options?.dir), saveName, saveFolder)
+      if (!dir) return { ok: false, error: '不知道这个文件夹在哪儿' }
+      paths.ensureDir(dir)
+      const failed = await shell.openPath(dir)
+      return failed ? { ok: false, error: failed } : { ok: true, dir }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
   ipcMain.handle('modrinth:install', async (event, options) => {
     if (contentRunning) return { ok: false, error: '已经有一个下载在跑了，等它完成' }
 
@@ -1246,11 +1279,25 @@ function registerIpcHandlers() {
       // 筛选用"游戏版本"（装了 Fabric 的版本要顺着继承找到 26.3），
       // 但**放文件还是放进选中的那个版本**（Mod 就要放进 Fabric 版本的 mods 里），
       // 而且是**它那个游戏目录**里的那个版本
+      //
+      // 【只有 Mod 能按加载器筛】资源包在 Modrinth 那边挂的 loaders 是 `minecraft`、
+      // 光影包是 `iris`/`optifine`、数据包是 `datapack`——**都不是** fabric/forge。
+      // 拿 "fabric" 去筛它们会一个文件都匹配不到，界面上看着就是"这个项目没有文件"
+      // （以前只测过纯原版版本，那会儿 loader 是空的，所以没露出来）。
+      // 整合包也是：它自带加载器（fabric/forge 由包决定），不能拿当前版本的加载器去筛。
+      //
+      // 游戏版本按**界面上那个筛选**来（"只搜当前版本" / "所有版本"）——
+      // 界面上写着"所有版本"却挑了个只给 26.3 的构建，用户看到的就是
+      // "我明明选的所有版本，怎么给我装了个老版本"。界面没传就按选中的版本算。
+      const gameVersion =
+        options.gameVersion !== undefined
+          ? resolveGameVersion(options.gameVersion || '')
+          : resolveGameVersion(versionId || '', where)
       const list = await modrinth.getVersions(projectId, {
-        gameVersion: resolveGameVersion(versionId || '', where),
-        loader: loaderSlugFor(versionId || '', where)
+        gameVersion,
+        loader: type === 'mod' ? loaderSlugFor(versionId || '', where) : ''
       })
-      const best = modrinth.pickBest(list)
+      const best = modrinth.pickBest(list, type)
 
       if (!best) {
         return {
@@ -1261,10 +1308,67 @@ function registerIpcHandlers() {
         }
       }
 
+      // ——— 整合包：走"整套安装"，不是"放进某个文件夹" ———
+      // 整合包是一整套东西（游戏版本 + 配置 + 一堆 Mod），所以交给 M11.1 那条
+      // "本地包"安装流程去办：先下到一个临时文件，再让 pack.installPack 解压安装。
+      // 装完把临时文件删掉——它可能几百 MB，留着白占地方。
+      if (type === 'modpack') {
+        // 整合包会连带装一整个游戏版本，可能跑好几分钟。
+        // 跟"拖进来的整合包"共用一把锁——两边同时装会互相踩（都在写 versions\ 和库文件）
+        if (packRunning) return { ok: false, error: '已经有一个整合包在装了，等它完成' }
+        packRunning = true
+
+        const temp = path.join(os.tmpdir(), `maoqiu-modpack-${Date.now()}.mrpack`)
+        const send = (channel, payload) => {
+          if (!event.sender.isDestroyed()) event.sender.send(channel, payload)
+        }
+        try {
+          // 用和别的内容同一套下载器：它自带"换源、重试、校验哈希、下完才改名"，
+          // 而且进度字段跟界面那边对得上（自己手搓一个的话，进度条和失败处理都得重写一遍）
+          const task = downloader.createTask(
+            [
+              {
+                name: best.file.filename || 'pack.mrpack',
+                url: best.file.url,
+                saveTo: temp,
+                sha1: best.file.sha1 || '',
+                size: Number(best.file.size) || 0
+              }
+            ],
+            { onProgress: (stats) => send('content:progress', stats) }
+          )
+          const stats = await task.start()
+          if (stats.failed > 0) {
+            const first = stats.failures && stats.failures[0]
+            return { ok: false, error: first ? first.error : '整合包下载失败' }
+          }
+
+          const installed = await pack.installPack(temp, {
+            dir: where,
+            onStage: (text) => send('pack:stage', text),
+            onProgress: (stats) => send('pack:progress', stats),
+            onTask: (task) => {
+              currentInstallTask = task
+            }
+          })
+          return { ...installed, versionName: best.name, dir: where, filename: best.file.filename || '' }
+        } finally {
+          packRunning = false
+          try {
+            fs.rmSync(temp, { force: true })
+          } catch {
+            // 删不掉就算了（临时目录系统自己会清）
+          }
+        }
+      }
+
       const result = await content.installFile({
         versionId,
         type,
         dir: where,
+        // saveName / saveFolder 只有数据包用得上（要指定装进哪个存档）
+        saveName: options.saveName,
+        saveFolder: options.saveFolder,
         file: best.file,
         onProgress: (stats) => {
           if (!event.sender.isDestroyed()) event.sender.send('content:progress', stats)

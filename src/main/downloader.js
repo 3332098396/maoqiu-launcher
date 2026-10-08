@@ -270,9 +270,17 @@ async function downloadOneFile(file, { signal, preferMirror, onBytes, sourcePref
 
   // 当前偏向的源排第一，另一个排第二。
   // 这样"偏向的那个不行"时能立刻换另一个，不用等重试。
+  //
+  // "官方那条路"可能有两个域名（见 mirror.js 的 officialFastPair）：
+  // Modrinth 的 cdn-raw 国内实测比 cdn 快 300 倍。快的排前面、慢的垫后面当退路，
+  // **两个都是官方的**，所以跟"只用官方"的设置不冲突。
+  const official = mirror.officialFastPair(file.url)
   const candidates = []
   if (preferMirror && mirrorUrl) candidates.push({ url: mirrorUrl, isMirror: true })
-  candidates.push({ url: file.url, isMirror: false })
+  candidates.push({ url: official ? official.fast : file.url, isMirror: false })
+  if (official && official.slow !== official.fast) {
+    candidates.push({ url: official.slow, isMirror: false })
+  }
   // 用户选了"只用官方"就绝不碰镜像（设置里写的明白，不能偷着用）
   if (!preferMirror && mirrorUrl && sourcePreference !== 'official') {
     candidates.push({ url: mirrorUrl, isMirror: true })
@@ -400,7 +408,17 @@ function createTask(files, options = {}) {
       skipped: skippedCount,
       failed: failedCount,
       remaining: list.length - doneCount - failedCount,
-      percent: list.length > 0 ? Math.round((doneCount / list.length) * 100) : 0,
+      // 【只有一个文件时按字节算】下 Mod / 整合包就是"一个文件"，
+      // 按"下完了几个文件"算的话，一个 96 MB 的整合包全程显示 0%，
+      // 最后突然跳到 100%——看着就像卡死了（实测：6 秒下完，进度条纹丝不动）
+      percent:
+        list.length > 1
+          ? Math.round((doneCount / list.length) * 100)
+          : totalBytes > 0
+            ? Math.min(100, Math.round((received / totalBytes) * 100))
+            : doneCount > 0
+              ? 100
+              : 0,
       totalBytes,
       receivedBytes: received,
       speed: perSecond,

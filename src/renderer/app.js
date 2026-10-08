@@ -1405,9 +1405,46 @@ let mrBusy = false
 /** 上一次下载的结果（「打开文件夹」要用） */
 let mrLastResult = null
 
-const MR_TYPE_NAMES = { mod: 'Mod', resourcepack: '资源包', shader: '光影包' }
-/** 内容类型 → 游戏里的文件夹（打开文件夹时用） */
-const MR_FOLDER_KEY = { mod: 'mods', resourcepack: 'resourcepacks', shader: 'shaderpacks' }
+const MR_TYPE_NAMES = {
+  mod: 'Mod',
+  modpack: '整合包',
+  datapack: '数据包',
+  resourcepack: '资源包',
+  shader: '光影包'
+}
+/**
+ * 内容类型 → 游戏里的文件夹（打开文件夹时用）。
+ * 【整合包 / 数据包不在表里】它们的落点算起来不这么直白（整合包是一个版本目录、
+ * 数据包藏在某个世界里面），统一交给主进程按"当初装进去的那段逻辑"重算一遍，
+ * 见下面 openContentFolder 那一段。
+ */
+const MR_FOLDER_KEY = {
+  mod: 'mods',
+  resourcepack: 'resourcepacks',
+  shader: 'shaderpacks'
+}
+
+/** 搜索框里的提示语跟着分类变——不然用户在整合包分类里看到"比如 sodium"会懵 */
+const MR_PLACEHOLDERS = {
+  mod: '搜索，比如 sodium、光影名…',
+  modpack: '搜索整合包，比如 匠魂、RLCraft…',
+  datapack: '搜索数据包，比如 更好的刷怪…',
+  resourcepack: '搜索资源包，比如 舒服细致…',
+  shader: '搜索光影，比如 光子、BSL…'
+}
+
+/** 切"只搜当前版本 / 所有版本"那两个小按钮（含高亮） */
+function setMrVersionMode(mode) {
+  mrVersionMode = mode
+  for (const chip of mrVersionEl.children) {
+    chip.classList.toggle('chip--on', chip.dataset.mrVersion === mode)
+  }
+}
+
+/** "装到哪个世界"那个弹窗里的几个零件 */
+const saveModalEl = document.getElementById('save-modal')
+const saveListEl = document.getElementById('save-list')
+const saveHintEl = document.getElementById('save-hint')
 
 /** 该把东西放到哪个版本里：启动页选中的那个（没选就退而用列表第一个） */
 function mrTarget() {
@@ -1441,6 +1478,10 @@ dlMenuEl.addEventListener('click', (event) => {
 
   if (item.dataset.dlCat) {
     mrType = item.dataset.dlCat
+    // 整合包**自带游戏版本和加载器**，拿"你现在选的那个版本"去筛它没道理
+    // （筛完基本是空的，用户会以为"整合包搜不到东西"），进这个分类自动切到"所有版本"
+    if (mrType === 'modpack' && mrVersionMode === 'auto') setMrVersionMode('all')
+    mrSearchEl.placeholder = MR_PLACEHOLDERS[mrType] || MR_PLACEHOLDERS.mod
     showDownloadTab('community')
     runMrSearch()
   } else if (item.dataset.dlTab === 'vanilla') {
@@ -1573,8 +1614,81 @@ async function runMrSearch() {
     status += info.loader
       ? ` · 当前版本用的是 ${info.loader}，只显示 ${info.loader} 版的 Mod`
       : ' · 这个版本还没装 Mod 加载器——到「版本设置」里装一个，Mod 才能用'
+  } else if (mrType === 'modpack') {
+    status += ' · 整合包会装成一个「新版本」，不动你现在装的'
+  } else if (mrType === 'datapack') {
+    status += ' · 数据包是装进「某一个世界」里的，点下载后会让你挑'
   }
   mrStatusEl.textContent = status
+}
+
+/** 装数据包时用户挑的那个世界（挑完再调一次 installMrProject 就带上它）*/
+let pendingSaveName = ''
+/** 那个世界在哪个 saves 文件夹里（版本自己的、还是公共的——见 showSavePicker） */
+let pendingSaveFolder = ''
+
+/** 时间戳 → "8月9日 17:30" 这种短写法 */
+function shortWhen(ms) {
+  const d = new Date(ms)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+/**
+ * 弹出"装到哪个世界"的列表（只有数据包会走这儿）。
+ * 【为什么让用户挑】数据包放进 `saves\<世界>\datapacks\` 才生效，
+ * 装到别的世界就跟没装一样——不问清楚，用户会以为"下载成功了怎么没用"。
+ */
+async function showSavePicker(button) {
+  const target = mrTarget()
+  let res
+  try {
+    res = await window.api.listSaves(target.id, target.dir)
+  } catch (error) {
+    mrStatusEl.textContent = `读存档列表失败：${error.message}`
+    return
+  }
+  if (!res.ok) {
+    mrStatusEl.textContent = `读存档列表失败：${res.error}`
+    return
+  }
+  if (!res.saves.length) {
+    mrStatusEl.textContent = '你还没有存档 —— 先在游戏里建一个世界并存过盘，再回来装数据包'
+    return
+  }
+
+  // 世界的存档可能在两个地方（版本自己的 saves、公共的 .minecraft\saves），
+  // 两边都有的时候得标出来——不然"同一个世界怎么出现两次"会让人犯迷糊
+  const mixed = new Set(res.saves.map((one) => one.where)).size > 1
+
+  saveListEl.textContent = ''
+  for (const one of res.saves) {
+    const item = document.createElement('button')
+    item.type = 'button'
+    item.className = 'save-item'
+
+    const name = document.createElement('span')
+    name.className = 'save-item__name'
+    name.textContent = one.name
+
+    const when = document.createElement('span')
+    when.className = 'save-item__when'
+    when.textContent =
+      '上次玩 ' + shortWhen(one.mtime) + (mixed ? ` · ${one.where}的存档` : '')
+
+    item.appendChild(name)
+    item.appendChild(when)
+    item.addEventListener('click', () => {
+      pendingSaveName = one.name
+      pendingSaveFolder = one.folder
+      saveModalEl.hidden = true
+      installMrProject(button) // 带上存档名重来一次
+    })
+    saveListEl.appendChild(item)
+  }
+
+  saveHintEl.textContent = '看着列表里的世界不对？多半是这个版本的「存档文件夹」不一样——先去游戏里进一次那个世界，它就会出现在最上面。'
+  saveModalEl.hidden = false
 }
 
 /** 点某一行的「下载」：自动挑文件 → 下载 → 放到该放的地方 */
@@ -1587,8 +1701,17 @@ async function installMrProject(button) {
   const target = mrTarget()
   const versionId = target.id
 
-  if (!versionId) {
+  // 整合包是"给我装一个**新**版本"，所以不要求已经装过版本；
+  // 别的类型（Mod / 资源包 / 数据包）得先有个版本，才知道该放进哪个目录。
+  if (!versionId && mrType !== 'modpack') {
     mrStatusEl.textContent = '还没有装过游戏版本——先到「原版游戏」里装一个，才知道该放到哪'
+    return
+  }
+
+  // 数据包跟**单个世界**走（不像 Mod 扔进公共文件夹就行），所以先让用户挑一个存档。
+  // 挑完会把 pendingSaveName 填上、再调回这个函数一次。
+  if (mrType === 'datapack' && !pendingSaveName) {
+    showSavePicker(button)
     return
   }
 
@@ -1608,6 +1731,12 @@ async function installMrProject(button) {
       projectId,
       type: mrType,
       versionId,
+      // 挑哪个文件，按**界面上那个筛选**来（"只搜当前版本" / "所有版本"）——
+      // 不然会出现"筛着 26.3 的搜索结果，装下去却是别的版本"
+      gameVersion: mrGameVersion(),
+      // saveName / saveFolder 只有数据包用得上（装进哪个世界）
+      saveName: pendingSaveName || undefined,
+      saveFolder: pendingSaveFolder || undefined,
       dir: target.dir
     })
   } catch (error) {
@@ -1620,17 +1749,66 @@ async function installMrProject(button) {
     setStage('')
     setFill(0)
     setDetail(result.error)
+    pendingSaveName = '' // 白挑的那个世界也忘掉，下次重新挑
+    pendingSaveFolder = ''
     return
   }
 
   setFill(100)
-  installTitleEl.textContent = `${title} 下载完成`
   setStage('')
+
+  // ——— 整合包：装完的结果是"版本列表里多了一个新版本" ———
+  // 它跟别的不一样——不是往某个文件夹里放个文件，而是整套装出一个新版本，
+  // 所以这儿要把版本列表重新读一遍、顺手把它选上，用户回启动页直接就能玩。
+  if (mrType === 'modpack') {
+    const fresh = result.versionId || ''
+    installTitleEl.textContent = `${title} 安装完成`
+    setDetail(fresh ? `版本列表里多了个「${fresh}」` : '装好了')
+    mrLastResult = {
+      versionId: fresh,
+      type: 'modpack',
+      dir: result.dir || '',
+      saveName: '',
+      saveFolder: ''
+    }
+    pendingSaveName = ''
+    pendingSaveFolder = ''
+
+    await refreshLaunchFacts()
+    if (fresh) {
+      const one = findVersion(fresh, result.dir || '')
+      if (one) {
+        selectedVersion = one.id
+        selectedDir = one.dir
+        refreshLaunchUi()
+      }
+    }
+
+    mrDoneTextEl.textContent = fresh
+      ? `${title} 装好了——版本列表里多了个「${fresh}」，回启动页选它就能玩`
+      : `${title} 装好了`
+    mrDoneEl.hidden = false
+    mrStatusEl.textContent = `装好了：${title}`
+    return
+  }
+
+  installTitleEl.textContent = `${title} 下载完成`
   const folderName = result.dir.split(/[\\/]/).pop()
   setDetail(`已放到 ${folderName} 文件夹：${result.filename}`)
 
-  mrLastResult = { versionId, type: mrType, dir: target.dir }
-  mrDoneTextEl.textContent = `${title}（${result.versionName}）已经放到 ${folderName} 文件夹`
+  mrLastResult = {
+    versionId,
+    type: mrType,
+    dir: target.dir,
+    saveName: pendingSaveName,
+    saveFolder: pendingSaveFolder
+  }
+  pendingSaveName = '' // 用完了清掉，下一个数据包还得重新挑
+  pendingSaveFolder = ''
+  mrDoneTextEl.textContent =
+    mrLastResult.type === 'datapack'
+      ? `${title}（${result.versionName}）已经放进世界「${mrLastResult.saveName}」里了——进游戏就能用`
+      : `${title}（${result.versionName}）已经放到 ${folderName} 文件夹`
   mrDoneEl.hidden = false
 }
 
@@ -1651,8 +1829,7 @@ mrSearchEl.addEventListener('keydown', (event) => {
 mrVersionEl.addEventListener('click', (event) => {
   const chip = event.target.closest('.chip')
   if (!chip) return
-  mrVersionMode = chip.dataset.mrVersion
-  for (const item of mrVersionEl.children) item.classList.toggle('chip--on', item === chip)
+  setMrVersionMode(chip.dataset.mrVersion)
   runMrSearch()
 })
 
@@ -1669,12 +1846,37 @@ window.api.onContentProgress((stats) => {
 // 打开刚下好的那个文件夹
 document.getElementById('mr-open-folder').addEventListener('click', async () => {
   if (!mrLastResult) return
-  const result = await window.api.openVersionFolder(
-    mrLastResult.versionId,
-    MR_FOLDER_KEY[mrLastResult.type],
-    mrLastResult.dir
-  )
+
+  // 数据包（和"刚装完的整合包"）走这条路：位置由主进程按**当初装进去时那段逻辑**
+  // 重新算一遍，保证打开的就是文件真正待着的地方——数据包可能在世界自己的
+  // saves 里，也可能在公共 saves 里，界面上拼不出来
+  const result = mrLastResult.type === 'datapack' || mrLastResult.type === 'modpack'
+    ? await window.api.openContentFolder({
+        versionId: mrLastResult.versionId,
+        type: mrLastResult.type,
+        dir: mrLastResult.dir,
+        saveName: mrLastResult.saveName,
+        saveFolder: mrLastResult.saveFolder
+      })
+    : await window.api.openVersionFolder(
+        mrLastResult.versionId,
+        MR_FOLDER_KEY[mrLastResult.type],
+        mrLastResult.dir
+      )
+
   if (!result.ok) mrStatusEl.textContent = `打不开文件夹：${result.error}`
+})
+
+// 选世界那个弹窗的取消按钮（还有点灰底也能关）
+function closeSavePicker() {
+  saveModalEl.hidden = true
+  pendingSaveName = ''
+  pendingSaveFolder = ''
+}
+
+document.getElementById('save-cancel').addEventListener('click', closeSavePicker)
+saveModalEl.addEventListener('click', (event) => {
+  if (event.target === saveModalEl) closeSavePicker()
 })
 
 // ═══════════════════════════════════════
@@ -2100,14 +2302,22 @@ packModalEl.addEventListener('click', (event) => {
 
 window.api.onPackStage((text) => {
   if (packInstalling) packProgressEl.textContent = text
+  // 从「下载」页下的整合包也走这条通道（装包和解包是同一套）。
+  // 不接这一条的话，底部面板会停在"正在下载…"不动好几分钟，看着像卡死了。
+  if (mrBusy) setStage(text)
 })
 
 window.api.onPackProgress((stats) => {
-  if (!packInstalling) return
   if (stats.percent === undefined) return
-  packProgressEl.textContent =
+  const line =
     `正在下载… ${stats.percent}% · ${stats.done}/${stats.total} 个` +
     (stats.failed > 0 ? ` · 失败 ${stats.failed}` : '')
+  if (packInstalling) packProgressEl.textContent = line
+  if (mrBusy) {
+    setStage('正在装整合包…（里面有几千个文件，慢一点是正常的）')
+    setFill(stats.percent)
+    setDetail(line.replace('正在下载… ', ''))
+  }
 })
 
 // ═══════════════════════════════════════

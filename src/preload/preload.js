@@ -266,6 +266,12 @@ contextBridge.exposeInMainWorld('api', {
    */
   installModrinth: (options) => ipcRenderer.invoke('modrinth:install', options),
 
+  /** 列出这个版本的存档（装数据包时挑一个）*/
+  listSaves: (versionId, dir) => ipcRenderer.invoke('saves:list', versionId, dir),
+
+  /** 打开"刚下好的那个东西"所在的文件夹（数据包这种藏在世界里的也能打开）*/
+  openContentFolder: (options) => ipcRenderer.invoke('content:openFolder', options),
+
   /** 下载进度（和安装版本共用一套字段） */
   onContentProgress: (callback) => {
     ipcRenderer.on('content:progress', (_event, stats) => callback(stats))

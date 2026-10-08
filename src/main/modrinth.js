@@ -139,15 +139,42 @@ async function getVersions(projectId, { gameVersion = '', loader = '' } = {}) {
 }
 
 /**
- * 从一堆版本里挑一个"最合适的"：优先正式版，其余按发布时间从新到旧。
- * 没有带文件的版本返回 null。
+ * 每类内容"能用的那个文件"长什么样（看扩展名）。
+ *
+ * 【为什么非要有这张表】同一个项目在 Modrinth 上可能**同时挂着好几种文件**。
+ * 实测 Terralith：它既有数据包（.zip），又有配套的 Fabric Mod（.jar），
+ * 两边的版本号还一样。挑错了就是"下载成功、游戏里啥也没变"这种最难查的问题
+ * ——数据包装的还是 .jar，游戏根本不认。
  */
-function pickBest(versions) {
+const TYPE_EXTENSION = {
+  mod: '.jar',
+  modpack: '.mrpack',
+  datapack: '.zip',
+  resourcepack: '.zip',
+  shader: '.zip'
+}
+
+/**
+ * 从一堆版本里挑一个"最合适的"：先挑对类型，再优先正式版，其余按发布时间从新到旧。
+ * 没有带文件的版本返回 null。
+ *
+ * @param {Array} versions
+ * @param {string} [type] 内容类型（mod / datapack / …）。不传就退化成"只看正式版"
+ */
+function pickBest(versions, type = '') {
   const usable = (versions || []).filter((v) => v.file && v.file.url)
   if (usable.length === 0) return null
 
-  const release = usable.filter((v) => v.versionType === 'release')
-  const pool = release.length > 0 ? release : usable
+  // 先按扩展名留下"这一类能用的"
+  const ext = TYPE_EXTENSION[type] || ''
+  const rightKind = ext
+    ? usable.filter((v) => String(v.file.filename || '').toLowerCase().endsWith(ext))
+    : usable
+  // 一个都没有就退回全部——宁可让用户拿到个可能不对的，也别报"没文件"
+  const pool0 = rightKind.length > 0 ? rightKind : usable
+
+  const release = pool0.filter((v) => v.versionType === 'release')
+  const pool = release.length > 0 ? release : pool0
 
   return pool
     .slice()

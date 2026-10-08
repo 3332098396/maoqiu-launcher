@@ -349,10 +349,17 @@ async function installModrinthPack(filePath, data, { onStage, onProgress, onTask
   const gameVersion = String(deps.minecraft || '')
 
   if (!gameVersion) throw new Error('整合包没写需要哪个游戏版本，装不了')
+
+  // 需要的基础版本没装过就**顺手一起装上**。
+  //
+  // 【为什么不报错让用户自己去装】从「下载」页点整合包的「下载」，用户的意思就是
+  // "把这个包装上"；中间把他轰去别的页面手动装一遍原版，多半就卡在这儿不装了
+  // （实测：点下载直接弹"本机还没装——先到「下载」页把它装好"，等于这功能用不了）。
+  // 拖进来的整合包也一样受益：这东西本来就该是一键装完的。
   if (!paths.isVersionInstalled(gameVersion, dir)) {
-    throw new Error(
-      `这个整合包需要 Minecraft ${gameVersion}，本机还没装——先到「下载」页把它装好`
-    )
+    stage(`这个整合包需要 Minecraft ${gameVersion}，正在顺手把它装上…`)
+    const r = await install.installVersion(gameVersion, { dir, onStage, onProgress, onTask })
+    if (!r.ok) throw new Error(`装 Minecraft ${gameVersion} 失败：${r.error}`)
   }
 
   // ——— ① 基础版本：原版 + 加载器 ———
@@ -469,7 +476,10 @@ async function installModrinthPack(filePath, data, { onStage, onProgress, onTask
     if (!target.startsWith(packRoot)) continue
 
     paths.ensureDir(path.dirname(target))
-    fs.writeFileSync(target, zip.readEntry(buffer, entry, password))
+    // Modrinth 的 .mrpack 从不加密，这儿没有密码可传（以前误用了外层的 password 变量，
+    // 从「下载」页下整合包时直接报 "password is not defined"——拖放那条路没走到这儿，
+    // 所以一直没露出来）
+    fs.writeFileSync(target, zip.readEntry(buffer, entry, ''))
     overrides++
   }
 
