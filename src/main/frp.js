@@ -83,17 +83,25 @@ function noteLine(text) {
  * @returns {{ok: boolean, error?: string}}
  */
 function start(options = {}) {
-  if (child) return { ok: false, error: '已经有一条隧道在跑了，先停掉它' }
+  // 【为什么错误也要写进 state】界面点完"开始"会顺手刷新一次状态，
+  // 而刷新是拿 state.message 覆盖提示行的——只 return 不写 state 的话，
+  // 用户刚看到的"还没选 frpc.exe"会在 0.8 秒后被冲成空白（2026-10-09 全量体检抓到的）。
+  const fail = (text) => {
+    state = { running: false, connected: false, message: text }
+    return { ok: false, error: text }
+  }
+
+  if (child) return fail('已经有一条隧道在跑了，先停掉它')
 
   const key = String(options.accessKey || '').trim()
   const tunnelId = String(options.tunnelId || '').trim()
   const exe = String(options.exePath || readFrpConfig().exePath || '').trim()
 
   if (!exe || !fs.existsSync(exe)) {
-    return { ok: false, error: '还没选 frpc.exe——点「选 frpc 文件…」，到你下载樱花的那个文件夹里挑' }
+    return fail('还没选 frpc.exe——点「选 frpc 文件…」，到你下载樱花的那个文件夹里挑')
   }
-  if (!key) return { ok: false, error: '先把访问密钥填上（樱花面板 → 用户信息 → 访问密钥）' }
-  if (!/^\d+$/.test(tunnelId)) return { ok: false, error: '隧道 ID 是一串数字，在樱花面板的隧道列表里' }
+  if (!key) return fail('先把访问密钥填上（樱花面板 → 用户信息 → 访问密钥）')
+  if (!/^\d+$/.test(tunnelId)) return fail('隧道 ID 是一串数字，在樱花面板的隧道列表里')
 
   const localPort = Number(options.localPort) || 25565
   saveFrpConfig({ accessKey: key, tunnelId, exePath: exe, localPort })

@@ -5003,7 +5003,9 @@ async function applyCurrentSkin() {
   if (saved && !saved.startsWith('@')) {
     const okLoaded = await loadSkinFrom(saved)
     if (okLoaded) {
-      skinBigFromEl.textContent = '来自：我选的'
+      // 说清楚是"毛球自带"还是"我上传的"（见 skinSourceLabel 的注释）
+      if (!skinLibCache) skinLibCache = await loadSkinLib()
+      skinBigFromEl.textContent = skinSourceLabel(saved)
       return
     }
   }
@@ -5109,6 +5111,21 @@ let bundledSkinNames = []
 /** 这一张是不是随软件打包的那几张 */
 function builtinSource(one) {
   return bundledSkinNames.includes(one.name)
+}
+
+/**
+ * 一句话说清"这张皮肤是哪儿来的"。
+ *
+ * 【为什么要单独有个函数】以前这话在三个地方各写各的：列表里写"毛球自带 / 我上传的"，
+ * 大预览那行却**一律**写"来自：我上传的"——毛球自带的那几张也被叫成"我上传的"，
+ * 同一个东西两个说法（2026-10-09 全量体检时抓到的）。
+ * 现在都走这里：认得出来是自带的就说自带，认不出来（比如库里的记录被删了、路径是老的）才说"我选的"。
+ */
+function skinSourceLabel(path) {
+  if (!path) return ''
+  const one = (skinLibCache || []).find((x) => samePath(x.path, path))
+  if (!one) return '来自：我选的'
+  return builtinSource(one) ? '来自：毛球自带' : '来自：我上传的'
 }
 
 /** 随机挑一张（同一次开软件里，一直用挑中的那张） */
@@ -5370,8 +5387,7 @@ async function renderSkinPage() {
   } else if (showing.kind === 'random') {
     skinBigFromEl.textContent = `来自：随机（${showing.from}）`
   } else {
-    const one = skinLibCache.find((x) => samePath(x.path, showing.path))
-    skinBigFromEl.textContent = '来自：我上传的'
+    skinBigFromEl.textContent = skinSourceLabel(showing.path)
   }
 }
 

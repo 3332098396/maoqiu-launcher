@@ -1579,6 +1579,11 @@ button.acc__tab:hover {
   color: var(--text-muted);
 }
 
+/* 同上：内联 style 会被 CSP 拦掉，要间距就加类 */
+.field__label--spaced {
+  margin-top: 14px;
+}
+
 .field__hint {
   font-size: 11.5px;
   line-height: 1.6;
@@ -1818,6 +1823,13 @@ button.acc__tab:hover {
   gap: 8px;
   font-size: 13px;
   color: var(--text);
+}
+
+/* 【为什么要这个类】页面里的 CSP 只允许 'self' 的样式，
+   写 style="margin-top:10px" 这种内联样式会被浏览器**直接拦掉**（控制台刷红字、间距也不生效）。
+   所以要间距就加个类，别写内联。2026-10-09 全量体检时抓到的。 */
+.check--spaced {
+  margin-top: 10px;
 }
 
 .check input {

@@ -287,28 +287,62 @@ function pickErrorLog() {
   const dir = paths.logsDir()
   if (!fs.existsSync(dir)) return null
 
-  // 文件名是 launch-20261009192301.log，按名字倒序 = 按时间倒序
-  const files = fs.readdirSync(dir).filter((one) => one.endsWith('.log')).sort().reverse()
+  // 文件名叫 launch-20261009192301.log。**按修改时间排，不按名字排**——
+  // 老日志的名字是拿世界时写的（比北京时间早 8 小时，2026-10-09 已修），
+  // 要是按名字排，跨越这次修改的那几份会排错顺序。取"最新的那份"用 mtime 最准。
+  const files = fs
+    .readdirSync(dir)
+    .filter((one) => one.endsWith('.log'))
+    .map((name) => {
+      let mtime = 0
+      let born = 0
+      try {
+        const stat = fs.statSync(path.join(dir, name))
+        mtime = stat.mtimeMs
+        born = stat.birthtimeMs || 0 // 文件的"出生时间" = 这次启动开始的那一刻
+      } catch {
+        /* 读不到时间就当最老 */
+      }
+      return { name, mtime, time: born || mtime }
+    })
+    .sort((a, b) => b.mtime - a.mtime)
   if (!files.length) return null
 
   let newest = null
-  for (const name of files) {
+  for (const one of files) {
     let text = ''
     try {
-      text = fs.readFileSync(path.join(dir, name), 'utf8')
+      text = fs.readFileSync(path.join(dir, one.name), 'utf8')
     } catch {
       continue
     }
-    if (!newest) newest = { name, text }
+    if (!newest) newest = { name: one.name, text, time: one.time }
 
     const result = diagnose.diagnose(text.slice(-200000), { crashed: true })
-    if (!result.unknown) return { name, text, findings: result.found }
+    if (!result.unknown) return { name: one.name, text, time: one.time, findings: result.found }
   }
 
   return { ...newest, findings: [] }
 }
 
-/** launch-20261009192301.log → "10月9日 19:23"（给用户看的时间） */
+/**
+ * "这次启动是什么时候" → "10月9日 19:23"（给用户看的时间）。
+ *
+ * 【为什么优先用文件时间、而不是抠文件名】老日志的名字是拿**世界时**拼的
+ * （比北京时间早 8 小时，2026-10-09 才改成按本机时间），直接从名字里读会把
+ * 上午 9 点说成"夜里 1 点"。文件的出生时间最准，名字只当兜底。
+ */
+function logTimeText(timeMs, name) {
+  const ms = Number(timeMs)
+  if (Number.isFinite(ms) && ms > 0) {
+    const date = new Date(ms)
+    const two = (n) => String(n).padStart(2, '0')
+    return `${date.getMonth() + 1}月${date.getDate()}日 ${two(date.getHours())}:${two(date.getMinutes())}`
+  }
+  return logNameToTime(name)
+}
+
+/** launch-20261009192301.log → "10月9日 19:23"（名字里抠时间的兜底办法） */
 function logNameToTime(name) {
   const match = /launch-(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/.exec(String(name || ''))
   if (!match) return ''
@@ -662,8 +696,8 @@ function registerIpcHandlers() {
       return {
         ok: true,
         name: picked.name,
-        // 日志文件名形如 launch-20261009192301.log，把时间翻成人话给用户看
-        when: logNameToTime(picked.name),
+        // 把"这次启动是什么时候"翻成人话（优先用文件时间，见 logTimeText）
+        when: logTimeText(picked.time, picked.name),
         text: trimmed.text,
         truncated: trimmed.truncated,
         findings: picked.findings

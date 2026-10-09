@@ -839,7 +839,14 @@ async function launch(versionId, options = {}) {
   const args = [...command.jvmArgs, fullJson.mainClass, ...command.gameArgs]
 
   paths.ensureDir(paths.logsDir())
-  const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)
+  // 【不能用 toISOString()】那是**世界时**，比北京时间早 8 小时：上午 9 点起的日志
+  // 会被写成 launch-...011314.log，界面上就会显示成"夜里 1 点那次启动"（2026-10-09 实测抓到）。
+  // 自己按本机时间拼，文件名和用户看到的钟点才对得上。
+  const now = new Date()
+  const two = (n) => String(n).padStart(2, '0')
+  const stamp =
+    `${now.getFullYear()}${two(now.getMonth() + 1)}${two(now.getDate())}` +
+    `${two(now.getHours())}${two(now.getMinutes())}${two(now.getSeconds())}`
   const logFile = path.join(paths.logsDir(), `launch-${stamp}.log`)
 
   // 游戏里点「对局域网开放」时会往日志里打一行，带着端口号。
