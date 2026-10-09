@@ -164,6 +164,31 @@ contextBridge.exposeInMainWorld('api', {
    */
   getLatestLog: () => ipcRenderer.invoke('log:latest'),
 
+  /** 诊断最近一次启动的日志（带退出码）：认出是什么毛病、为什么、怎么办 */
+  diagnoseLast: (exitCode) => ipcRenderer.invoke('diagnose:last', exitCode),
+
+  // ——— AI 助手（M22）———
+  //
+  // 【谁付钱】用户自己填自己的 Key。不填就只用本地规则库（不联网、不花钱）。
+
+  /** 现在的 AI 配置（**不含 Key 本身**，只说填没填过） */
+  getAiConfig: () => ipcRenderer.invoke('ai:getConfig'),
+
+  /** 改 AI 配置：{ endpoint, model, mode, apiKey } */
+  setAiConfig: (patch) => ipcRenderer.invoke('ai:setConfig', patch),
+
+  /** 打开智谱开放平台（拿免费 Key 的地方） */
+  openAiSite: () => ipcRenderer.invoke('ai:openSite'),
+
+  /** 测一下通不通 */
+  testAi: () => ipcRenderer.invoke('ai:test'),
+
+  /** 准备要发的日志（挑最近一次报错的 + 去隐私），给用户过目用 */
+  prepareAiLog: () => ipcRenderer.invoke('ai:prepareLog'),
+
+  /** 问 AI。options: { question, logText, history } */
+  askAi: (options) => ipcRenderer.invoke('ai:ask', options),
+
   /** 在文件资源管理器里打开日志文件夹 */
   openLogFolder: () => ipcRenderer.invoke('log:openFolder'),
 

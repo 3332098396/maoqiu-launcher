@@ -103,6 +103,21 @@ const DEFAULTS = {
     frp: { accessKey: '', tunnelId: '', exePath: '', localPort: 25565 }
   },
   /**
+   * AI 助手（M22）。用户自己填自己的 Key，毛球只管存和发。
+   * 【key 存的是**加密后**的串】用 Windows 自带的 safeStorage 加密（见 ai.js），
+   * 明文绝不落盘——配置文件是纯文本，谁打开都看得见。
+   */
+  ai: {
+    /** 接口地址（OpenAI 兼容的那套；默认智谱的，因为那个模型**免费**） */
+    endpoint: 'https://open.bigmodel.cn/api/paas/v4',
+    /** 用哪个模型（默认智谱 GLM-4-Flash：免费、128K、中文好） */
+    model: 'glm-4-flash',
+    /** 加密后的 Key（空 = 还没填，那就只用本地规则库） */
+    keyEncrypted: '',
+    /** 界面用哪种：local = 本地规则库；api = 用用户自己的 AI */
+    mode: 'local'
+  },
+  /**
    * 每个版本的自定义信息（显示名、备注），按版本号存：
    * { "26.3": { name: "我的生存", note: "装了 XX" } }
    * 只存用户真填过的，留空的版本不会出现在这里。
@@ -183,7 +198,8 @@ function readConfig() {
         // frp 是里面的一层，得单独合一次（不然老配置读出来没有它）
         frp: { ...DEFAULTS.online.frp, ...(((raw.online) || {}).frp || {}) }
       },
-      look: { ...DEFAULTS.look, ...((raw.look) || {}) }
+      look: { ...DEFAULTS.look, ...((raw.look) || {}) },
+      ai: { ...DEFAULTS.ai, ...((raw.ai) || {}) }
     }
   } catch {
     return {
@@ -192,7 +208,8 @@ function readConfig() {
       download: { ...DEFAULTS.download },
       gameDirs: { known: [], lastPackDir: '' },
       online: { ...DEFAULTS.online },
-      look: { ...DEFAULTS.look }
+      look: { ...DEFAULTS.look },
+      ai: { ...DEFAULTS.ai }
     }
   }
 }

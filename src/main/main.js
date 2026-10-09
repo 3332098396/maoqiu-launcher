@@ -27,6 +27,8 @@ const microsoft = require('./microsoft')
 const skins = require('./skins')
 const javaUtil = require('./java')
 const launch = require('./launch')
+const diagnose = require('./diagnose')
+const ai = require('./ai')
 const versions = require('./versions')
 const inherit = require('./inherit')
 const cleanup = require('./cleanup')
@@ -270,6 +272,50 @@ let cursorWatcher = null
 
 /** 有没有整合包在装（同时只允许一个） */
 let packRunning = false
+
+/**
+ * 挑"最近一次报错的日志"（M22，用户点名要的取法）。
+ *
+ * 【为什么不是"最近那份"】用户报错之后往往又开了好几次游戏，
+ * 最近那份日志早就变成"正常跑通"的了——拿它去问 AI 等于问了个空。
+ * 所以从新到旧翻，取第一份"规则能认出毛病"的；一份都没有就用最新的那份
+ * （界面会说明"最近几次看着都正常"）。
+ *
+ * @returns {{name: string, text: string, findings: Array}|null}
+ */
+function pickErrorLog() {
+  const dir = paths.logsDir()
+  if (!fs.existsSync(dir)) return null
+
+  // 文件名是 launch-20261009192301.log，按名字倒序 = 按时间倒序
+  const files = fs.readdirSync(dir).filter((one) => one.endsWith('.log')).sort().reverse()
+  if (!files.length) return null
+
+  let newest = null
+  for (const name of files) {
+    let text = ''
+    try {
+      text = fs.readFileSync(path.join(dir, name), 'utf8')
+    } catch {
+      continue
+    }
+    if (!newest) newest = { name, text }
+
+    const result = diagnose.diagnose(text.slice(-200000), { crashed: true })
+    if (!result.unknown) return { name, text, findings: result.found }
+  }
+
+  return { ...newest, findings: [] }
+}
+
+/** launch-20261009192301.log → "10月9日 19:23"（给用户看的时间） */
+function logNameToTime(name) {
+  const match = /launch-(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/.exec(String(name || ''))
+  if (!match) return ''
+  const month = Number(match[2])
+  const day = Number(match[3])
+  return `${month}月${day}日 ${match[4]}:${match[5]}`
+}
 
 /** 有没有"下载社区资源"在跑（同时只允许一个） */
 let contentRunning = false
@@ -549,6 +595,97 @@ function registerIpcHandlers() {
    * 日志可能很大，只返回最后 300 KB——看日志是看"最后出什么事了"，
    * 前面的启动过程没什么用。被截断时会告诉界面。
    */
+  /**
+   * 诊断最近一次启动的日志（M22）。
+   *
+   * 【为什么主进程自己读日志】日志文件在游戏目录里，界面碰不到文件系统；
+   * 而且诊断要在主进程做——把整篇日志（几百 KB）来回传给界面纯属浪费。
+   *
+   * @param {number} [exitCode] 游戏退出码（界面从启动状态里带过来）
+   */
+  ipcMain.handle('diagnose:last', (_event, exitCode) => {
+    try {
+      const picked = pickErrorLog()
+      if (!picked) return { ok: true, found: [], unknown: true, reason: '还没有日志' }
+      const result = diagnose.diagnose(picked.text.slice(-200000), { crashed: true, exitCode })
+      return { ok: true, ...result, logName: picked.name }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  // ——— AI 助手（M22）———
+  //
+  // 【谁付钱】用户自己填自己的 Key，毛球不内置（内置 = 把账号密码印在传单上发）。
+  // 不填就只用本地规则库，一样能看报错。
+
+  /** 给界面看的 AI 配置（**不带 Key 本身**，只说填没填过） */
+  ipcMain.handle('ai:getConfig', () => {
+    try {
+      return { ok: true, config: ai.publicConfig() }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 改 AI 配置（接口地址 / 模型名 / 用哪种模式 / Key） */
+  ipcMain.handle('ai:setConfig', (_event, patch) => {
+    try {
+      return ai.updateConfig(patch)
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 测一下通不通（填完 Key 点那个按钮） */
+  ipcMain.handle('ai:test', async () => {
+    try {
+      return await ai.test()
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /**
+   * 准备要发给 AI 的日志：**挑最近一次报错的**，顺手把隐私抹掉。
+   * 【为什么不直接发】发出去就收不回来了——界面会先把这段给用户看一眼，他确认了才发。
+   */
+  ipcMain.handle('ai:prepareLog', () => {
+    try {
+      const picked = pickErrorLog()
+      if (!picked) return { ok: false, error: '还没有日志文件' }
+
+      const account = accounts.getAccount()
+      const redacted = ai.redact(picked.text.slice(-200000), { accountName: account?.name })
+      const trimmed = ai.trimLog(redacted)
+
+      return {
+        ok: true,
+        name: picked.name,
+        // 日志文件名形如 launch-20261009192301.log，把时间翻成人话给用户看
+        when: logNameToTime(picked.name),
+        text: trimmed.text,
+        truncated: trimmed.truncated,
+        findings: picked.findings
+      }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 问 AI（日志由界面传回来——用户可能改过） */
+  ipcMain.handle('ai:ask', async (_event, options) => {
+    try {
+      return await ai.ask({
+        question: options?.question || '',
+        logText: options?.logText || '',
+        history: Array.isArray(options?.history) ? options.history : []
+      })
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
   ipcMain.handle('log:latest', () => {
     try {
       const dir = paths.logsDir()
@@ -1131,6 +1268,16 @@ function registerIpcHandlers() {
   ipcMain.handle('skin:official', (_event, kind) => {
     try {
       return skins.officialDefault('', kind === 'alex' ? 'alex' : 'steve')
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 打开智谱开放平台（用户去那儿注册、拿免费的 Key） */
+  ipcMain.handle('ai:openSite', async () => {
+    try {
+      await shell.openExternal('https://open.bigmodel.cn/')
+      return { ok: true }
     } catch (error) {
       return { ok: false, error: String(error?.message ?? error) }
     }

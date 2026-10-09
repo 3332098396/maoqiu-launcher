@@ -130,6 +130,17 @@
           <span class="rail__label">下载</span>
         </button>
 
+        <button class="rail__btn" type="button" data-page="ai">
+          <span class="rail__icon">
+            <!-- AI 助手＝两颗四角星（AI 通行的那个符号），照整套的线条风格画的 -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.4 3.2l1.7 4.9 4.9 1.7-4.9 1.7-1.7 4.9-1.7-4.9L3.8 9.8l4.9-1.7Z" />
+              <path d="M17.6 14.6l.85 2.35 2.35.85-2.35.85-.85 2.35-.85-2.35-2.35-.85 2.35-.85Z" />
+            </svg>
+          </span>
+          <span class="rail__label">AI 助手</span>
+        </button>
+
         <button class="rail__btn" type="button" data-page="skin">
           <span class="rail__icon">
             <!-- 皮肤＝半身像（脑袋 + 肩膀）——图纸上"皮肤"那个位置画的是三个一模一样的
@@ -639,6 +650,67 @@
         </div>
       </section>
 
+      <!-- ═══════════ AI 助手（M22）═══════════
+           两种模式：本地规则库（不联网、不花钱）/ 用户自己的 AI（花他自己的额度）。
+           顶上那个切换是用户随时能来回点的——**把"花不花钱"的开关交给他**。 -->
+      <section class="page" data-page="ai" hidden>
+        <div class="content ai-page">
+          <div class="ai-head">
+            <div>
+              <h2 class="ai-head__title">AI 助手</h2>
+              <p class="ai-head__sub">看不懂的报错、搞不定的毛病，问它</p>
+            </div>
+            <div class="ai-mode" id="ai-mode">
+              <button class="chip chip--on" type="button" data-ai-mode="local">
+                本地规则库（不花钱）
+              </button>
+              <button class="chip" type="button" data-ai-mode="api">我的 AI</button>
+            </div>
+          </div>
+
+          <p class="ai-note" id="ai-note"></p>
+
+          <div class="ai-chat" id="ai-chat"></div>
+
+          <div class="ai-input">
+            <textarea
+              class="input ai-input__box"
+              id="ai-input"
+              rows="2"
+              placeholder="把报错贴进来，或者直接问，比如：装了整合包一开世界就崩"
+            ></textarea>
+            <div class="ai-input__row">
+              <label class="check">
+                <input type="checkbox" id="ai-with-log" />
+                <span>带上最近的报错日志</span>
+              </label>
+              <span class="ai-input__hint" id="ai-loghint"></span>
+              <button class="btn btn--primary" type="button" id="ai-send">发送</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 发日志之前的"给你看一眼"（M22）：发出去就收不回来了，这一步不能省 -->
+      <div class="modal" id="ai-preview-modal" hidden>
+        <div class="modal__box modal__box--form">
+          <div class="modal__head">
+            <span class="modal__title">确认要发出去的内容</span>
+          </div>
+          <p class="panel__desc" id="ai-preview-when"></p>
+          <textarea class="input ai-preview__box" id="ai-preview-text" rows="12"></textarea>
+          <p class="delbox">
+            发出去就收不回来了。上面这段<b>已经把你电脑的用户名和账号名抹掉了</b>
+            （换成 &lt;用户名&gt;、&lt;玩家名&gt;），Mod 名和报错内容留着——那是判断问题的依据。
+            觉得哪行不合适，直接在上面删掉再发。
+          </p>
+          <div class="modal__actions modal__actions--end">
+            <button class="btn btn--ghost" type="button" id="ai-preview-cancel">取消</button>
+            <button class="btn btn--primary" type="button" id="ai-preview-send">确认，发出去</button>
+          </div>
+        </div>
+      </div>
+
       <!-- ═══════════ 皮肤页（M17.5，照设计稿的"皮肤与披风页"，披风那块不做）═══════════ -->
       <section class="page" data-page="skin" hidden>
         <div class="content skin-page">
@@ -710,6 +782,7 @@
             <span class="menu__item" data-settings-tab="account">账号</span>
             <span class="menu__item" data-settings-tab="backup">备份</span>
             <span class="menu__item" data-settings-tab="clean">清理</span>
+            <span class="menu__item" data-settings-tab="ai">AI 助手</span>
             <span class="menu__item" data-settings-tab="look">个性化</span>
           </nav>
           <div class="side__note">还想加什么，跟作者说</div>
@@ -1014,6 +1087,82 @@
           </div>
 
           <!-- ——— 个性化（M13：功能隐藏 + 背景 + 标题栏）——— -->
+          <!-- ——— AI 助手（M22）———
+               用户自己填自己的 Key：毛球不内置（内置就等于把账号密码印在传单上发）。
+               默认填的是**免费**的那个模型，所以用户注册个账号、贴个 Key 就能白嫖。 -->
+          <div class="settings-tab" data-settings-tab="ai" hidden>
+            <div class="notice" id="ai-settings-note">
+              这里的 Key 是<b>你自己的</b>——毛球不内置、也不借用别人的。
+              不填也能用：助手页的「本地规则库」不联网就能看报错。
+            </div>
+
+            <section class="panel">
+              <h3 class="panel__title">我的 AI</h3>
+              <p class="panel__desc">
+                默认帮你填好了<b>智谱 GLM-4-Flash</b>——那个模型<b>免费</b>，
+                注册个智谱账号、把 Key 贴进来就能用，不花钱。
+                想换成别家（DeepSeek / 豆包 / 通义 / Kimi…）改下面两项就行。
+              </p>
+
+              <div class="field">
+                <span class="field__label">第一步 · 去拿一个 Key</span>
+                <div class="setrow">
+                  <button class="btn btn--ghost btn--sm" type="button" id="ai-open-site">
+                    打开智谱开放平台（免费注册）
+                  </button>
+                </div>
+                <span class="field__hint">
+                  在网站上：注册 → 实名 → 左边「API Keys」→ 新建一个 → 复制那串 Key（很长，别漏字符）。
+                </span>
+              </div>
+
+              <div class="field">
+                <span class="field__label">第二步 · 把 Key 贴在这儿</span>
+                <input
+                  class="input input--edit"
+                  id="ai-key"
+                  type="password"
+                  placeholder="粘贴你的 API Key"
+                  autocomplete="new-password"
+                />
+                <span class="field__hint" id="ai-key-hint"></span>
+              </div>
+
+              <div class="field">
+                <span class="field__label">接口地址和模型（不懂就别动）</span>
+                <div class="setrow">
+                  <input class="input" id="ai-endpoint" type="text" placeholder="https://…" />
+                </div>
+                <div class="setrow">
+                  <input class="input" id="ai-model" type="text" placeholder="模型名" />
+                </div>
+                <span class="field__hint">
+                  这两项是给"想换别家"的人准备的。默认的智谱地址和模型名是最省钱的组合。
+                </span>
+              </div>
+
+              <div class="setrow">
+                <button class="btn btn--primary btn--sm" type="button" id="ai-save">保存</button>
+                <button class="btn btn--ghost btn--sm" type="button" id="ai-test">测试连接</button>
+                <button class="btn btn--ghost btn--sm" type="button" id="ai-clear">清掉 Key</button>
+              </div>
+              <p class="panel__desc" id="ai-test-result"></p>
+            </section>
+
+            <section class="panel">
+              <h3 class="panel__title">这笔账是怎么算的</h3>
+              <p class="panel__desc">
+                用你自己的 Key = <b>花你自己的额度</b>。毛球在你每次发送前都会让你看一眼要发的内容，
+                并且<b>单次最多发 8000 字</b>的日志（AI 是按字数收费的，这条是替你省钱）。
+                免费模型（比如默认这个）不花钱，只受"每分钟问几次"的速度限制。
+              </p>
+              <p class="panel__desc">
+                Key 存在你电脑上，而且是<b>用 Windows 自带的加密功能加密之后才存的</b>——
+                配置文件里看不到明文。
+              </p>
+            </section>
+          </div>
+
           <div class="settings-tab" data-settings-tab="look" hidden>
             <div class="notice">
               这里的改动都是"看着玩"的，不影响游戏本身。改完立刻生效。
@@ -1239,12 +1388,19 @@
         <div class="modal__head">
           <span class="modal__title" id="log-title">游戏日志</span>
           <div class="modal__actions">
+            <!-- M22：看不懂就交给 AI。点了跳到 AI 助手页，并把"最近一次报错的日志"带上 -->
+            <button class="btn btn--primary btn--sm" type="button" id="log-ask-ai">
+              问问 AI
+            </button>
             <button class="btn btn--ghost btn--sm" type="button" id="log-folder">
               打开日志文件夹
             </button>
             <button class="btn btn--ghost btn--sm" type="button" id="log-close">关闭</button>
           </div>
         </div>
+        <!-- 诊断结果（M22 第 1 步）：把日志里的毛病翻成人话。
+             规则认不出来时这里会说"没认出来"，并给一个问 AI 的入口（第 4 步接上）。 -->
+        <div class="diag" id="log-diagnosis" hidden></div>
         <pre class="log log--modal" id="log-modal-text"></pre>
       </div>
     </div>

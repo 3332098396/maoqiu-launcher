@@ -35,6 +35,11 @@ function showPage(name) {
     moveSkinViewerTo(skinStageEl, 1) // 从皮肤页回来时把小人搬回来（M17.5）
   }
 
+  // AI 助手页（M22）：进来先读一遍配置（用户可能刚在设置里填了 Key）
+  if (name === 'ai') {
+    loadAiConfig()
+  }
+
   // 皮肤页（M17.5）：把 3D 小人搬过来 + 重新画列表
   if (name === 'skin') {
     ensureSkinCard()
@@ -3443,7 +3448,67 @@ function showSettingsTab(name) {
   if (name === 'clean') loadCleanTab()
   if (name === 'look') renderLookTab()
   if (name === 'account') renderMicrosoftClientId()
+  if (name === 'ai') renderAiSettingsTab()
 }
+
+// ——— AI 设置那一栏（M22）———
+
+const aiKeyEl = document.getElementById('ai-key')
+const aiEndpointEl = document.getElementById('ai-endpoint')
+const aiModelEl = document.getElementById('ai-model')
+const aiKeyHintEl = document.getElementById('ai-key-hint')
+const aiTestResultEl = document.getElementById('ai-test-result')
+
+/** 把当前配置填进设置页那几个框（**Key 不回填**——服务器都不往回发，界面也不留） */
+async function renderAiSettingsTab() {
+  await loadAiConfig()
+  aiEndpointEl.value = aiConfig.endpoint || ''
+  aiModelEl.value = aiConfig.model || ''
+  aiKeyEl.value = ''
+  aiKeyEl.placeholder = aiConfig.hasKey ? '已经填过了（留空 = 不改；想换就直接粘新的）' : '粘贴你的 API Key'
+  aiKeyHintEl.textContent = aiConfig.hasKey
+    ? '已经存好一个 Key 了（加密存的）。要换就粘新的进来，要清掉点下面「清掉 Key」。'
+    : '还没有 Key。不填也能用——助手页的「本地规则库」不联网就能看报错。'
+  aiTestResultEl.textContent = ''
+}
+
+document.getElementById('ai-open-site').addEventListener('click', () => {
+  window.api.openAiSite()
+})
+
+document.getElementById('ai-save').addEventListener('click', async () => {
+  const patch = {
+    endpoint: aiEndpointEl.value.trim(),
+    model: aiModelEl.value.trim()
+  }
+  // 只有用户真打了字才动 Key（留空 = 不改动已有的）
+  if (aiKeyEl.value.trim()) patch.apiKey = aiKeyEl.value.trim()
+
+  const result = await window.api.setAiConfig(patch)
+  if (!result.ok) {
+    aiTestResultEl.textContent = result.error
+    return
+  }
+  aiKeyEl.value = ''
+  await renderAiSettingsTab()
+  aiTestResultEl.textContent = '存好了。点「测试连接」看看通不通。'
+})
+
+document.getElementById('ai-test').addEventListener('click', async () => {
+  aiTestResultEl.textContent = '正在试…'
+  const result = await window.api.testAi()
+  aiTestResultEl.textContent = result.ok
+    ? `通了 ✓ 它回了「${result.answer || '…'}」，可以用了。`
+    : `没通：${result.error}`
+})
+
+document.getElementById('ai-clear').addEventListener('click', async () => {
+  const yes = window.confirm('清掉存着的 API Key？\n\n清掉之后还是能用「本地规则库」，只是不能问 AI 了。')
+  if (!yes) return
+  await window.api.setAiConfig({ apiKey: '' })
+  await renderAiSettingsTab()
+  aiTestResultEl.textContent = '已经清掉了。'
+})
 
 // ——— 帮助页（M13）———
 
@@ -3685,6 +3750,7 @@ window.api.onBackupProgress((payload) => {
 
 const logModalEl = document.getElementById('log-modal')
 const logModalTextEl = document.getElementById('log-modal-text')
+const diagnosisEl = document.getElementById('log-diagnosis')
 const logTitleEl = document.getElementById('log-title')
 
 /** 弹窗里现在显示的是哪种日志：'live' = 本次打开软件后的实时记录，'file' = 上次存下来的 */
@@ -3695,8 +3761,81 @@ function renderLogModal() {
   logModalTextEl.scrollTop = logModalTextEl.scrollHeight
 }
 
+/**
+ * 把诊断结果画到日志窗口顶上（M22 第 1 步）。
+ *
+ * 【放在这儿的原因】用户看到一屏英文时的第一个动作就是点「日志」——
+ * 那就该在这儿的**最上面**先说人话，下面才是原始日志。
+ */
+function renderDiagnosis(result) {
+  diagnosisEl.textContent = ''
+  diagnosisEl.hidden = false
+
+  if (!result || !result.ok) {
+    diagnosisEl.hidden = true
+    return
+  }
+
+  // 一条都没认出来：老实说，并给个下一步
+  if (result.unknown) {
+    const box = document.createElement('div')
+    box.className = 'diag__unknown'
+    const t = document.createElement('b')
+    t.textContent = '这次的问题毛球没认出来'
+    const p = document.createElement('span')
+    p.textContent =
+      '日志就在下面。可以把它复制给懂行的朋友看，或者等「问问 AI」做好之后交给大模型看。'
+    box.appendChild(t)
+    box.appendChild(p)
+    diagnosisEl.appendChild(box)
+    return
+  }
+
+  for (const one of result.found) {
+    const item = document.createElement('div')
+    item.className = 'diag__item'
+
+    const title = document.createElement('b')
+    title.className = 'diag__title'
+    title.textContent = one.title
+    item.appendChild(title)
+
+    if (one.why) {
+      const why = document.createElement('span')
+      why.className = 'diag__why'
+      why.textContent = one.why
+      item.appendChild(why)
+    }
+
+    if (Array.isArray(one.steps) && one.steps.length) {
+      const list = document.createElement('ol')
+      list.className = 'diag__steps'
+      for (const step of one.steps) {
+        const li = document.createElement('li')
+        li.textContent = step
+        list.appendChild(li)
+      }
+      item.appendChild(list)
+    }
+
+    diagnosisEl.appendChild(item)
+  }
+}
+
+/** 问主进程要一次诊断（读的是最近那份日志） */
+async function runDiagnosis(exitCode) {
+  try {
+    const result = await window.api.diagnoseLast(exitCode)
+    renderDiagnosis(result)
+  } catch (error) {
+    diagnosisEl.hidden = true
+  }
+}
+
 async function openLogModal() {
   logModalEl.hidden = false
+  // 顺手诊断一下（不等它，日志先显示出来）
+  runDiagnosis()
 
   // 本次打开软件后启动过游戏——直接看实时的那份
   if (logLines.length > 0) {
@@ -3734,6 +3873,17 @@ async function openLogModal() {
 function closeLogModal() {
   logModalEl.hidden = true
 }
+
+// 「问问 AI」：关掉日志窗口 → 跳到 AI 助手页 → 勾上"带日志" → 弹"确认要发的内容"
+document.getElementById('log-ask-ai').addEventListener('click', async () => {
+  closeLogModal()
+  showPage('ai')
+  await loadAiConfig()
+  aiWithLogEl.checked = true
+  aiLogHintEl.textContent = '会先弹一层让你过目，确认了才发'
+  aiInputEl.focus()
+  await prepareAiLogAndPreview('这次游戏出问题了，帮我看看是什么原因、怎么解决。')
+})
 
 document.getElementById('log-btn').addEventListener('click', openLogModal)
 document.getElementById('log-close').addEventListener('click', closeLogModal)
@@ -5401,6 +5551,351 @@ skinAccountBtnEl.addEventListener('click', () => {
 // 这次没出事（因为启动页不碰穿透那几个变量），但属于"运气好"。
 // 所以这行**挪到文件最末尾**了——以后新加的代码都加在它前面，不用再记着这条规矩。
 // ——————————————————————————————————————————————
+
+// ═══════════════════════════════════════
+// AI 助手（M22）
+// ═══════════════════════════════════════
+//
+// 【设计要点，别改歪】
+//   ① **花不花钱的开关在用户手上**：顶上一排切换，随时能从"自己的 AI"切回本地规则库
+//   ② 不填 Key 也能用：本地规则库不联网，认日志里的毛病
+//   ③ **发出去之前一定让用户看一眼**（那是他的日志，发出去收不回来）
+//   ④ 本地规则认不出来的，主动提示"要不要切到 AI 问问"，但不替他切
+
+const aiModeEl = document.getElementById('ai-mode')
+const aiNoteEl = document.getElementById('ai-note')
+const aiChatEl = document.getElementById('ai-chat')
+const aiInputEl = document.getElementById('ai-input')
+const aiWithLogEl = document.getElementById('ai-with-log')
+const aiLogHintEl = document.getElementById('ai-loghint')
+const aiSendEl = document.getElementById('ai-send')
+const aiPreviewModalEl = document.getElementById('ai-preview-modal')
+const aiPreviewTextEl = document.getElementById('ai-preview-text')
+const aiPreviewWhenEl = document.getElementById('ai-preview-when')
+
+/** 现在的 AI 配置（界面那份，不含 Key） */
+let aiConfig = { mode: 'local', hasKey: false, model: '', endpoint: '' }
+/** 聊天记录（只在内存里，关掉软件就没了——隐私上干净） */
+let aiHistory = []
+/** 正在等回答（等的时候不让再发） */
+let aiBusy = false
+/** 这一次发送用的日志（用户可能改过） */
+let aiPendingLog = ''
+
+async function loadAiConfig() {
+  try {
+    const result = await window.api.getAiConfig()
+    if (result.ok) aiConfig = result.config
+  } catch {
+    // 读不到就用默认的（只用本地规则库）
+  }
+  renderAiHead()
+}
+
+function renderAiHead() {
+  for (const chip of aiModeEl.querySelectorAll('[data-ai-mode]')) {
+    chip.classList.toggle('chip--on', chip.dataset.aiMode === aiConfig.mode)
+  }
+
+  if (aiConfig.mode === 'api') {
+    aiNoteEl.textContent = aiConfig.hasKey
+      ? `现在用的是你自己的 AI（${aiConfig.model}）——会花你自己的额度。想省钱随时点左边那个切回本地。`
+      : '还没填 Key。点上面「我的 AI」旁边的提示去设置里填一个（有免费的）。'
+  } else {
+    aiNoteEl.textContent = aiConfig.hasKey
+      ? '现在用的是本地规则库：不联网、不花钱、立刻有答案。认不出来的可以切到「我的 AI」。'
+      : '现在用的是本地规则库：不联网、不花钱。它能认常见的报错（Java 版本、内存、Mod 冲突…）。'
+  }
+}
+
+/** 往聊天区加一条 */
+function addAiMessage(kind, text, foot) {
+  const box = document.createElement('div')
+  box.className = `ai-msg ai-msg--${kind}`
+  box.textContent = text
+  if (foot) {
+    const line = document.createElement('span')
+    line.className = 'ai-msg__foot'
+    line.textContent = foot
+    box.appendChild(line)
+  }
+  aiChatEl.appendChild(box)
+  aiChatEl.scrollTop = aiChatEl.scrollHeight
+  return box
+}
+
+/** 本地模式：用规则库/小抄回答 */
+async function answerLocally(question, logText) {
+  // 有日志 → 走规则诊断（这是本地模式最拿手的）
+  if (logText) {
+    try {
+      const result = await window.api.diagnoseLast()
+      if (result.ok && !result.unknown && result.found.length) {
+        const lines = []
+        for (const one of result.found) {
+          lines.push(`【${one.title}】`)
+          if (one.why) lines.push(one.why)
+          if (Array.isArray(one.steps)) one.steps.forEach((s, i) => lines.push(`${i + 1}. ${s}`))
+          lines.push('')
+        }
+        return { ok: true, text: lines.join('\n').trim() }
+      }
+      return {
+        ok: true,
+        text:
+          '这段日志本地规则库没认出来。\n\n' +
+          '可以试试：① 换个更长的日志（把整个文件贴进来）；② 或者切到「我的 AI」让它看看。'
+      }
+    } catch (error) {
+      return { ok: false, text: `本地诊断出错：${error.message}` }
+    }
+  }
+
+  // 没日志 → 常见问题小抄（关键词匹配，写死的，不联网）
+  const hit = matchFaq(question)
+  if (hit) return { ok: true, text: hit }
+  return {
+    ok: true,
+    text:
+      '本地规则库只能认日志里的报错，回答不了这种开放问题。\n\n' +
+      '想聊这种问题，切到「我的 AI」（右上角那个）——用你自己的 Key，可以一直追问。'
+  }
+}
+
+/**
+ * 常见问题小抄（本地、写死的）。
+ * 【为什么要有】本地模式如果只会"贴日志"，用户问一句"怎么装 Mod"就被弹回来，
+ * 会显得这个页面很没用。把最高频的几个问题写死，关键词一匹配就答。
+ */
+const AI_FAQ = [
+  {
+    key: ['内存', '卡', '掉帧', '内存不足', '给多少'],
+    answer:
+      '内存给多少：\n\n' +
+      '1. 到「设置 → 启动选项 → 内存分配」，建议给本机的 1/4 左右（16G 的机器给 4G 上下）\n' +
+      '2. 装了整合包的话，可以在「版本设置」里给那一个版本单独多分点\n' +
+      '3. 别拉满——给太多会把整台电脑拖慢，游戏反而更卡\n' +
+      '4. 还是卡的话：把游戏里「视距」调小、关掉光影，效果比加内存明显'
+  },
+  {
+    key: ['装mod', '装 mod', 'mod怎么', '怎么装mod', '模组'],
+    answer:
+      '怎么装 Mod：\n\n' +
+      '1. 先给这个版本装一个「Mod 加载器」：版本设置 → 装 Fabric（或 Forge）\n' +
+      '2. 装完会多出一个新版本（名字带 fabric-loader），**启动要用那个新版本**\n' +
+      '3. 到「下载」页搜你要的 Mod，点下载——会自动放进这个版本的 mods 文件夹\n' +
+      '4. 注意：Mod 要跟游戏版本和加载器对得上，不然进游戏会崩'
+  },
+  {
+    key: ['联机', '和朋友', '一起玩', '房间码'],
+    answer:
+      '怎么和朋友联机：\n\n' +
+      '1. 房主：进游戏开一个世界 → 按 Esc → 点「对局域网开放」\n' +
+      '2. 房主：回毛球「联机」页 → 创建房间 → 得到一串房间码\n' +
+      '3. 好友：在毛球「联机」页输入房间码加入\n' +
+      '4. 好友：进游戏 → 多人游戏 → 列表里就能看到房主的世界\n\n' +
+      '（两边都得用毛球。连不上的话，看联机页底下那行"连接状态"说的是什么）'
+  },
+  {
+    key: ['皮肤', '怎么换皮肤', '外观'],
+    answer:
+      '怎么换皮肤：\n\n' +
+      '毛球里挑的皮肤是**给毛球那个小人看的**，游戏里显示的皮肤是问账号服务器要的——两回事。\n\n' +
+      '想让游戏里也是你自己的皮肤：\n' +
+      '1. 用一个皮肤站账号（比如 littleskin.cn）：在网站上「角色管理」里传皮肤\n' +
+      '2. 回毛球用「外置登录」登进去，进游戏就是你那张\n\n' +
+      '离线账号进游戏只会穿官方自带的默认皮肤——这是游戏本身的限制，不是毛球的问题。'
+  },
+  {
+    key: ['闪退', '打不开', '起不来', '崩'],
+    answer:
+      '游戏闪退/打不开，按这个顺序查：\n\n' +
+      '1. **先看日志**：左下角「日志」按钮，最上面那块"诊断"会直接告诉你是什么毛病\n' +
+      '2. 常见的是 Java 版本不对——到「设置 → Java 运行时」把「自动检测并下载」打开，再重装一次版本\n' +
+      '3. 挂了 Mod 的话：把最近新加的 Mod 删掉试试（版本设置 → Mod 文件夹）\n' +
+      '4. 都不行就把日志发给 AI 看看（切到「我的 AI」）'
+  },
+  {
+    key: ['下载慢', '下载失败', '下不动'],
+    answer:
+      '下载慢：\n\n' +
+      '1. 到「设置 → 启动选项 → 下载源」，选「优先国内镜像」\n' +
+      '2. 再点一次安装/重装，已经下好的不会重下\n' +
+      '3. 还是慢就换个时间段——晚上高峰官方源会很慢'
+  }
+]
+
+/** 在常见问题小抄里找一条（关键词匹配） */
+function matchFaq(question) {
+  const text = String(question || '').toLowerCase()
+  if (!text) return ''
+  for (const item of AI_FAQ) {
+    if (item.key.some((k) => text.includes(k.toLowerCase()))) return item.answer
+  }
+  return ''
+}
+
+/** 点「发送」 */
+async function sendAiQuestion() {
+  if (aiBusy) return
+  const question = aiInputEl.value.trim()
+
+  // 要带日志的话，先弹"给你看一眼"
+  if (aiWithLogEl.checked) {
+    await prepareAiLogAndPreview(question)
+    return
+  }
+
+  if (!question) return
+  aiInputEl.value = ''
+  await runAiAnswer(question, '')
+}
+
+/** 弹"确认要发的内容"（先去主进程把日志挑好、隐私抹掉） */
+async function prepareAiLogAndPreview(question) {
+  let result
+  try {
+    result = await window.api.prepareAiLog()
+  } catch (error) {
+    addAiMessage('tip', `读日志失败：${error.message}`)
+    return
+  }
+
+  if (!result.ok) {
+    addAiMessage('tip', `没能读到日志：${result.error}`)
+    return
+  }
+
+  aiPreviewWhenEl.textContent = result.when
+    ? `用的是 ${result.when} 那次启动的日志（最近一次出问题的）${result.truncated ? '，太长，只发了最后一段' : ''}`
+    : '用的是最近一次启动的日志'
+  aiPreviewTextEl.value = question ? `【我的问题】\n${question}\n\n【日志】\n${result.text}` : result.text
+  aiPreviewModalEl.hidden = false
+}
+
+/** 确认发送 */
+async function confirmSendAi() {
+  aiPreviewModalEl.hidden = true
+  const question = aiInputEl.value.trim()
+  aiInputEl.value = ''
+  aiWithLogEl.checked = false
+
+  const logText = aiPreviewTextEl.value.replace(/^【我的问题】[\s\S]*?【日志】\n/, '')
+  await runAiAnswer(question || '这次游戏出问题了，帮我看看是什么原因、怎么解决。', logText)
+}
+
+/** 真正去要答案（本地 or AI） */
+async function runAiAnswer(question, logText) {
+  aiBusy = true
+  aiSendEl.disabled = true
+  addAiMessage('me', logText ? `${question}\n（附上了最近一次的报错日志）` : question)
+
+  const waiting = addAiMessage('bot wait', '正在想…')
+
+  try {
+    if (aiConfig.mode === 'local') {
+      const local = await answerLocally(question, logText)
+      waiting.remove()
+      if (local.ok) {
+        addAiMessage('bot', local.text, '（这是本地规则库的答案，不联网、没花钱）')
+        // 本地答不了 → 主动提示可以切到 AI（但**不替他切**）
+        if (!logText || local.text.includes('没认出来') || local.text.includes('回答不了')) {
+          const tip = addAiMessage('tip', '想让它更聪明一点？点右上角切到「我的 AI」。')
+          tip.style.cursor = 'pointer'
+          tip.addEventListener('click', () => switchAiMode('api'))
+        }
+      } else {
+        addAiMessage('bot', local.text)
+      }
+    } else {
+      // 用用户自己的 AI
+      const result = await window.api.askAi({
+        question,
+        logText,
+        history: aiHistory.slice(-6)
+      })
+      waiting.remove()
+
+      if (!result.ok) {
+        addAiMessage('bot', `没问成：${result.error}`)
+        // Key 没填 → 直接把他送到设置页
+        if (String(result.error).includes('还没填')) {
+          const tip = addAiMessage('tip', '点这里去填 Key →')
+          tip.style.cursor = 'pointer'
+          tip.addEventListener('click', () => {
+            showPage('settings')
+            showSettingsTab('ai')
+          })
+        }
+      } else {
+        const foot = result.trimmed
+          ? '（AI 说的不一定对，动手前想清楚。日志太长，只发了最后一段）'
+          : '（AI 说的不一定对，动手前想清楚）'
+        addAiMessage('bot', result.answer, foot)
+        // 记进历史，好让用户能追问
+        aiHistory.push({ role: 'user', content: question })
+        aiHistory.push({ role: 'assistant', content: result.answer })
+        if (aiHistory.length > 12) aiHistory = aiHistory.slice(-12)
+      }
+    }
+  } catch (error) {
+    waiting.remove()
+    addAiMessage('bot', `出错了：${error.message}`)
+  }
+
+  aiBusy = false
+  aiSendEl.disabled = false
+}
+
+/** 切换"用哪个" */
+async function switchAiMode(mode) {
+  if (mode === 'api' && !aiConfig.hasKey) {
+    // 没填过 Key → 直接把他送到设置页（用户定的：没填过就跳过去填）
+    showPage('settings')
+    showSettingsTab('ai')
+    setNotice('先用本地规则库顶着——填好 Key 就能切到「我的 AI」了。', 'ok')
+    return
+  }
+
+  aiConfig.mode = mode
+  renderAiHead()
+  try {
+    await window.api.setAiConfig({ mode })
+  } catch {
+    // 存不下也没关系，这次照样按选的来
+  }
+}
+
+// 顶上的切换
+aiModeEl.addEventListener('click', (event) => {
+  const chip = event.target.closest('[data-ai-mode]')
+  if (chip) switchAiMode(chip.dataset.aiMode)
+})
+
+aiSendEl.addEventListener('click', sendAiQuestion)
+
+// 输入框里按回车发送（Shift+回车是换行）
+aiInputEl.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault()
+    sendAiQuestion()
+  }
+})
+
+// 勾上"带日志"时，先说清楚会发什么
+aiWithLogEl.addEventListener('change', () => {
+  aiLogHintEl.textContent = aiWithLogEl.checked
+    ? '会先弹一层让你过目，确认了才发'
+    : ''
+})
+
+document.getElementById('ai-preview-cancel').addEventListener('click', () => {
+  aiPreviewModalEl.hidden = true
+})
+aiPreviewModalEl.addEventListener('click', (event) => {
+  if (event.target === aiPreviewModalEl) aiPreviewModalEl.hidden = true
+})
+document.getElementById('ai-preview-send').addEventListener('click', confirmSendAi)
 
 // ═══════════════════════════════════════
 // 樱花内网穿透（M15）
