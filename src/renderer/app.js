@@ -5790,11 +5790,20 @@ async function runAiAnswer(question, logText) {
   aiSendEl.disabled = true
   addAiMessage('me', logText ? `${question}\n（附上了最近一次的报错日志）` : question)
 
-  const waiting = addAiMessage('bot wait', '正在想…')
+  const waiting = addAiMessage('bot', '正在想…')
+  waiting.classList.add('ai-msg--wait') // 灰色等一等的样子（以前写成 addAiMessage('bot wait')，类名对不上，样式一直没生效）
+  // 让用户看见它"还活着"：每秒报一下等了几秒。
+  // （免费模型赶上人多会慢，光写"正在想…"一动不动，看着像卡死——用户就是这么以为的）
+  const startedAt = Date.now()
+  const ticker = setInterval(() => {
+    waiting.textContent = `正在想…（已经等了 ${Math.round((Date.now() - startedAt) / 1000)} 秒）`
+  }, 1000)
+  const stopTicker = () => clearInterval(ticker)
 
   try {
     if (aiConfig.mode === 'local') {
       const local = await answerLocally(question, logText)
+      stopTicker()
       waiting.remove()
       if (local.ok) {
         addAiMessage('bot', local.text, '（这是本地规则库的答案，不联网、没花钱）')
@@ -5814,6 +5823,7 @@ async function runAiAnswer(question, logText) {
         logText,
         history: aiHistory.slice(-6)
       })
+      stopTicker()
       waiting.remove()
 
       if (!result.ok) {
@@ -5839,6 +5849,7 @@ async function runAiAnswer(question, logText) {
       }
     }
   } catch (error) {
+    stopTicker()
     waiting.remove()
     addAiMessage('bot', `出错了：${error.message}`)
   }

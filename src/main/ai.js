@@ -236,7 +236,15 @@ function friendlyError(error, status, bodyText) {
     return '接口地址不对——检查一下地址末尾（有的平台要把 /v1 或 /v4 带上）'
   }
   if (status === 429) {
-    return '问得太快了，或者今天的免费额度用完了。等一会儿再问，或者明天再试'
+    // 429 其实分两种：一种是"你问太快"（额度用完），另一种是"这个模型现在挤不上"
+    // （智谱实测回过 code 1305「该模型当前访问量过大」——2026-10-09 在 glm-4.7-flash 上碰到）
+    const detail = text.replace(/\s+/g, ' ').trim().slice(0, 160)
+    const busy = /访问量|繁忙|排队|overload|busy/i.test(text)
+    const head = busy ? '这个免费模型现在用的人太多，暂时挤不上' : '问得太快了，或者今天的免费额度用完了'
+    const tail = busy
+      ? '（过几分钟再试；急着用就去「设置 → AI 助手」把模型名换成 glm-4-flash-250414——那个也免费、现在很稳）'
+      : '（等一会儿再问，或者明天再试）'
+    return detail ? `${head}。平台的原话：「${detail}」\n${tail}` : `${head}。${tail}`
   }
   if (status >= 500) {
     return '对面服务器出问题了（不是你的锅），等几分钟再试'
@@ -246,7 +254,7 @@ function friendlyError(error, status, bodyText) {
     const detail = text.slice(0, 200)
     // 最常见的 400 就是模型名写错了，单独给一句能照着做的（模型名随时能在设置里改）
     if (/model|模型/i.test(text)) {
-      return `这个模型名平台不认：${detail}\n（去「设置 → AI 助手」把模型名换一个。智谱现在免费的名字是 glm-4.7-flash，老一点的 glm-4-flash-250414 也免费）`
+      return `这个模型名平台不认：${detail}\n（去「设置 → AI 助手」把模型名换一个。免费的可以填 glm-4-flash-250414——一直很稳；glm-4.7-flash 更新，但赶上人多会挤不上）`
     }
     return `这个请求对方不认：${detail}`
   }
