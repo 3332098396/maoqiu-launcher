@@ -3536,6 +3536,9 @@ document
   .getElementById('help-open-config')
   .addEventListener('click', () => openHelpFolder('config', '配置目录'))
 
+// 帮助页那块「AI 助手怎么用」底下那个按钮：直接带他去 AI 页（M22）
+document.getElementById('help-goto-ai').addEventListener('click', () => showPage('ai'))
+
 // ——— 清理游戏垃圾（M13）———
 
 const cleanNoticeEl = document.getElementById('clean-notice')

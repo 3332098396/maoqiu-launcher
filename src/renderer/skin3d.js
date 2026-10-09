@@ -379,6 +379,82 @@ function applyCamera() {
   camera.lookAt(look.x, look.y, look.z)
 }
 
+// ——————————————————————————————————————————————
+// 显卡上下文丢了怎么办（2026-10-09 用户撞上的那个 bug）
+// ——————————————————————————————————————————————
+//
+// 【现象】皮肤页那个大预览里只剩下一圈光圈，小人不见了；启动页那张小卡也一样。
+// 列表里的小头像（2D 画的）好好的——因为它们不用显卡。
+// 【复现】`.probe/ui-skin-lose.js`：用 WEBGL_lose_context 把上下文弄丢，画出来跟用户截图一模一样。
+// 【原因】WebGL 的上下文会被系统/驱动/GPU 进程崩溃**随时收回**。规范里写着一条要命的规矩：
+//         **不调 preventDefault() 的话，浏览器就永远不会把上下文还回来**，画面从此一直黑着。
+//         我们以前一个监听都没挂 → 丢了就是永久丢了。
+// 【修法】① 丢了 → preventDefault（这样浏览器才会在能还的时候还）；
+//         ② 还回来 → 收拾一下画面；
+//         ③ 要是一直不还（驱动真崩了）→ 10 秒后自己重建一个渲染器，不能就这么黑着。
+let contextWatchdog = null
+
+function stopWatchdog() {
+  if (contextWatchdog) {
+    clearInterval(contextWatchdog)
+    contextWatchdog = null
+  }
+}
+
+/** 每 1 秒问一句"还回来了吗"，10 秒还没回来就重建 */
+function watchContext() {
+  stopWatchdog()
+  let tries = 0
+  contextWatchdog = setInterval(() => {
+    tries++
+    const gl = renderer && renderer.getContext()
+    if (!renderer || !gl || !gl.isContextLost()) {
+      stopWatchdog()
+      return
+    }
+    if (tries >= 10) {
+      stopWatchdog()
+      rebuildRenderer()
+    }
+  }, 1000)
+}
+
+function onContextLost(event) {
+  event.preventDefault() // ★ 这一句是整件事的关键，删了它画面就永久黑了
+  watchContext()
+}
+
+function onContextRestored() {
+  stopWatchdog()
+  resize()
+}
+
+/** 真等不回来了：就地换一个崭新的渲染器（旧的那个已经废了，重建模型贴图） */
+function rebuildRenderer() {
+  if (!renderer || !scene || !camera) return
+  const container = renderer.domElement.parentElement
+  const old = renderer
+  try { old.domElement.remove() } catch { /* 已经没了就算了 */ }
+  try { old.dispose() } catch { /* 上下文都没了，dispose 报错很正常 */ }
+
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
+  renderer.domElement.style.width = '100%'
+  renderer.domElement.style.height = '100%'
+  renderer.domElement.style.display = 'block'
+  renderer.domElement.style.cursor = 'default'
+  if (container) container.appendChild(renderer.domElement)
+  bindContextEvents()
+
+  rebuild() // 模型和贴图得照新的上下文重做一份
+  resize()
+}
+
+function bindContextEvents() {
+  renderer.domElement.addEventListener('webglcontextlost', onContextLost)
+  renderer.domElement.addEventListener('webglcontextrestored', onContextRestored)
+}
+
 /**
  * 起一个 3D 预览，塞进指定的容器元素里。
  *
@@ -425,6 +501,7 @@ function mount(container, zoom) {
   renderer.domElement.style.display = 'block'
   renderer.domElement.style.cursor = 'grab'
   container.appendChild(renderer.domElement)
+  bindContextEvents() // 显卡上下文被系统收走时的自救（见上面那段注释）
 
   rebuild()
   resize()
@@ -547,6 +624,7 @@ function useDefaultSkin() {
 /** 停掉（切页面时省点电） */
 function unmount() {
   if (window.api && window.api.watchCursor) window.api.watchCursor(false)
+  stopWatchdog()
   if (raf) cancelAnimationFrame(raf)
   raf = null
   renderer = null
