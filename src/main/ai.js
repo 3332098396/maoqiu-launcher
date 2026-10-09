@@ -244,7 +244,11 @@ function friendlyError(error, status, bodyText) {
   if (status === 400) {
     // 平台通常会在 body 里说清楚，能读到就带上
     const detail = text.slice(0, 200)
-    return `这个请求对方不认（可能是模型名写错了）：${detail}`
+    // 最常见的 400 就是模型名写错了，单独给一句能照着做的（模型名随时能在设置里改）
+    if (/model|模型/i.test(text)) {
+      return `这个模型名平台不认：${detail}\n（去「设置 → AI 助手」把模型名换一个。智谱现在免费的名字是 glm-4.7-flash，老一点的 glm-4-flash-250414 也免费）`
+    }
+    return `这个请求对方不认：${detail}`
   }
 
   const message = String(error?.message || '')

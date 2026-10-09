@@ -110,8 +110,13 @@ const DEFAULTS = {
   ai: {
     /** 接口地址（OpenAI 兼容的那套；默认智谱的，因为那个模型**免费**） */
     endpoint: 'https://open.bigmodel.cn/api/paas/v4',
-    /** 用哪个模型（默认智谱 GLM-4-Flash：免费、128K、中文好） */
-    model: 'glm-4-flash',
+    /**
+     * 用哪个模型（默认智谱 GLM-4.7-Flash：**免费**、200K 上下文、中文好）。
+     * 2026-10-09 换的名字：老写法 glm-4-flash 已从智谱的免费列表里拿掉，
+     * 新名字是 glm-4.7-flash（老的 glm-4-flash-250414 也还免费）。
+     * 模型名是可以随时改的——Key 不绑模型，填什么名字就用什么模型。
+     */
+    model: 'glm-4.7-flash',
     /** 加密后的 Key（空 = 还没填，那就只用本地规则库） */
     keyEncrypted: '',
     /** 界面用哪种：local = 本地规则库；api = 用用户自己的 AI */
