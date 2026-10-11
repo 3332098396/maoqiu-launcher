@@ -22,6 +22,13 @@ const settings = require('./settings')
 
 /** 正在跑的 frpc 进程（null = 没跑） */
 let child = null
+/** "没人应声"的看门狗定时器（见 start() 里的说明） */
+let watchdog = null
+
+function clearWatchdog() {
+  if (watchdog) clearTimeout(watchdog)
+  watchdog = null
+}
 /** 最近的日志行（给界面看状态用） */
 let logLines = []
 /** 起没起来、连没连上。
@@ -49,11 +56,17 @@ function saveFrpConfig(patch) {
   return readFrpConfig()
 }
 
-/** 状态：给界面看的 */
+/** 状态：给界面看的。
+ *  【为什么要把 state 里的 ok 剃掉】这个对象会被包成 `{ ok: true, ...这个 }` 发给界面，
+ *  而界面（app.js 的 refreshFrp）第一句就是 `if (!status.ok) return`。
+ *  只要 state 里混进一个 ok:false，上头的 ok:true 就被顶掉，界面从此不再刷新
+ *  ——"卡在正在启动…"就是这么来的（2026-10-11，见 docs/10）。
+ *  内部字段一律不许叫 ok。 */
 function status() {
+  const { ok: _drop, ...inner } = state
   return {
     running: Boolean(child),
-    ...state,
+    ...inner,
     log: logLines.slice(-12),
     config: readFrpConfig()
   }
@@ -65,7 +78,15 @@ function noteLine(text) {
   if (logLines.length > 200) logLines.shift()
 
   // frpc 的输出里认这几句（不同版本措辞略有差别，所以用宽松的关键词）
-  if (/启动成功|start tunnel success|start proxy success/i.test(text)) {
+  // 【排在最前】新版的 frpc 被樱花锁了：别的程序一调用，它只打这句就退出
+  // （2026-10-11 实测本机的 sakura-14 就是这样，见 docs/10）。
+  if (/not intended to be run directly|part of SakuraFrp Launcher/i.test(text)) {
+    state = {
+      running: true,
+      connected: false,
+      message: '这个 frpc 是樱花启动器专用的，它拒绝被别的程序调用。请到樱花面板「软件下载」里下那个单独的 frpc.exe'
+    }
+  } else if (/启动成功|start tunnel success|start proxy success/i.test(text)) {
     state = { running: true, connected: true, message: '隧道已启动' }
   } else if (/认证失败|auth failed|token/i.test(text) && /fail|错误|失败/i.test(text)) {
     state = { running: true, connected: false, message: '访问密钥不对，或者这条隧道不属于这个账号' }
@@ -99,6 +120,14 @@ function start(options = {}) {
 
   if (!exe || !fs.existsSync(exe)) {
     return fail('还没选 frpc.exe——点「选 frpc 文件…」，到你下载樱花的那个文件夹里挑')
+  }
+  // 【为什么先按名字拦一道】樱花启动器的安装目录里躺着好几个 exe：
+  // SakuraLauncher.exe（图形界面）、SakuraFrpService.exe（后台服务）、frpc.exe（真正干活的）。
+  // 用户很容易挑中前两个，而它们压根不读我们的参数——界面就永远停在"正在启动…"
+  // （2026-10-11 用户就是这么踩的，见 docs/10）。
+  const exeName = path.basename(exe).toLowerCase()
+  if (/^sakuralauncher|^sakurafrp|^natfrp-service/.test(exeName)) {
+    return fail('这个不是 frpc，是樱花自己的启动器/服务程序——它不听别的程序指挥。请到樱花面板「软件下载」里下那个单独的 frpc.exe，再选它')
   }
   if (!key) return fail('先把访问密钥填上（樱花面板 → 用户信息 → 访问密钥）')
   if (!/^\d+$/.test(tunnelId)) return fail('隧道 ID 是一串数字，在樱花面板的隧道列表里')
@@ -134,20 +163,39 @@ function start(options = {}) {
   child.stdout.on('data', eat)
   child.stderr.on('data', eat)
 
-  child.on('exit', (code) => {
-    child = null
-    if (state.ok) {
-      state = { running: false, connected: true, message: '隧道已停止' }
-      return
+  // 【"没人应声"的看门狗】挑错了文件时那个程序有两种表现：
+  //   ① 图形程序（SakuraLauncher.exe）——不读参数、不打印、也永远不退出；
+  //   ② 被锁的 frpc —— 打一行"不给别的程序调用"就退出（那句 noteLine 认得，走 exit 那条路）。
+  // ①就靠这个兜底：真 frpc 一上来就会打版本号，所以"N 秒一句话都没有"基本就是挑错了。
+  // 【为什么限定"一句话都没有"】能打印的 frpc 可能只是连得慢，那属于正常，别去打扰它。
+  clearWatchdog()
+  watchdog = setTimeout(() => {
+    watchdog = null
+    if (!child || state.connected) return
+    if (logLines.length > 0) return
+    state = {
+      running: true,
+      connected: false,
+      message: '这个文件一直没吭声，多半是挑错了——要选的是 frpc.exe（樱花面板「软件下载」里那个），不是 SakuraLauncher / SakuraFrpService 这类程序'
     }
+  }, 12000)
+
+  child.on('exit', (code) => {
+    clearWatchdog()
+    child = null
 
     // 没成功就退出了：把原因说清楚。
     // 【注意】这里不能直接用 state.message——它可能还停在"正在启动…"，
     // 那等于什么都没说。只有认出了具体原因（密钥错/隧道不存在/连不上）才用它。
+    //
+    // 【为什么这里不许再写 ok 这个字段】它会被 status() 一并发给界面，
+    // 而界面第一句是 `if (!status.ok) return`——于是"退出了"这条提示
+    // 永远画不出来，界面就死死卡在"正在启动…"（2026-10-11 实测踩到，见 docs/10）。
+    // 内部状态字段别跟 IPC 那个 ok 撞名字。
     const known = state.message && state.message !== '正在启动…'
     state = {
       running: false,
-      ok: false,
+      connected: false,
       message: known ? state.message : `frpc 退出了（退出码 ${code}）——看看下面的日志，常见原因是密钥或隧道 ID 不对`
     }
   })
@@ -157,6 +205,7 @@ function start(options = {}) {
 
 /** 停隧道 */
 function stop() {
+  clearWatchdog()
   if (!child) return { ok: true }
   try {
     child.kill()
