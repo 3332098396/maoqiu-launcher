@@ -377,8 +377,19 @@ contextBridge.exposeInMainWorld('api', {
 
   // ——— 樱花内网穿透（M15）———
 
-  /** 挑 frpc.exe（用户自己去樱花面板下的那个） */
+  /** 让毛球自己下 frpc（下之前先问一句、下完之后校验） */
+  ensureFrpc: () => ipcRenderer.invoke('frp:ensure-frpc'),
+
+  /** 挑 frpc.exe（自己有现成的——比如从樱花面板下过的那个） */
   pickFrpc: () => ipcRenderer.invoke('frp:pick-exe'),
+
+  /** 下 frpc 过程中的"现在在干嘛" / 进度百分比 */
+  onFrpStage: (callback) => {
+    ipcRenderer.on('frp:stage', (_event, text) => callback(text))
+  },
+  onFrpProgress: (callback) => {
+    ipcRenderer.on('frp:progress', (_event, stats) => callback(stats))
+  },
 
   /** 起隧道 / 停隧道 / 看状态 */
   frpStart: (options) => ipcRenderer.invoke('frp:start', options),

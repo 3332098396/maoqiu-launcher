@@ -61,6 +61,20 @@ function easytierDir(version) {
 }
 
 /**
+ * 樱花穿透的 frpc.exe 放这儿：%APPDATA%\毛球\frp\
+ *
+ * 【为什么毛球要自己下一个】樱花启动器自带那个 frpc **被锁了**：别的程序一调用，
+ * 它只打一句"不给别的程序调用"就退出。只有樱花面板「软件下载」里的独立版才听毛球的指挥。
+ * 让用户自己去那个页面翻太绕，所以毛球直接从樱花的公开下载站拿（见 frp.js 顶上的说明）。
+ *
+ * 【和联机组件一个道理】它跟游戏装在哪没关系，所以放启动器自己的目录；
+ * 卸载/重装游戏目录不会把它弄丢。
+ */
+function frpcDir() {
+  return path.join(configDir(), 'frp')
+}
+
+/**
  * authlib-injector 存哪儿（M16.2 外置登录用）。
  * 它是个 java 小代理，不跟某一个游戏版本绑定，所以不同版本放在一个目录里。
  */
@@ -314,6 +328,7 @@ module.exports = {
   backupsDir,
   easytierRoot,
   easytierDir,
+  frpcDir,
   authlibRoot,
   authlibJarPath,
   defaultGameDir,

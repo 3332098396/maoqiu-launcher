@@ -5939,11 +5939,22 @@ const frpMsgEl = document.getElementById('frp-message')
 const frpLogEl = document.getElementById('frp-log')
 const frpStartEl = document.getElementById('frp-start')
 const frpStopEl = document.getElementById('frp-stop')
+const frpDownloadEl = document.getElementById('frp-download')
 
 /** 有没有在跑（按钮状态要跟着变） */
 let frpRunning = false
 /** 定时刷状态的计时器 */
 let frpTimer = null
+/** 正在下 frpc（这期间轮询不许动提示行，见 renderFrp） */
+let frpBusy = false
+/** 到这个时刻之前，轮询也别动提示行（让"下好了"这类话多留几秒） */
+let frpQuiet = 0
+
+/** 在提示行上说一句话，并让轮询在 keepMs 内别去冲它 */
+function frpSay(text, keepMs = 6000) {
+  frpMsgEl.textContent = text
+  frpQuiet = Date.now() + keepMs
+}
 
 /** 把主进程给的状态画到界面上
  *
@@ -5958,7 +5969,11 @@ function renderFrp(status) {
   frpStartEl.disabled = frpRunning
   frpStopEl.disabled = !frpRunning
 
-  frpMsgEl.textContent = status.message || ''
+  // 【为什么不是直接写了】"正在下 frpc…" 和"刚下好"这类话也画在这一行，
+  // 而轮询每 3 秒会拿主进程的 message（闲着的时候是空的）把它冲掉——
+  // 于是提示一闪就没。忙的时候、刚说过话之后的几秒，都让轮询让路。
+  if (!frpBusy && Date.now() > frpQuiet) frpMsgEl.textContent = status.message || ''
+
   frpLogEl.textContent = (status.log || []).join('\n')
   frpLogEl.scrollTop = frpLogEl.scrollHeight
 }
@@ -6004,11 +6019,64 @@ document.getElementById('frp-pick').addEventListener('click', async () => {
   if (!picked.ok) return
   frpDraft.exePath = null // 用户刚亲手选的，以这个为准，别被之前手打的旧值顶掉
   fillFrpInputs(picked.config)
-  frpMsgEl.textContent = '记住 frpc 了。'
+  frpSay('记住 frpc 了。')
+})
+
+/**
+ * 让毛球自己下 frpc。
+ *
+ * 【为什么要这个】樱花启动器自带那个 frpc 被它锁了，别的程序调不动；
+ * 能用的那个在樱花的公开下载站上。让用户自己找那个页面太绕，所以毛球代下（下完校验）。
+ * @returns {Promise<boolean>} 现在手上有没有一个可用的 frpc
+ */
+async function 准备frpc() {
+  frpBusy = true
+  frpDownloadEl.disabled = true
+  frpMsgEl.textContent = '正在准备 frpc…'
+  try {
+    const result = await window.api.ensureFrpc()
+    if (!result.ok) {
+      frpSay(result.error)
+      return false
+    }
+    frpDraft.exePath = null // 刚下回来的，以这个为准，别被之前留下的旧路径顶掉
+    frpExeEl.value = result.path
+    frpSay(
+      result.downloaded
+        ? `frpc 下好了（${result.version}，已核对校验值）`
+        : `frpc 已经备好了（${result.version}）`
+    )
+    return true
+  } catch (error) {
+    frpSay(`下 frpc 出错：${error.message}`)
+    return false
+  } finally {
+    frpBusy = false
+    frpDownloadEl.disabled = false
+  }
+}
+
+frpDownloadEl.addEventListener('click', () => { 准备frpc() })
+
+// 下 frpc 的时候，主进程会把"现在在干嘛"和进度推过来（借的是安装那套下载器）
+window.api.onFrpStage((text) => {
+  if (frpBusy) frpMsgEl.textContent = text
+})
+window.api.onFrpProgress((stats) => {
+  if (!frpBusy || !stats || !stats.percent) return
+  frpMsgEl.textContent = `正在下载 frpc… ${stats.percent}%（${formatSpeed(stats.speed)}）`
 })
 
 frpStartEl.addEventListener('click', async () => {
-  frpMsgEl.textContent = '正在启动…'
+  // 手上还没有 frpc 就自己下一个——用户不用先跑去樱花面板里翻（下不动才提示他手动选）
+  if (!frpExeEl.value.trim()) {
+    const ok = await 准备frpc()
+    if (!ok) return
+  }
+
+  // keepMs 给 0：这句是"过渡话"，马上就该让主进程的真状态接管
+  // （不然刚下完 frpc 留下的 6 秒"静默期"会把真状态一起挡住）
+  frpSay('正在启动…', 0)
   try {
     const result = await window.api.frpStart({
       accessKey: frpKeyEl.value,

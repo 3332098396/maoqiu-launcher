@@ -8,17 +8,17 @@
 // 而 frpc 自己就带"拉配置"功能（`frpc -f 密钥:隧道ID`，官方手册里就是这么写的）——
 // 把这件事交给 frpc 最省事，我们只管起进程、看日志、报告状态。
 //
-// 【frpc 从哪来】它的下载要登录樱花面板（没有公开地址），所以**由用户自己下**，
-// 我们只记住他选的那个 exe 路径。好处：不用我们下载一个来路不明的可执行文件。
-//
+// 【frpc 从哪来】毛球**自己下**（见下面「frpc 从哪来」那一节），也允许用户自己指一个。
 // 【和 EasyTier 的区别】frpc **不需要管理员权限**（没有虚拟网卡），
 // 所以这条路子比联机房间"门槛低"——代价是好友得手动连过来，而且要先有樱花账号。
 
 const fs = require('node:fs')
 const path = require('node:path')
+const crypto = require('node:crypto')
 const { spawn } = require('node:child_process')
 const paths = require('./paths')
 const settings = require('./settings')
+const downloader = require('./downloader')
 
 /** 正在跑的 frpc 进程（null = 没跑） */
 let child = null
@@ -56,6 +56,172 @@ function saveFrpConfig(patch) {
   return readFrpConfig()
 }
 
+// ══════════════════════════════════════════════════════
+// frpc 从哪来：毛球自己下（2026-10-11 补）
+// ══════════════════════════════════════════════════════
+//
+// 【为什么非自己下不可】樱花启动器（就是樱花的图形界面）自带一个 frpc.exe，但它**被锁了**：
+// 别的程序一调用，它只打一句 "not intended to be run directly or launched by any program
+// other than SakuraFrp Service" 就自己退出。实测过（2026-10-11，见 docs/10）。
+// 能用的是樱花**面板「软件下载」里的那个独立版**，而它在一个公开的下载站上：
+//
+//     https://nya.globalslb.net/natfrp/client/frpc/<版本>/frpc_windows_amd64.exe
+//
+// 那个站不用登录、不用账号（翻过它的目录）。所以让用户自己去面板里点来点去太绕了，
+// 毛球直接下——**但不能白下**：下完必须验，见下面两道关。
+//
+// 【为什么不打包进安装包】14 MB，而且它是别人家的程序：用的时候下最新版更合理，
+// 也不用替它的更新操心（和联机组件 EasyTier 一个路子）。
+//
+// 【怎么保证下下来的没被换过 —— 两道关】
+//   ① 哈希：那个站**不提供官方校验值**（翻过目录列表，没有 .sig 也没有清单文件），
+//      所以只能"毛球自己认过的清单"：版本号 + 大小 + SHA-256 写死在下面这张表里。
+//      下完逐字节核对，对不上就删掉、报错、绝不用。
+//      （代价：樱花出新版时毛球不会自动跟，得我们往表里加一行——这是拿"能校验"换的，值。）
+//   ② 再扫一眼文件里有没有那句"不给别的程序调用"的守卫字符串。被锁的那个版本和独立版
+//      **文件名一模一样，只有内容不同**，哈希管住了"是不是我们认的那个字节"，
+//      这一道管住"下到的到底是不是能干活的"——万一我们抄错哈希，它能兜住。
+
+/**
+ * 毛球认过的 frpc（新的排前面，优先用新的）。
+ *
+ * 【怎么加一行 / 换新的】
+ *   1. 到上面那个地址把 exe 下下来（把 <版本> 换成新的）
+ *   2. `sha256sum frpc.exe` 和 `ls -l` 拿到哈希和大小，填进来
+ *   3. 顺手验一下它是独立版：`grep -c "not intended to be run directly" frpc.exe` 应当是 **0**
+ *      （是 1 就说明你下到了被锁的那个，别加进来）
+ *
+ * 【为什么写死版本号，而不是每次去问"最新是哪个"】那个下载站没有版本清单接口，
+ * 目录列表是个网页（得解析 HTML，还会变）。写死 = 每次下的都是同一串字节，哈希才验得起来。
+ * 旧版本哪天被它删了，会自动往下一个试，不会卡死。
+ */
+const FRPC_VERSIONS = [
+  { version: '0.51.0-sakura-15', size: 14209024, sha256: '7387a348ac631a736d15c796e89a972186b48ae3db9210bb60a451e50a17ea69' },
+  { version: '0.51.0-sakura-14', size: 14133248, sha256: 'b705262edad9f0de04b38f342e811e9d97d0beada75edab3f790e105dcfb5234' }
+]
+
+/** 我们这个平台上，那个文件叫什么名 */
+const FRPC_FILENAME = 'frpc_windows_amd64.exe'
+
+/** "只有樱花自己的服务能调用我"的守卫字符串（被锁的版本里有，独立版里没有） */
+const FRPC_LOCKED_MARK = 'not intended to be run directly'
+
+/** 某个版本的下载地址 */
+function frpcUrl(version) {
+  return `https://nya.globalslb.net/natfrp/client/frpc/${version}/${FRPC_FILENAME}`
+}
+
+/** 下好之后落在哪儿 */
+function frpcPath() {
+  return path.join(paths.frpcDir(), 'frpc.exe')
+}
+
+/** 算一段内容的 SHA-256（十六进制小写） */
+function sha256Of(buffer) {
+  return crypto.createHash('sha256').update(buffer).digest('hex')
+}
+
+/**
+ * 硬盘上现在这个 frpc 能用吗。
+ * @returns {{ok: boolean, path?: string, version?: string, reason?: string}}
+ *          reason: missing 没有 / unreadable 读不动 / unknown 有但对不上我们认的清单
+ */
+function frpcState() {
+  const file = frpcPath()
+  if (!fs.existsSync(file)) return { ok: false, reason: 'missing' }
+
+  let got = ''
+  try {
+    got = sha256Of(fs.readFileSync(file))
+  } catch {
+    return { ok: false, reason: 'unreadable' }
+  }
+
+  const hit = FRPC_VERSIONS.find((entry) => entry.sha256 === got)
+  if (!hit) return { ok: false, reason: 'unknown' }
+  return { ok: true, path: file, version: hit.version }
+}
+
+/**
+ * 确保硬盘上有一个"能用的"frpc.exe。已经有就直接用；没有就下一个，下完验。
+ *
+ * @param {{onStage?: Function, onProgress?: Function}} options
+ * @returns {Promise<{ok: boolean, path?: string, version?: string, downloaded?: boolean, error?: string}>}
+ */
+async function ensureFrpc(options = {}) {
+  const stage = (text) => {
+    if (options.onStage) options.onStage(text)
+  }
+
+  const ready = frpcState()
+  if (ready.ok) return { ok: true, path: ready.path, version: ready.version, downloaded: false }
+
+  paths.ensureDir(paths.frpcDir())
+
+  const dest = frpcPath()
+  // 【为什么先下到 .part 再改名】下到一半断电/断网，硬盘上留的是 .part，
+  // 不会被当成本体拿去跑（和"配置先写临时文件再改名"是一个道理）。
+  const tmp = `${dest}.part`
+  let lastError = ''
+
+  for (const entry of FRPC_VERSIONS) {
+    stage(`正在下载 frpc（${entry.version}，约 ${Math.round(entry.size / 1048576)} MB）…`)
+
+    try {
+      const task = downloader.createTask(
+        [{ name: FRPC_FILENAME, url: frpcUrl(entry.version), saveTo: tmp, size: entry.size }],
+        { onProgress: options.onProgress }
+      )
+      const stats = await task.start()
+
+      if (stats.failed !== 0 || !fs.existsSync(tmp)) {
+        lastError = stats.failures[0] ? String(stats.failures[0].error) : '下载失败'
+        continue
+      }
+
+      // ——— 第一道关：哈希 ———
+      stage('正在核对校验值…')
+      const buffer = fs.readFileSync(tmp)
+      const got = sha256Of(buffer)
+      if (got !== entry.sha256) {
+        lastError = `${entry.version} 下下来对不上校验值（下载站可能有问题）`
+        continue
+      }
+
+      // ——— 第二道关：确认它不是"被锁"的那个版本 ———
+      if (buffer.includes(FRPC_LOCKED_MARK)) {
+        lastError = '下到的 frpc 是"只认樱花启动器"的那个版本，毛球指挥不动它'
+        continue
+      }
+
+      // 换上新文件。目标位置可能躺着一个旧的/坏的同名文件（Windows 的 rename 不许覆盖，
+      // 所以先删；删了才有那一下"短暂没有 frpc"的窗口，但那时用户也不会正好去点启动）
+      try {
+        fs.rmSync(dest, { force: true })
+      } catch {
+        // 删不掉的话下面 rename 会报错，会被 catch 住
+      }
+      fs.renameSync(tmp, dest)
+
+      return { ok: true, path: dest, version: entry.version, downloaded: true }
+    } catch (error) {
+      lastError = String(error?.message ?? error)
+    } finally {
+      // 这一路成没成都把半截文件清掉（成功时已经改名走了，这儿删的是不存在的东西，无所谓）
+      try {
+        fs.rmSync(tmp, { force: true })
+      } catch {
+        // 删不掉不影响什么，下次会覆盖
+      }
+    }
+  }
+
+  return {
+    ok: false,
+    error: `frpc 没下下来（${lastError}）。检查一下网络再试一次；也可以自己到樱花面板「软件下载」里下一个，用旁边的「我自己有，选文件…」指给毛球。`
+  }
+}
+
 /** 状态：给界面看的。
  *  【为什么要把 state 里的 ok 剃掉】这个对象会被包成 `{ ok: true, ...这个 }` 发给界面，
  *  而界面（app.js 的 refreshFrp）第一句就是 `if (!status.ok) return`。
@@ -78,21 +244,54 @@ function noteLine(text) {
   if (logLines.length > 200) logLines.shift()
 
   // frpc 的输出里认这几句（不同版本措辞略有差别，所以用宽松的关键词）
-  // 【排在最前】新版的 frpc 被樱花锁了：别的程序一调用，它只打这句就退出
+  //
+  // 【这些原话是 2026-10-11 从独立版 frpc 的二进制里挖出来的】——不是猜的：
+  //   成功：  "%s 隧道启动成功" / "隧道已启动" / "连接节点成功, 运行 …"
+  //   密钥：  "访问密钥错误" / "访问密钥无效, 请检查您的输入" / "访问密钥输入有误" /
+  //           "访问密钥长度错误" / "配置中的访问密钥为空"
+  //   已在线："当前隧道已在线, 请勿重复开启"
+  //   连不上："登录节点失败, 请检查网络连接" / "正在重试连接节点…"
+  // 【为什么非挖不可】最早那版代码认的是"启动成功"/"认证失败"这种想当然的词，
+  // 跟真机对不上——表现就是隧道其实通了，界面却永远停在"正在启动…"。
+  // 换成真话之后，"能连"和"连不上"才都画得出来。
+  //
+  // 【排在最前】被锁的 frpc：别的程序一调用，它只打这句就退出
   // （2026-10-11 实测本机的 sakura-14 就是这样，见 docs/10）。
   if (/not intended to be run directly|part of SakuraFrp Launcher/i.test(text)) {
     state = {
       running: true,
       connected: false,
-      message: '这个 frpc 是樱花启动器专用的，它拒绝被别的程序调用。请到樱花面板「软件下载」里下那个单独的 frpc.exe'
+      message: '这个 frpc 是樱花启动器专用的，它拒绝被别的程序调用。点上面的「让毛球自己下 frpc」换一个'
     }
-  } else if (/启动成功|start tunnel success|start proxy success/i.test(text)) {
+  } else if (/隧道启动成功|隧道已启动|启动成功|连接节点成功|start tunnel success|start proxy success/i.test(text)) {
     state = { running: true, connected: true, message: '隧道已启动' }
-  } else if (/认证失败|auth failed|token/i.test(text) && /fail|错误|失败/i.test(text)) {
-    state = { running: true, connected: false, message: '访问密钥不对，或者这条隧道不属于这个账号' }
+  } else if (/隧道已在线|请勿重复开启/i.test(text)) {
+    state = {
+      running: true,
+      connected: false,
+      message: '这条隧道已经在别处开着了（樱花一条隧道同时只能开一处）——先把那边关掉，或者换一条隧道'
+    }
+  } else if (/访问密钥/.test(text) && /错误|无效|为空|有误|长度/.test(text)) {
+    state = {
+      running: true,
+      connected: false,
+      message: '访问密钥不对——到樱花面板「用户信息」里重新复制一遍（注意别漏字符、别带空格）'
+    }
+  } else if (/认证失败|auth failed/i.test(text) || (/token/i.test(text) && /fail|错误|失败/i.test(text))) {
+    state = {
+      running: true,
+      connected: false,
+      message: '认证没过——多半是访问密钥不对；反复失败的话再看看电脑时间准不准'
+    }
   } else if (/隧道不存在|tunnel not found|no such tunnel/i.test(text)) {
     state = { running: true, connected: false, message: '找不到这个隧道 ID——到樱花面板上核对一下' }
-  } else if (/连接失败|connect failed|connection refused|timeout|超时/i.test(text)) {
+  } else if (/隧道.*失败/.test(text)) {
+    state = {
+      running: true,
+      connected: false,
+      message: '这条隧道没起来——到樱花面板上看看它的状态（欠费、被停用、端口被占都会这样）'
+    }
+  } else if (/登录节点失败|连接节点失败|重试连接节点失败|连接失败|connect failed|connection refused|timeout|超时/i.test(text)) {
     state = { running: true, connected: false, message: '连不上樱花节点，检查一下网络' }
   }
 }
@@ -119,7 +318,7 @@ function start(options = {}) {
   const exe = String(options.exePath || readFrpConfig().exePath || '').trim()
 
   if (!exe || !fs.existsSync(exe)) {
-    return fail('还没选 frpc.exe——点「选 frpc 文件…」，到你下载樱花的那个文件夹里挑')
+    return fail('还没有 frpc——点「让毛球自己下 frpc」就行（想用自己手上的那个，就点「我自己有，选文件…」）')
   }
   // 【为什么先按名字拦一道】樱花启动器的安装目录里躺着好几个 exe：
   // SakuraLauncher.exe（图形界面）、SakuraFrpService.exe（后台服务）、frpc.exe（真正干活的）。
@@ -127,7 +326,7 @@ function start(options = {}) {
   // （2026-10-11 用户就是这么踩的，见 docs/10）。
   const exeName = path.basename(exe).toLowerCase()
   if (/^sakuralauncher|^sakurafrp|^natfrp-service/.test(exeName)) {
-    return fail('这个不是 frpc，是樱花自己的启动器/服务程序——它不听别的程序指挥。请到樱花面板「软件下载」里下那个单独的 frpc.exe，再选它')
+    return fail('这个不是 frpc，是樱花自己的启动器/服务程序——它不听别的程序指挥。点上面的「让毛球自己下 frpc」换一个')
   }
   if (!key) return fail('先把访问密钥填上（樱花面板 → 用户信息 → 访问密钥）')
   if (!/^\d+$/.test(tunnelId)) return fail('隧道 ID 是一串数字，在樱花面板的隧道列表里')
@@ -217,4 +416,4 @@ function stop() {
   return { ok: true }
 }
 
-module.exports = { start, stop, status, readFrpConfig, saveFrpConfig }
+module.exports = { start, stop, status, readFrpConfig, saveFrpConfig, ensureFrpc }

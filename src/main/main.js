@@ -1156,7 +1156,28 @@ function registerIpcHandlers() {
 
   // ——— 樱花内网穿透（M15）———
 
-  /** 让用户挑 frpc.exe（要他自己去樱花面板下，我们不代下） */
+  /** 让毛球自己去下 frpc（下完校验哈希，通过才记下来）——用户不用去樱花面板里翻 */
+  ipcMain.handle('frp:ensure-frpc', async (event) => {
+    // 【为什么每个处理函数都自己写一遍 send】别的处理函数都这么干（见 loader:install）。
+    // 第一版这里忘了声明，界面直接报 "send is not defined"（用户一点就露馅了）。
+    const send = (channel, payload) => {
+      if (!event.sender.isDestroyed()) event.sender.send(channel, payload)
+    }
+
+    try {
+      const result = await frp.ensureFrpc({
+        onStage: (text) => send('frp:stage', text),
+        onProgress: (stats) => send('frp:progress', stats)
+      })
+      // 下好了就记进配置——"开始穿透"会用这个路径（用户的手填值仍然由界面负责）
+      if (result.ok) frp.saveFrpConfig({ exePath: result.path })
+      return result
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 让用户挑 frpc.exe（自己有现成的人用——比如从樱花面板下过的） */
   ipcMain.handle('frp:pick-exe', async () => {
     const result = await dialog.showOpenDialog({
       title: '找到你下载的 frpc.exe',

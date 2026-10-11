@@ -493,7 +493,7 @@
                 ——在建隧道那页建一条 <b>TCP 隧道</b>，本地端口填你的游戏端口
               </li>
               <li>把「访问密钥」和「隧道 ID」复制到下面（密钥在用户信息页，ID 在隧道列表里）</li>
-              <li>frpc 也要从它面板的「软件下载」里下一个，选 Windows + amd64，然后在这里指给毛球</li>
+              <li>frpc 是真正跑隧道的那个小程序——<b>毛球能自己下</b>，点下面的按钮就行</li>
             </ol>
 
             <label class="field">
@@ -515,9 +515,17 @@
             </label>
 
             <div class="join-row">
-              <input class="input" id="frp-exe" type="text" readonly placeholder="还没选 frpc.exe" />
-              <button class="btn btn--ghost btn--sm" type="button" id="frp-pick">选 frpc 文件…</button>
+              <button class="btn btn--primary btn--sm" type="button" id="frp-download">让毛球自己下 frpc</button>
+              <button class="btn btn--ghost btn--sm" type="button" id="frp-pick">我自己有，选文件…</button>
             </div>
+
+            <label class="field">
+              <span class="field__label">frpc</span>
+              <input class="input" id="frp-exe" type="text" readonly placeholder="还没有 frpc" />
+              <span class="field__hint">
+                真正跑隧道的那个小程序。让毛球下回来的，它下完会核对校验值才会用
+              </span>
+            </label>
 
             <div class="modal__actions modal__actions--end">
               <button class="btn btn--primary" type="button" id="frp-start">开始穿透</button>
