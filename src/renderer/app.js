@@ -5945,15 +5945,14 @@ let frpRunning = false
 /** 定时刷状态的计时器 */
 let frpTimer = null
 
-/** 把主进程给的状态画到界面上 */
+/** 把主进程给的状态画到界面上
+ *
+ *  【绝对不许在这儿碰输入框】这个函数每 3 秒被轮询调一次，顺手刷一下输入框，
+ *  就会把用户正填的东西冲掉——之前"填完访问密钥去填隧道 ID，访问密钥就没了"
+ *  就是这儿闹的（光标离开哪个框，哪个框就被旧配置刷掉）。
+ *  输入框只在 fillFrpInputs() 里填，那个只在进页面 / 选完 frpc 时调。 */
 function renderFrp(status) {
   if (!status) return
-
-  const config = status.config || {}
-  if (document.activeElement !== frpKeyEl) frpKeyEl.value = config.accessKey || ''
-  if (document.activeElement !== frpTunnelEl) frpTunnelEl.value = config.tunnelId || ''
-  frpPortEl.value = String(config.localPort || 25565)
-  frpExeEl.value = config.exePath || ''
 
   frpRunning = Boolean(status.running)
   frpStartEl.disabled = frpRunning
@@ -5964,10 +5963,29 @@ function renderFrp(status) {
   frpLogEl.scrollTop = frpLogEl.scrollHeight
 }
 
-async function refreshFrp() {
+/** 用户动手填过的东西先存一份在这儿
+ *  【为什么要有它】主进程存的只是"上次点启动时用的值"，用户没点过启动就是空的；
+ *  填到一半切去别的页面再回来，光靠主进程那份会把用户填的顶掉 */
+const frpDraft = { accessKey: null, tunnelId: null, localPort: null, exePath: null }
+for (const [元素, 字段] of [[frpKeyEl, 'accessKey'], [frpTunnelEl, 'tunnelId'], [frpPortEl, 'localPort'], [frpExeEl, 'exePath']]) {
+  元素.addEventListener('input', () => { frpDraft[字段] = 元素.value })
+}
+
+/** 把配置填进输入框（进页面 / 选完 frpc 时调）——用户手填过的优先，没填过的用存下来的 */
+function fillFrpInputs(config) {
+  const c = config || {}
+  frpKeyEl.value = frpDraft.accessKey ?? c.accessKey ?? ''
+  frpTunnelEl.value = frpDraft.tunnelId ?? c.tunnelId ?? ''
+  frpPortEl.value = frpDraft.localPort ?? String(c.localPort || 25565)
+  frpExeEl.value = frpDraft.exePath ?? c.exePath ?? ''
+}
+
+async function refreshFrp(要不要填输入框 = false) {
   try {
     const status = await window.api.frpStatus()
-    if (status.ok) renderFrp(status)
+    if (!status.ok) return
+    renderFrp(status)
+    if (要不要填输入框) fillFrpInputs(status.config)
   } catch {
     // 问不到就先不动
   }
@@ -5975,7 +5993,7 @@ async function refreshFrp() {
 
 /** 进联机页时把樱花那块的设置读出来 */
 function loadFrpPanel() {
-  refreshFrp()
+  refreshFrp(true) // 只有这会儿填输入框
   if (!frpTimer) frpTimer = setInterval(refreshFrp, 3000)
 }
 
@@ -5984,7 +6002,9 @@ document.getElementById('frp-open-site').addEventListener('click', () => window.
 document.getElementById('frp-pick').addEventListener('click', async () => {
   const picked = await window.api.pickFrpc()
   if (!picked.ok) return
-  renderFrp({ config: picked.config, running: frpRunning, message: '记住 frpc 了。' })
+  frpDraft.exePath = null // 用户刚亲手选的，以这个为准，别被之前手打的旧值顶掉
+  fillFrpInputs(picked.config)
+  frpMsgEl.textContent = '记住 frpc 了。'
 })
 
 frpStartEl.addEventListener('click', async () => {
