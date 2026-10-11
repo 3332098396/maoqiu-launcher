@@ -236,6 +236,15 @@ ipcMain.handle('win:isMaximized', (event) =>
   Boolean(BrowserWindow.fromWebContents(event.sender)?.isMaximized())
 )
 
+// 界面问"我是哪个版本的"——答案直接来自 package.json。
+// 【为什么不能写死在界面上】以前左下角把 0.1.0 写死了，package.json 升到 0.2.0
+// 它也纹丝不动，用户看到写着 0.1.0、装的其实是 0.2.0。以后升版本只改 package.json 一处。
+// 【为什么不用 app.getVersion()】它认的是"App 目录里的 package.json"，开发模式下
+// 入口是脚本文件、认不出来，会退回** Electron 自己的版本号**（实测返回 44.6.0）。
+// 直接按路径读死，开发跑和装完跑结果一样。
+const APP_VERSION = require(path.join(__dirname, '..', '..', 'package.json')).version
+ipcMain.handle('app:version', () => APP_VERSION)
+
 /** 当前正在跑的安装任务（同时只允许一个） */
 let currentInstall = null
 /** 正在跑的下载任务控制器（界面点"取消安装"时用它） */

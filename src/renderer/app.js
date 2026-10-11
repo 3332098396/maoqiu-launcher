@@ -4358,8 +4358,16 @@ window.api.onOnlineStage((text) => setOnlineNotice(text))
 // 版本号
 // ═══════════════════════════════════════
 
-document.getElementById('stat-left').textContent =
-  `版本 ${window.api?.appVersion ?? '未知'}`
+// 版本号问主进程要（来自 package.json），左下角和导航栏角标都填它。
+// 读不到就显示"未知"——总比显示一个错的版本号强
+window.api
+  .getAppVersion()
+  .then((version) => {
+    const text = version || '未知'
+    document.getElementById('stat-left').textContent = `版本 ${text}`
+    document.getElementById('rail-badge').textContent = text
+  })
+  .catch(() => {})
 
 // 个性化设置要在开机时就套上：藏了哪些页面、背景图、背景音乐、顶栏样式
 // （读失败就当没设过——这些是"看着玩"的东西，不该拦住软件启动）

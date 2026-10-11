@@ -10,8 +10,8 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 contextBridge.exposeInMainWorld('api', {
-  /** 界面可以读取自己的版本号，用来显示在页脚 */
-  appVersion: '0.1.0',
+  /** 问一句"我是哪个版本的"——答案由主进程从 package.json 读出（别在界面上写死） */
+  getAppVersion: () => ipcRenderer.invoke('app:version'),
 
   // ——— 窗口按钮（M17.4：标题栏是自己画的，最小化/最大化/关闭也得自己来）———
 
