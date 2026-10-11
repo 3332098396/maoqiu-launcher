@@ -243,57 +243,95 @@ function noteLine(text) {
   logLines.push(text)
   if (logLines.length > 200) logLines.shift()
 
-  // frpc 的输出里认这几句（不同版本措辞略有差别，所以用宽松的关键词）
-  //
-  // 【这些原话是 2026-10-11 从独立版 frpc 的二进制里挖出来的】——不是猜的：
-  //   成功：  "%s 隧道启动成功" / "隧道已启动" / "连接节点成功, 运行 …"
-  //   密钥：  "访问密钥错误" / "访问密钥无效, 请检查您的输入" / "访问密钥输入有误" /
-  //           "访问密钥长度错误" / "配置中的访问密钥为空"
-  //   已在线："当前隧道已在线, 请勿重复开启"
-  //   连不上："登录节点失败, 请检查网络连接" / "正在重试连接节点…"
-  // 【为什么非挖不可】最早那版代码认的是"启动成功"/"认证失败"这种想当然的词，
-  // 跟真机对不上——表现就是隧道其实通了，界面却永远停在"正在启动…"。
-  // 换成真话之后，"能连"和"连不上"才都画得出来。
-  //
+  const next = readFrpcLine(text, state.connected)
+  if (next) state = { running: true, connected: next.connected, message: next.message }
+}
+
+/**
+ * 认一行 frpc 的输出，说出"现在算是什么状态"。
+ *
+ * 【为什么单独拆出来】它得能**拿字符串单独喂**着验（喂真机日志里的原话），
+ * 不用起界面、不用真去连隧道。所以做成纯函数：只看传进来的两个参数，不碰外面的东西。
+ *
+ * 【底下这些措辞是从独立版 frpc 的二进制里挖出来的原话】——不是猜的：
+ *   成功：  "%s 隧道启动成功" / "隧道已启动" / "连接节点成功, 运行 …"
+ *   密钥：  "访问密钥错误" / "访问密钥无效, 请检查您的输入" / "访问密钥输入有误" /
+ *           "访问密钥长度错误" / "配置中的访问密钥为空"
+ *   已在线："当前隧道已在线, 请勿重复开启"
+ *   连不上："登录节点失败, 请检查网络连接" / "正在重试连接节点…"
+ * 【为什么非挖不可】最早那版代码认的是"启动成功"/"认证失败"这种想当然的词，
+ * 跟真机对不上——表现就是隧道其实通了，界面却永远停在"正在启动…"。
+ *
+ * @param {string} text 一行输出
+ * @param {boolean} wasConnected 认这行之前是不是已经连上了
+ * @returns {{connected: boolean, message: string}|null} 认不出来就 null（状态不动）
+ */
+function readFrpcLine(text, wasConnected) {
   // 【排在最前】被锁的 frpc：别的程序一调用，它只打这句就退出
   // （2026-10-11 实测本机的 sakura-14 就是这样，见 docs/10）。
   if (/not intended to be run directly|part of SakuraFrp Launcher/i.test(text)) {
-    state = {
-      running: true,
+    return {
       connected: false,
       message: '这个 frpc 是樱花启动器专用的，它拒绝被别的程序调用。点上面的「让毛球自己下 frpc」换一个'
     }
-  } else if (/隧道启动成功|隧道已启动|启动成功|连接节点成功|start tunnel success|start proxy success/i.test(text)) {
-    state = { running: true, connected: true, message: '隧道已启动' }
-  } else if (/隧道已在线|请勿重复开启/i.test(text)) {
-    state = {
-      running: true,
+  }
+
+  // 【"先别慌"这一类，必须挡在底下那条 timeout 规则前面】
+  // 隧道起来之后，frpc 会时不时重试某一条"数据通道"，日志里长这样：
+  //   [W] 新数据连接建立失败: dial tcp 122.192.154.125:8088: i/o timeout
+  // 这是**正常抖动**，不是"连不上樱花节点"。不单独拦下来的话，底下那条规则一看
+  // 到 timeout 就当故障，把已经显示出来的「隧道已启动」翻成「连不上樱花节点」——
+  // 用户看到的就是状态自己乱跳（2026-10-11 用户实测抓到的正是这个）。
+  if (/新数据连接|重试连接节点|正在重试|reconnect/i.test(text)) {
+    // 已经连上的：一个字都不改，保持"隧道已启动"
+    if (wasConnected) return null
+    // 还没连上的：给一句话说明它在忙什么，但别喊"故障"
+    return { connected: false, message: 'frpc 正在重试跟节点的数据连接——日志里有详情，先等一会儿' }
+  }
+
+  if (/隧道启动成功|隧道已启动|启动成功|连接节点成功|start tunnel success|start proxy success/i.test(text)) {
+    return { connected: true, message: '隧道已启动' }
+  }
+
+  if (/隧道已在线|请勿重复开启/i.test(text)) {
+    return {
       connected: false,
       message: '这条隧道已经在别处开着了（樱花一条隧道同时只能开一处）——先把那边关掉，或者换一条隧道'
     }
-  } else if (/访问密钥/.test(text) && /错误|无效|为空|有误|长度/.test(text)) {
-    state = {
-      running: true,
+  }
+
+  // 【为什么"访问密钥"和"错误"要分两段判】frpc 有好几种说法（错误 / 无效 / 为空 / 有误 /
+  // 长度错误），而"访问密钥"这四个字本身也出现在正常提示里，所以必须两个都中才算。
+  if (/访问密钥/.test(text) && /错误|无效|为空|有误|长度/.test(text)) {
+    return {
       connected: false,
       message: '访问密钥不对——到樱花面板「用户信息」里重新复制一遍（注意别漏字符、别带空格）'
     }
-  } else if (/认证失败|auth failed/i.test(text) || (/token/i.test(text) && /fail|错误|失败/i.test(text))) {
-    state = {
-      running: true,
+  }
+
+  if (/认证失败|auth failed/i.test(text) || (/token/i.test(text) && /fail|错误|失败/i.test(text))) {
+    return {
       connected: false,
       message: '认证没过——多半是访问密钥不对；反复失败的话再看看电脑时间准不准'
     }
-  } else if (/隧道不存在|tunnel not found|no such tunnel/i.test(text)) {
-    state = { running: true, connected: false, message: '找不到这个隧道 ID——到樱花面板上核对一下' }
-  } else if (/隧道.*失败/.test(text)) {
-    state = {
-      running: true,
+  }
+
+  if (/隧道不存在|tunnel not found|no such tunnel/i.test(text)) {
+    return { connected: false, message: '找不到这个隧道 ID——到樱花面板上核对一下' }
+  }
+
+  if (/隧道.*失败/.test(text)) {
+    return {
       connected: false,
       message: '这条隧道没起来——到樱花面板上看看它的状态（欠费、被停用、端口被占都会这样）'
     }
-  } else if (/登录节点失败|连接节点失败|重试连接节点失败|连接失败|connect failed|connection refused|timeout|超时/i.test(text)) {
-    state = { running: true, connected: false, message: '连不上樱花节点，检查一下网络' }
   }
+
+  if (/登录节点失败|连接节点失败|连接失败|connect failed|connection refused|timeout|超时/i.test(text)) {
+    return { connected: false, message: '连不上樱花节点，检查一下网络' }
+  }
+
+  return null
 }
 
 /**
@@ -416,4 +454,4 @@ function stop() {
   return { ok: true }
 }
 
-module.exports = { start, stop, status, readFrpConfig, saveFrpConfig, ensureFrpc }
+module.exports = { start, stop, status, readFrpConfig, saveFrpConfig, ensureFrpc, readFrpcLine }
