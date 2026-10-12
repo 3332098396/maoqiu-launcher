@@ -32,6 +32,9 @@
 | `src/main/voxlink/punchAuth.js` | `network/PunchAuth.java` — 打洞包的 HMAC 防伪章 | **LGPL-3.0-only** |
 | `src/main/voxlink/rudp.js` | `network/ReliableUdpTransport.java` — 可靠 UDP 传输、XOR 校验、RTT 估计 | **LGPL-3.0-only** |
 | `src/main/voxlink/stun.js` | `network/StunProbe.java` — 公网地址探测与 NAT 类型判断（含 RFC 5389 客户端） | **LGPL-3.0-only** |
+| `src/main/voxlink/punchProfiles.js` | `network/PunchProfile.java` — 五套发包模板与各场景参数（数值零改动） | **LGPL-3.0-only** |
+| `src/main/voxlink/punchPolicy.js` | `network/` 下 PunchParams / PunchTuner / PortPredictor / NatClass / PunchStrategySelector / PunchFailureClassifier — 失败分类、自适应调参、端口预测 | **LGPL-3.0-only** |
+| `src/main/voxlink/punch.js` | `network/UdpHolePuncher.java` — 打洞主循环、控制包格式、发包限速 | **LGPL-3.0-only** |
 
 改写过程中参考了 [KAMUCL](https://github.com/kamubaba-i/KAMUCL) 的 JS 实现
 （`src/main/core/voxlink/`；该项目中对应部分同样按 LGPL-3.0-only 声明）。
