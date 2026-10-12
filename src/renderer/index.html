@@ -409,22 +409,6 @@
         <div class="content">
           <!-- 两种联机方式（M17.x）：两张正方形卡片并排当入口，点哪个下面显示哪个的内容。
                原来是竖着摞一大条，又长又不知道从哪看起。 -->
-          <!-- ⚠️ 2026-10-12：「房间码联机」（EasyTier）那张入口卡片**撤掉了**（用户要求换成 VoxLink）。
-               注意：**主进程那一套一行没删** —— `src/main/easytier.js`、`src/main/online.js`、
-               `online:*` 那几个 IPC、`%APPDATA%\毛球\easytier\` 组件都原样在。
-               要恢复：把下面这段注释解开、并把 VoxLink 卡上的 mode-card--on 去掉；
-               HTML 底下那个 data-online-pane="room" 的面板也要去掉 hidden。
-            <button class="mode-card mode-card--on" type="button" data-online-mode="room">
-              <span class="mode-card__icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
-                  <path d="M9.05 15.1V11.6h6.55" />
-                </svg>
-              </span>
-              <span class="mode-card__name">房间码联机</span>
-              <span class="mode-card__desc">一个人建房拿到房间码，好友输码进来，就像坐在同一个 WiFi 下</span>
-            </button>
-            -->
           <div class="online-modes">
             <button class="mode-card mode-card--on" type="button" data-online-mode="voxlink">
               <span class="mode-card__icon" aria-hidden="true">
@@ -452,85 +436,6 @@
               <span class="mode-card__name">樱花内网穿透</span>
               <span class="mode-card__desc">自己配一条隧道，不用管理员权限；好友手动连你的地址</span>
             </button>
-          </div>
-
-          <!-- ——— 房间码联机（EasyTier）的内容 ———
-               ⚠️ 2026-10-12 入口卡片撤了，这里也加了 hidden（整块代码原样留着，随时能恢复）。
-                  恢复时要一并去 HTML 顶上把那张卡的注释解开。 -->
-          <div class="online-mode" data-online-pane="room" hidden>
-          <div class="notice" id="online-notice">
-            两个人不在一个地方也能一起玩：一个人「创建房间」拿到房间码，
-            另一个人输码进来，之后就<b>像坐在同一个 WiFi 下</b>一样联机。
-          </div>
-
-          <!-- 还没进房间时：创建 / 加入 -->
-          <div class="online-grid" id="online-start">
-            <section class="panel">
-              <h3 class="panel__title">创建房间</h3>
-              <p class="panel__desc">
-                建一个房间，会生成一串房间码。把它发给好友，他们输进来就能和你联机。
-                <b>建之前得先在游戏里把世界「对局域网开放」</b>——毛球要先知道端口，
-                才知道该把哪个地址发给好友。
-              </p>
-              <button class="btn btn--primary btn--block" type="button" id="online-create">
-                创建房间
-              </button>
-            </section>
-
-            <section class="panel">
-              <h3 class="panel__title">加入好友的房间</h3>
-              <p class="panel__desc">把好友给你的房间码填在这里（8 位，字母数字）。</p>
-              <div class="join-row">
-                <input
-                  class="input input--edit"
-                  type="text"
-                  id="online-code-input"
-                  placeholder="房间码"
-                  autocomplete="off"
-                  spellcheck="false"
-                />
-                <button class="btn btn--ghost" type="button" id="online-join">加入</button>
-              </div>
-              <p class="delbox" id="online-join-hint"></p>
-            </section>
-          </div>
-
-          <!-- 已经在房间里：房间码 + 状态 -->
-          <section class="panel panel--full" id="online-room" hidden>
-            <h3 class="panel__title" id="online-room-title">房间里</h3>
-
-            <div class="fact-row">
-              <div class="fact">
-                <span class="fact__k">房间码</span>
-                <span class="fact__v" id="online-code">—</span>
-              </div>
-              <div class="fact">
-                <span class="fact__k">你的地址</span>
-                <span class="fact__v fact__v--path" id="online-myip">—</span>
-              </div>
-            </div>
-
-            <p class="delbox" id="online-tip"></p>
-
-            <h3 class="panel__title">房间里的人</h3>
-            <ul class="peer-list" id="online-peers"></ul>
-            <p class="delbox" id="online-peers-empty">还没有别人进来。把房间码发给好友吧。</p>
-
-            <div class="modal__actions modal__actions--end">
-              <button class="btn btn--ghost" type="button" id="online-copy">复制房间码</button>
-              <button class="btn btn--danger" type="button" id="online-leave">离开房间</button>
-            </div>
-          </section>
-
-          <!-- 连接状态：**只在真的开着房间时才出现**（M17.x）。
-               以前它一直杵在那儿，明明没开房间还写"还没连接"，白占一块地方。 -->
-          <section class="panel panel--full" id="online-status-panel" hidden>
-            <h3 class="panel__title">连接状态</h3>
-            <p class="panel__desc" id="online-status-text">
-              还没连接。创建或加入房间后，这里会显示：你是房主还是加入的人、
-              连接方式（直连还是走了中转）、延迟多少。
-            </p>
-          </section>
           </div>
 
           <!-- ——— VoxLink 房间码：第三种联机方式 ———
@@ -1701,28 +1606,6 @@
           <span class="modal__spacer"></span>
           <button class="btn btn--ghost" type="button" id="java-pick-cancel">取消</button>
           <button class="btn btn--primary" type="button" id="java-pick-save">保存选择</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 「还没开局域网就想建房」的提醒（M17.x）
-         用户定的规矩：世界没对局域网开放，就不许建房。 -->
-    <div class="modal" id="lan-modal" hidden>
-      <div class="modal__box modal__box--form">
-        <div class="modal__head">
-          <span class="modal__title">还差一步：先去游戏里开局域网</span>
-        </div>
-        <p class="panel__desc">
-          毛球得先从游戏那儿拿到端口号，才知道该把哪个地址发给好友。
-          所以<b>建房间之前，先在游戏里做这三步</b>：
-        </p>
-        <ol class="frp-steps">
-          <li>在毛球里点「开始游戏」，进一个世界（专门新开一个也行）</li>
-          <li>按 <b>Esc</b> → 点「<b>对局域网开放</b>」→ 再点「开放局域网世界」</li>
-          <li>回到这个页面，点「创建房间」——这时候就能建了</li>
-        </ol>
-        <div class="modal__actions modal__actions--end">
-          <button class="btn btn--primary" type="button" id="lan-modal-ok">知道了</button>
         </div>
       </div>
     </div>

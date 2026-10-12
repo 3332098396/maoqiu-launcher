@@ -235,7 +235,6 @@ body[data-theme='neon'] {
 .chip,
 .log,
 .install,
-.peer,
 .frp-log,
 .mr__icon,
 .pick__cat,
@@ -1439,62 +1438,10 @@ button.acc__tab:hover {
 
 /* 【别删这一行】.online-grid 自己写了 display: grid，会**盖过** hidden 属性
    （hidden 只是把 display 设成 none，可它没 CSS 里的规则"硬"）。
-   结果就是"进了房间，创建/加入那两块还杵在那儿"（实测截图里就是这样）。 */
+   结果是"已经在房间里了，创建/加入那两块还杵在那儿"（实测截图里就是这样）。
+   VoxLink 那边也是靠这条藏 `.online-grid`。 */
 .online-grid[hidden] {
   display: none;
-}
-
-.fact-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.peer-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.peer {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
-  font-size: 13px;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 9px;
-}
-
-.peer__name {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 直连/中继 + 延迟，做成小标签 */
-.peer__tag {
-  flex: 0 0 auto;
-  padding: 2px 8px;
-  font-size: 11px;
-  border-radius: 999px;
-}
-
-.peer__tag--direct {
-  color: var(--ok-text);
-  background: var(--ok-soft);
-}
-
-.peer__tag--relay {
-  color: var(--warn-text);
-  background: var(--warn-soft);
 }
 
 .log {

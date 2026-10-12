@@ -10,7 +10,6 @@
 
 | 组件 | 用途 | 许可 | 上游 |
 |---|---|---|---|
-| EasyTier | 联机：虚拟局域网打洞 | **LGPL-3.0** | https://github.com/EasyTier/EasyTier |
 | FRP（frpc） | 樱花内网穿透的端口映射 | **Apache-2.0** | https://github.com/fatedier/frp |
 | authlib-injector | 外置登录（皮肤站账号） | 见上游仓库 | https://github.com/yushijinhun/authlib-injector |
 | Terracotta | 打洞辅助（配合 VoxLink 使用） | **AGPL-3.0** | https://github.com/burningtnt/Terracotta |

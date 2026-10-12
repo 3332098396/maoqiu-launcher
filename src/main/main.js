@@ -45,7 +45,6 @@ const packexport = require('./packexport')
 const logs = require('./logs')
 const downloader = require('./downloader')
 const pack = require('./pack')
-const online = require('./online')
 const { VoxLink } = require('./voxlink')
 const voxlinkPorts = require('./voxlink/ports')
 /**
@@ -1617,62 +1616,6 @@ function registerIpcHandlers() {
     }
   })
 
-  // ——— 联机（M12）———
-
-  /** 现在联机是什么情况（还没进房间就返回 running:false） */
-  ipcMain.handle('online:status', () => {
-    try {
-      const config = settings.readConfig().online
-      return {
-        ok: true,
-        ...online.status(),
-        // 启动时清理残留的那句提示（读一次就清掉，免得反复弹）
-        startupNote: online.takeStartupNote(),
-        code: config.code || '',
-        role: config.role || ''
-      }
-    } catch (error) {
-      return { ok: false, error: String(error?.message ?? error), running: false, peers: [] }
-    }
-  })
-
-  /**
-   * 建房间 / 进房间。这一步会弹一次系统权限确认（要建虚拟网卡），
-   * 进度通过 online:stage 推给界面。
-   */
-  ipcMain.handle('online:start', async (event, options) => {
-    const send = (text) => {
-      if (!event.sender.isDestroyed()) event.sender.send('online:stage', text)
-    }
-
-    const role = options && options.role === 'guest' ? 'guest' : 'host'
-    let code = String((options && options.code) || '')
-
-    if (role === 'host') {
-      code = online.newRoomCode()
-    } else {
-      const checked = online.normalizeCode(code)
-      if (!checked.ok) return { ok: false, error: checked.error }
-      code = checked.code
-    }
-
-    try {
-      const result = await online.startRoom({ role, code, onStage: send })
-      return { ...result, role, code }
-    } catch (error) {
-      return { ok: false, error: String(error?.message ?? error) }
-    }
-  })
-
-  /** 离开房间（虚拟网卡也会一起收掉） */
-  ipcMain.handle('online:leave', () => {
-    try {
-      return online.leave()
-    } catch (error) {
-      return { ok: false, error: String(error?.message ?? error) }
-    }
-  })
-
   // ———————————————— 联机：VoxLink（房间这一层）————————————————
   //
   // 房间码是真的、服务器认得；进房之后两个启动器会自己打洞、互相连上（V2c）。
@@ -2562,34 +2505,6 @@ app.whenReady().then(() => {
     }
   } catch (error) {
     console.warn('[启动器] 轮转日志时出错：', error.message)
-  }
-
-  // 收拾"上一个毛球留下的联机进程"（M17.x）。
-  // 毛球被强杀（装安装包、任务管理器结束进程）时 EasyTier 会残留，
-  // 新开的毛球一问"有进程在跑"就说"你在房间里"——可房间码早清空了，
-  // 界面上显示成"你在好友的房间里"配一个空的房间码（用户实测撞到过）。
-  // 这里只收"没有房间记录"的那种，正常开着的房间不动。
-  try {
-    if (online.cleanupStray()) {
-      console.log('[启动器] 收掉了一个上次没退干净的联机进程')
-    }
-  } catch (error) {
-    console.warn('[启动器] 清理残留联机进程时出错：', error.message)
-  }
-
-  // 房间还在、但**游戏早就退了** → 这是个空房间，收掉（M17.x）。
-  // 【为什么能这么判断】规矩是"必须先开局域网才让建房"，所以建房那一刻游戏一定在跑；
-  // 反过来"游戏没在跑、却还留着房间"就只能是上次没收干净的。
-  // 用户实测碰到过：一打开毛球就显示"你是房主"，房间码还是上次那个。
-  try {
-    const onlineCfg = settings.readConfig().online
-    if (onlineCfg.code && online.isRunning() && !launch.isRunning()) {
-      online.leave()
-      online.noteStrayRoom()
-      console.log('[启动器] 收掉了一个游戏已经退出的空房间')
-    }
-  } catch (error) {
-    console.warn('[启动器] 收空房间时出错：', error.message)
   }
 
   // 顺手清掉"设过中文"记录里那些**目录已经不在了**的（M17.x）。

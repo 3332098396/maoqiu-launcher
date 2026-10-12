@@ -31,7 +31,7 @@
 - **Java 运行时管理**：自动列出本机 Java、可挑可加；缺的 Java 自动补下（可以关掉，关掉就一个字节都不下）
 
 **联机**
-- **8 位房间码**：底层 [EasyTier](https://github.com/EasyTier/EasyTier)，不需要公网 IP、不用改路由器
+- **VoxLink 房间码**：6 位房间码，借 VoxLink 的公共服务器牵线，打通之后直接进同一个世界
 - **樱花内网穿透**：端口映射方式，**不需要管理员权限**
 
 **其他**
@@ -103,7 +103,6 @@ Electron + 原生 HTML / CSS / JS。**没有构建步骤**，界面上不依赖�
 
 联机部分的思路与协议参考自 [**VoxLink**](https://github.com/AUGUHDAR/VoxLink)（LGPL-3.0），
 打洞组件感谢 [**Terracotta**](https://github.com/burningtnt/Terracotta)（AGPL-3.0），
-局域网打洞使用 [**EasyTier**](https://github.com/EasyTier/EasyTier)（LGPL-3.0），
 内网穿透使用 [**frp**](https://github.com/fatedier/frp)（Apache-2.0），
 外置登录使用 [**authlib-injector**](https://github.com/yushijinhun/authlib-injector)，
 Mod 生态数据来自 [**Modrinth**](https://modrinth.com)。

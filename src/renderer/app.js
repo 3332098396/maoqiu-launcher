@@ -54,9 +54,8 @@ function showPage(name) {
   // 设置页同理：设置可能被别处改过（比如改完内存回到启动页看信息卡）
   if (name === 'settings') loadSettingsPage()
 
-  // 联机页：进来先看一眼"现在房间里是什么情况"（可能上次就没退出去）
+  // 联机页：进来先看一眼樱花穿透那边的状态
   if (name === 'online') {
-    refreshOnlinePage()
     loadFrpPanel()
   }
 }
@@ -1497,20 +1496,8 @@ window.api.onLaunchState((payload) => {
     setNotice('游戏已经启动了。这个窗口可以最小化，不影响游戏。', 'ok')
   } else if (payload.state === 'exited') {
     launching = false
-    // 游戏一退，"世界对局域网开放"这件事就没了——端口清零。
-    // 【为什么必须清】"有没有开局域网"就是靠 lanPort 判断的（用户定的规矩：
-    // 没开局域网不许建房）。不清的话，上次玩剩的端口号会让判断一直为真，
-    // 用户明明没开也能建房，那个提醒就形同虚设。
-    lanPort = 0
     refreshLaunchUi()
 
-    // 游戏一退，"世界"就没了——房间也就没用了，顺手收掉（M17.x，用户提的：
-    // "我退出游戏了，但是毛球还在创建过的房间里"）。
-    // 【为什么该收】好友这会儿连不上（服务端跟着世界一起没了）；而且下次开游戏
-    // 端口多半会变，之前发给好友的地址也就失效了，留着只会误导人。
-    if (onlineInfo.running && onlineInfo.code) {
-      leaveRoomNow('游戏退出了，房间也顺手收了 —— 下次要联机，进游戏开局域网后重新建一个。')
-    }
     if (payload.ok) {
       setNotice('游戏正常退出了。可以再点「开始游戏」重新玩。', 'ok')
     } else {
@@ -1532,23 +1519,13 @@ window.api.onLaunchState((payload) => {
     refreshLaunchUi()
     setNotice(payload.error, 'error')
   } else if (payload.state === 'lan-closed') {
-    // 退出存档了（回到主菜单）——端口作废。
-    // 【为什么不顺手退房】用户换个世界重开、再按一次「对局域网开放」就会报个新端口上来，
-    // 房间还能接着用，退了反而要他重建。这里只把"发给好友的地址"收掉。
-    lanPort = 0
-    if (onlineInfo.running) renderOnline()
-    appendLog(['[启动器] 世界关掉了（退出存档），之前那个发给好友的地址作废了'])
+    // 退出存档了（回到主菜单）——游戏开出来的那个局域网端口作废。
+    appendLog(['[启动器] 世界关掉了（退出存档），之前那个端口作废了'])
   } else if (payload.state === 'lan') {
-    // 游戏里点了「对局域网开放」——拿到端口号，把它变成"发给好友的地址"
-    lanPort = payload.port
-    // 樱花那块也顺手填上（大部分人的隧道就是指向这个端口）
+    // 游戏里点了「对局域网开放」——拿到端口号。
+    // 樱花那块顺手填上（大部分人的隧道就是指向这个端口）
     if (frpPortEl && !frpRunning) frpPortEl.value = String(payload.port)
     appendLog([`[启动器] 你的世界已经对局域网开放（端口 ${payload.port}）`])
-    if (onlineInfo.running) {
-      // 在房间里：直接把"发给好友的地址"显示出来
-      renderOnline()
-      setNotice(`世界开好了！把地址 ${HOST_VIRTUAL_IP}:${payload.port} 发给好友。`, 'ok')
-    }
   }
 })
 
@@ -4218,13 +4195,8 @@ document.getElementById('log-folder').addEventListener('click', async () => {
 })
 
 // ═══════════════════════════════════════
-// 联机（M12）
+// 联机页：入口卡片切换（M17.x）
 // ═══════════════════════════════════════
-
-const onlineNoticeEl = document.getElementById('online-notice')
-const onlineStartEl = document.getElementById('online-start')
-const onlineRoomEl = document.getElementById('online-room')
-const onlineStatusPanelEl = document.getElementById('online-status-panel')
 
 // ——— 联机页那两张入口卡片（M17.x）———
 // 用户说原来那页"太臃肿"：房间码 + 连接状态 + 樱花穿透竖着摞一大条，进来不知道看哪儿。
@@ -4244,24 +4216,6 @@ function showOnlineMode(name) {
 for (const card of onlineModeCards) {
   card.addEventListener('click', () => showOnlineMode(card.dataset.onlineMode))
 }
-const onlineRoomTitleEl = document.getElementById('online-room-title')
-const onlineCodeEl = document.getElementById('online-code')
-const onlineMyIpEl = document.getElementById('online-myip')
-const onlineTipEl = document.getElementById('online-tip')
-const onlinePeersEl = document.getElementById('online-peers')
-const onlinePeersEmptyEl = document.getElementById('online-peers-empty')
-const onlineStatusTextEl = document.getElementById('online-status-text')
-const onlineCodeInputEl = document.getElementById('online-code-input')
-const onlineJoinHintEl = document.getElementById('online-join-hint')
-const onlineCreateEl = document.getElementById('online-create')
-/** "还没开局域网就想建房"时弹的那个提醒（M17.x）*/
-const lanModalEl = document.getElementById('lan-modal')
-const onlineJoinEl = document.getElementById('online-join')
-const onlineCopyEl = document.getElementById('online-copy')
-const onlineLeaveEl = document.getElementById('online-leave')
-
-/** 房主的虚拟地址是固定的（联机模块里定死的），好友永远连这个 */
-const HOST_VIRTUAL_IP = '10.126.126.1'
 
 /** 版本可以挑的图标（就这几个够用了，不搞表情包大全） */
 const VERSION_ICONS = ['', '⭐', '🔥', '🌿', '⛏', '🏰', '🧪', '🐷', '💎', '🚀', '🎮', '🛠']
@@ -4331,298 +4285,11 @@ async function renderVersionJava(id) {
   }
 }
 
-/** 联机现在的状态（主进程给的原文） */
-let onlineInfo = { running: false, peers: [], code: '', myIp: '', role: '' }
-/** 游戏里"对局域网开放"用的端口（从游戏日志里抓的，没开就是 0） */
-let lanPort = 0
-/** 正在建房间 / 进房间（这时候按钮要禁用，免得点两遍） */
-let onlineBusy = false
-/** 在房间里的时候，定时去问一下状态（谁进来了、延迟多少） */
-let onlineTimer = null
-
-function setOnlineNotice(text, kind = 'info') {
-  onlineNoticeEl.textContent = text
-  onlineNoticeEl.classList.toggle('notice--ok', kind === 'ok')
-  onlineNoticeEl.classList.toggle('notice--error', kind === 'error')
-}
-
-/** 进联机页时调一次：把现在的状态读回来画上去 */
-async function refreshOnlinePage() {
-  let status
-  try {
-    status = await window.api.onlineStatus()
-  } catch (error) {
-    setOnlineNotice(`联机状态读不出来：${error.message}`, 'error')
-    return
-  }
-
-  if (!status.ok) {
-    setOnlineNotice(status.error, 'error')
-    return
-  }
-
-  onlineInfo = status
-  renderOnline()
-
-  // 启动时毛球自己收拾过残留（上次没退干净的联机进程 / 游戏已退出的空房间）——
-  // 说一声，不然用户只知道"打开来没房间"，不知道毛球替他清过。
-  // 这句在服务端是"读一次就清掉"的，所以不会反复弹。
-  if (status.startupNote) setOnlineNotice(status.startupNote, 'ok')
-}
-
-/**
- * 把状态画到界面上。两种样子：
- *   · 还没进房间 → 显示"创建房间 / 加入房间"两块
- *   · 已经在房间里 → 显示房间码、房间里有谁、离开按钮
- */
-function renderOnline() {
-  // 【为什么还要看 code】光看 running 不够：EasyTier 残留的时候（毛球被强杀过），
-  // running 是 true 但房间码是空的——那样界面上会显示成"你在好友的房间里"配一个空房间码，
-  // 用户完全看不懂（他实测撞到过："为什么安装程序安装完就显示已经创建房间"）。
-  // 主进程启动时已经会清掉这种残留（online.cleanupStray），这里再兜一层。
-  const inRoom = onlineInfo.running && Boolean(onlineInfo.code)
-  onlineStartEl.hidden = inRoom
-  onlineRoomEl.hidden = !inRoom
-  // 连接状态那块只在**真的开着房间**时露出来。
-  // 以前它一直摆着，没开房间也写"还没连接"——用户点名说那样太占地方。
-  onlineStatusPanelEl.hidden = !inRoom
-
-  // 定时问状态的开关：在房间里才需要
-  if (inRoom && !onlineTimer) {
-    onlineTimer = setInterval(refreshOnlineSilently, 3000)
-  } else if (!inRoom && onlineTimer) {
-    clearInterval(onlineTimer)
-    onlineTimer = null
-  }
-
-  if (!inRoom) {
-    onlineStatusTextEl.textContent =
-      '还没连接。创建或加入房间后，这里会显示：你是房主还是加入的人、连接方式（直连还是走了中转）、延迟多少。'
-    return
-  }
-
-  const isHost = onlineInfo.role === 'host'
-  // 房间里的人（下面写提示和列表都要用，所以先在顶上取出来）
-  const peers = onlineInfo.peers || []
-  onlineRoomTitleEl.textContent = isHost ? '你是房主' : '你在好友的房间里'
-  onlineCodeEl.textContent = onlineInfo.code || '—'
-  onlineMyIpEl.textContent = onlineInfo.myIp || (isHost ? '10.126.126.1' : '正在分配…')
-
-  // 房主和访客要做的事不一样，提示也分开写。
-  // 房主那边还分两种情况：世界还没对局域网开放 / 已经开了（抓到端口了）
-  if (isHost) {
-    // 【为什么不再提醒"去开局域网"】用户定的规矩是"世界没对局域网开放就不许建房"
-    // （见下面 onlineCreateEl 的点击处理），所以能走到这一步就说明已经开好了——直接给地址。
-    // 剩下这条兜底是给"建房以后游戏退了"（lanPort 会被清零）准备的。
-    onlineTipEl.textContent = lanPort
-      ? `世界已经开放了。把这个地址发给好友，让他在游戏里用「直接连接」填进去：` +
-        `${HOST_VIRTUAL_IP}:${lanPort}（他的多人游戏列表里多半也会自动出现）`
-      : '世界现在是关着的。要联机的话：进游戏开一个世界，按 Esc 点「对局域网开放」' +
-        '——开了之后这里会自动出现发给好友的地址，房间不用重建。'
-  } else if (peers.length > 0) {
-    // 访客这边：**看到人了**才敢说"房主那边已经开好世界"
-    // （用户这轮定的规矩：没开局域网不许建房，所以房主在就说明他开好了）
-    onlineTipEl.textContent =
-      '房主那边的世界已经开好了。去游戏里点「多人游戏」——列表里应该能看到；' +
-      '看不到就让房主把地址发你，用「直接连接」填进去。'
-  } else {
-    // 房间里一个人都没有 —— 这时候说"房主世界开好了"就是骗人
-    // （实测：随手编一个房间码也能"进去"，因为房间码只是给虚拟网络起个名字，
-    //   没有一个服务器能回答"这个房间存在吗"。所以这儿只能如实说：没人）
-    onlineTipEl.textContent =
-      '这个房间里现在只有你一个 —— 房主还没上来，或者房间码打错了。' +
-      '等房主那边开了房间，这里会自动看到人。'
-  }
-
-  // 房间里的人（peers 在上面已经取过了）
-  onlinePeersEl.textContent = ''
-  onlinePeersEmptyEl.hidden = peers.length > 0
-  // 空着的时候说什么，房主和访客不一样：让访客"把房间码发给好友"是牛头不对马嘴
-  onlinePeersEmptyEl.textContent = isHost
-    ? '还没有别人进来。把房间码发给好友吧。'
-    : '房间里还没看到别人 —— 房主可能还没上来（房间码打错了也会是这样）。'
-
-  for (const one of peers) {
-    const li = document.createElement('li')
-    li.className = 'peer'
-
-    const name = document.createElement('span')
-    name.className = 'peer__name'
-    name.textContent = `${one.name}（${one.ip}）`
-    li.appendChild(name)
-
-    const tag = document.createElement('span')
-    tag.className = `peer__tag peer__tag--${one.route === 'relay' ? 'relay' : 'direct'}`
-    tag.textContent =
-      (one.route === 'relay' ? '中转' : '直连') + (one.latencyMs !== null ? ` · ${one.latencyMs}ms` : '')
-    li.appendChild(tag)
-
-    onlinePeersEl.appendChild(li)
-  }
-
-  // 【说人话，别说假话】以前这儿对访客一律写"已连上房主的房间"——
-  // 可房间码只是给虚拟网络起个名字，**没有一个服务器能回答"这个房间存在吗"**：
-  // 随手编一串码也能"进去"（实测用户编了个 DAADUBRV，界面照样说已连上）。
-  // 所以有没有连上，只能看"房间里有没有别人"。
-  if (isHost) {
-    onlineStatusTextEl.textContent = `房间开着，里面有 ${peers.length} 位好友。`
-  } else if (peers.length > 0) {
-    onlineStatusTextEl.textContent = `连上房主了，房间里一共 ${peers.length + 1} 个人。`
-  } else {
-    onlineStatusTextEl.textContent =
-      '还没看到房主——房间码已经用上了，但这个房间里现在一个人都没有。'
-  }
-}
-
-/** 定时刷新（不弹错误、不闪界面，安安静静地更新） */
-async function refreshOnlineSilently() {
-  if (onlineBusy) return
-  try {
-    const status = await window.api.onlineStatus()
-    if (status.ok) {
-      onlineInfo = status
-      renderOnline()
-    }
-  } catch {
-    // 问不到就先不动，下一轮再说
-  }
-}
-
-/** 建房间或者进房间（两个按钮走同一条路，只有 role 不一样） */
-async function startOnline(role) {
-  if (onlineBusy) return
-
-  if (role === 'guest') {
-    const typed = onlineCodeInputEl.value
-    if (!typed.trim()) {
-      onlineJoinHintEl.textContent = '先把房间码填上'
-      onlineJoinHintEl.className = 'delbox delbox--warn'
-      return
-    }
-  }
-
-  onlineBusy = true
-  onlineCreateEl.disabled = true
-  onlineJoinEl.disabled = true
-  onlineJoinHintEl.textContent = ''
-  onlineJoinHintEl.className = 'delbox'
-
-  try {
-    setOnlineNotice(
-      role === 'host'
-        ? '正在建房间…（第一次会下载联机组件；中途可能弹一次系统权限确认，点是就行）'
-        : '正在进房间…（中途可能弹一次系统权限确认，点是就行）'
-    )
-
-    const result = await window.api.onlineStart({
-      role,
-      code: role === 'guest' ? onlineCodeInputEl.value : ''
-    })
-
-    if (!result.ok) {
-      setOnlineNotice(result.error, 'error')
-      if (role === 'guest') {
-        onlineJoinHintEl.textContent = result.error
-        onlineJoinHintEl.className = 'delbox delbox--warn'
-      }
-      return
-    }
-
-    onlineInfo = {
-      ok: true,
-      running: true,
-      code: result.code,
-      role: result.role,
-      myIp: result.ip || '',
-      peers: []
-    }
-    onlineCodeInputEl.value = ''
-    setOnlineNotice(
-      role === 'host'
-        ? '房间建好了！把房间码发给好友。'
-        : // 别一上来就说"进房间了"——那会儿还没跟任何人握上手，
-          // 说得跟真连上了似的，用户会以为房主已经在等他了
-          '房间码填上了。正在找房主……几个人算连上，下面那行"连接状态"会说实话。',
-      'ok'
-    )
-    renderOnline()
-  } catch (error) {
-    setOnlineNotice(`出错了：${error.message}`, 'error')
-  } finally {
-    onlineBusy = false
-    onlineCreateEl.disabled = false
-    onlineJoinEl.disabled = false
-  }
-}
-
-// 「创建房间」：**世界没对局域网开放就不让建**（用户 2026-10-08 定的规矩）。
-// 【怎么判断"开了没"】看 lanPort —— 它是从游戏日志里抓到的端口号
-// （游戏里点「对局域网开放」时会打一行 `Started serving on 54321`）。
-// 游戏一退出，主进程会推 exited，那边把 lanPort 清零。
-onlineCreateEl.addEventListener('click', () => {
-  if (!lanPort) {
-    lanModalEl.hidden = false
-    return
-  }
-  startOnline('host')
-})
-document.getElementById('lan-modal-ok').addEventListener('click', () => {
-  lanModalEl.hidden = true
-})
-lanModalEl.addEventListener('click', (event) => {
-  // 点弹窗外面（灰底）也能关
-  if (event.target === lanModalEl) lanModalEl.hidden = true
-})
-onlineJoinEl.addEventListener('click', () => startOnline('guest'))
-onlineCodeInputEl.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') startOnline('guest')
-})
-
-onlineCopyEl.addEventListener('click', async () => {
-  try {
-    await navigator.clipboard.writeText(onlineInfo.code || '')
-    onlineCopyEl.textContent = '复制好了'
-    setTimeout(() => (onlineCopyEl.textContent = '复制房间码'), 1500)
-  } catch {
-    onlineCopyEl.textContent = '复制不了，手动抄一下吧'
-    setTimeout(() => (onlineCopyEl.textContent = '复制房间码'), 1500)
-  }
-})
-
-/**
- * 退出房间。两条路都走这儿：用户点「离开房间」、以及**游戏退出时自动退**。
- * @param {string} why 退完在联机页上说的那句话
- */
-async function leaveRoomNow(why) {
-  try {
-    await window.api.onlineLeave()
-    onlineInfo = { ok: true, running: false, peers: [], code: '', myIp: '', role: '' }
-    setOnlineNotice(why, 'ok')
-    renderOnline()
-  } catch (error) {
-    setOnlineNotice(`离开房间时出错：${error.message}`, 'error')
-  }
-}
-
-onlineLeaveEl.addEventListener('click', async () => {
-  onlineLeaveEl.disabled = true
-  try {
-    await leaveRoomNow('已离开房间，虚拟网卡也收掉了。')
-  } finally {
-    onlineLeaveEl.disabled = false
-  }
-})
-
-// 主进程推过来的阶段提示（"正在下载组件…""正在创建虚拟网卡…"）
-window.api.onOnlineStage((text) => setOnlineNotice(text))
-
 // ═══════════════════════════════════════
 // 联机：VoxLink（现在只做到「房间」这一层）
 // ═══════════════════════════════════════
 //
-// ⚠️ 这一块跟上面的「房间码联机」（EasyTier）是**两码事**，别混：
-//    · 上面那套 —— 毛球自己用 EasyTier 搭虚拟局域网（8 位码）
-//    · 这一套 —— 借 VoxLink 的公共服务器牵线（6 位码）
+// 借 VoxLink 的公共服务器牵线（6 位房间码）。
 // 现在这一套只做到"房间码是真的、服务器认得"，**还连不上游戏**。
 // 所以下面所有文案都必须把这句话说清楚，不许含糊成"能联机了"。
 

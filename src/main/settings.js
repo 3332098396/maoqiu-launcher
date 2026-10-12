@@ -112,13 +112,10 @@ const DEFAULTS = {
     heroOrder: 'order'
   },
   /**
-   * 联机（M12）。记着上次的房间码和用的组件版本，下次打开界面能直接接上。
-   * code 为空 = 现在没在房间里。
+   * 联机。现在只剩樱花内网穿透那套（M15）：访问密钥、隧道 ID、frpc 路径、本地端口。
+   * （以前的"房间码联机"走 EasyTier，2026-10-13 整套删掉了。）
    */
   online: {
-    code: '',
-    role: '',
-    version: '',
     /** 樱花内网穿透那套（M15）：访问密钥、隧道 ID、frpc 路径、本地端口 */
     frp: { accessKey: '', tunnelId: '', exePath: '', localPort: 25565 }
   },
@@ -228,9 +225,8 @@ function readConfig() {
         lastPackDir: typeof dirs.lastPackDir === 'string' ? dirs.lastPackDir : ''
       },
       online: {
-        ...DEFAULTS.online,
-        ...((raw.online) || {}),
-        // frp 是里面的一层，得单独合一次（不然老配置读出来没有它）
+        // 只合 frp 一层。老配置里那些 EasyTier 的 code/role/version 直接丢掉
+        // （那套联机 2026-10-13 删了）。
         frp: { ...DEFAULTS.online.frp, ...(((raw.online) || {}).frp || {}) }
       },
       look: { ...DEFAULTS.look, ...((raw.look) || {}) },
