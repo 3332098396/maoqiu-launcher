@@ -6371,6 +6371,532 @@ async function renderCapes(isMicrosoft) {
   capeListEl.appendChild(off)
 }
 
+// ═══════════════════════════════════════════════════════════
+// 皮肤编辑器（M23）：在启动器里直接改皮肤
+// ═══════════════════════════════════════════════════════════
+//
+// 【为什么不做一个"完整"的绘图软件】用户要的是"给我的小人换个颜色、
+// 画个图案"，不是开一个 Photoshop。所以这里只有四样：画笔、橡皮、取色、油漆桶，
+// 加上一个够宽的调色板和撤销。够用、看得懂、不会点错。
+
+const seModal = document.getElementById('skin-editor')
+const seCanvas = document.getElementById('se-canvas')
+const seCtx = seCanvas.getContext('2d', { willReadFrequently: true })
+const seWrapEl = document.getElementById('se-wrap')
+const seOutlineEl = document.getElementById('se-outline')
+const seToolsEl = document.getElementById('se-tools')
+const sePartsEl = document.getElementById('se-parts')
+const sePaletteEl = document.getElementById('se-palette')
+const seRecentEl = document.getElementById('se-recent')
+const seColorEl = document.getElementById('se-color')
+const seNameEl = document.getElementById('se-name')
+const seHintEl = document.getElementById('se-hint')
+
+/** 64×64 皮肤图上，六个部位各自占哪一块（1.8 之后的统一布局） */
+const SKIN_PARTS = [
+  { key: 'head', label: '头', x: 0, y: 0, w: 32, h: 16 },
+  { key: 'body', label: '身体', x: 16, y: 16, w: 24, h: 16 },
+  { key: 'armR', label: '右臂', x: 40, y: 16, w: 16, h: 16 },
+  { key: 'armL', label: '左臂', x: 32, y: 48, w: 16, h: 16 },
+  { key: 'legR', label: '右腿', x: 0, y: 16, w: 16, h: 16 },
+  { key: 'legL', label: '左腿', x: 16, y: 48, w: 16, h: 16 }
+]
+
+const SE_TOOLS = [
+  { key: 'brush', label: '画笔', hint: '左键按住涂，可以拖着走。' },
+  { key: 'eraser', label: '橡皮', hint: '把像素擦成透明的（透明的地方游戏里是空的）。' },
+  { key: 'picker', label: '取色', hint: '点哪取哪的颜色，取完自动切回画笔。' },
+  { key: 'bucket', label: '油漆桶', hint: '把跟这一格连成一片的同样颜色整块换掉。' }
+]
+
+let seTool = 'brush'
+let seColor = '#3aa0ff'
+let seRecent = []
+/** 静默期：设置输入框的值时别触发 change */
+let seUndoStack = []
+let seRedoStack = []
+let seDrawing = false
+let seLastPixel = null
+/** 打开时的那张图（"回到刚打开的样子"用） */
+let seOriginal = null
+let sePart = ''
+
+/** RGB → "#rrggbb" */
+function rgbHex(r, g, b) {
+  const one = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')
+  return `#${one(r)}${one(g)}${one(b)}`
+}
+
+/** HSL → "#rrggbb"（调色板是用色相推出来的，省得手写几十个色号） */
+function hslHex(h, s, l) {
+  const sat = s / 100
+  const light = l / 100
+  const c = (1 - Math.abs(2 * light - 1)) * sat
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+  const m = light - c / 2
+
+  let rgb = [0, 0, 0]
+  if (h < 60) rgb = [c, x, 0]
+  else if (h < 120) rgb = [x, c, 0]
+  else if (h < 180) rgb = [0, c, x]
+  else if (h < 240) rgb = [0, x, c]
+  else if (h < 300) rgb = [x, 0, c]
+  else rgb = [c, 0, x]
+
+  return rgbHex((rgb[0] + m) * 255, (rgb[1] + m) * 255, (rgb[2] + m) * 255)
+}
+
+/** 一次快照（撤销用）。64×64 的图一份才 16 KB，存几十份没关系 */
+function seSnapshot() {
+  try {
+    return seCtx.getImageData(0, 0, 64, 64)
+  } catch {
+    return null
+  }
+}
+
+function sePushUndo() {
+  const shot = seSnapshot()
+  if (!shot) return
+  seUndoStack.push(shot)
+  if (seUndoStack.length > 60) seUndoStack.shift()
+  // 新动作一发生，之前撤销掉的"未来"就作废了
+  seRedoStack = []
+  seUpdateUndoButtons()
+}
+
+function seUpdateUndoButtons() {
+  document.getElementById('se-undo').disabled = seUndoStack.length === 0
+  document.getElementById('se-redo').disabled = seRedoStack.length === 0
+}
+
+function seRestore(shot) {
+  if (!shot) return
+  seCtx.putImageData(shot, 0, 0)
+}
+
+/** 把老式 64×32 的皮肤补成 64×64（右边那半镜像左边） */
+function seNormalizeSource(source) {
+  const w = source.naturalWidth || source.width || 64
+  const h = source.naturalHeight || source.height || 64
+
+  const out = document.createElement('canvas')
+  out.width = 64
+  out.height = 64
+  const ctx = out.getContext('2d')
+  ctx.imageSmoothingEnabled = false
+  ctx.drawImage(source, 0, 0, Math.min(w, 64), Math.min(h, 64))
+
+  if (h === 32) {
+    // 老布局里腿和胳膊只有一半，右边那半是把左边镜像过去的
+    const mirror = (sx, sy, sw, sh, dx, dy) => {
+      ctx.save()
+      ctx.translate(dx + sw, dy)
+      ctx.scale(-1, 1)
+      ctx.drawImage(out, sx, sy, sw, sh, 0, 0, sw, sh)
+      ctx.restore()
+    }
+    mirror(0, 16, 16, 16, 16, 48) // 右腿 → 左腿
+    mirror(40, 16, 16, 16, 32, 48) // 右臂 → 左臂
+  }
+
+  return out
+}
+
+/** 现在身上穿的那张图（编辑器拿它当底稿） */
+async function seGetBase() {
+  try {
+    if (currentSkinImage) return seNormalizeSource(currentSkinImage)
+  } catch {
+    // 拿不到就退回默认
+  }
+  if (window.skinViewer && window.skinViewer.makeDefaultSkin) {
+    return seNormalizeSource(window.skinViewer.makeDefaultSkin())
+  }
+  const blank = document.createElement('canvas')
+  blank.width = 64
+  blank.height = 64
+  return blank
+}
+
+/** 画调色板 */
+function seBuildPalette() {
+  sePaletteEl.textContent = ''
+
+  const colors = []
+  // ① 灰阶（从黑到白 8 档）
+  for (let i = 0; i < 8; i++) {
+    const v = Math.round((i / 7) * 255)
+    colors.push(rgbHex(v, v, v))
+  }
+  // ② 12 个色相 × 3 档明暗
+  for (let h = 0; h < 12; h++) {
+    for (const [s, l] of [[70, 35], [85, 52], [70, 72]]) {
+      colors.push(hslHex(h * 30, s, l))
+    }
+  }
+
+  for (const color of colors) {
+    const swatch = document.createElement('button')
+    swatch.type = 'button'
+    swatch.className = 'se-swatch'
+    swatch.style.background = color
+    swatch.title = color
+    swatch.addEventListener('click', () => seSetColor(color))
+    sePaletteEl.appendChild(swatch)
+  }
+}
+
+/** 最近用过的颜色 */
+function seRenderRecent() {
+  seRecentEl.textContent = ''
+  for (const color of seRecent) {
+    const swatch = document.createElement('button')
+    swatch.type = 'button'
+    swatch.className = 'se-swatch'
+    swatch.style.background = color
+    swatch.title = color
+    swatch.addEventListener('click', () => seSetColor(color))
+    seRecentEl.appendChild(swatch)
+  }
+}
+
+function seSetColor(color) {
+  seColor = color
+  seColorEl.value = color
+  seRecent = [color, ...seRecent.filter((one) => one !== color)].slice(0, 12)
+  seRenderRecent()
+}
+
+/** 画工具和部位的按钮 */
+function seBuildSide() {
+  seToolsEl.textContent = ''
+  for (const one of SE_TOOLS) {
+    const chip = document.createElement('button')
+    chip.type = 'button'
+    chip.className = seTool === one.key ? 'chip chip--on' : 'chip'
+    chip.textContent = one.label
+    chip.title = one.hint
+    chip.addEventListener('click', () => {
+      seTool = one.key
+      const tip = SE_TOOLS.find((t) => t.key === seTool)
+      seHintEl.textContent = tip ? tip.hint : ''
+      seBuildSide()
+    })
+    seToolsEl.appendChild(chip)
+  }
+
+  sePartsEl.textContent = ''
+  const none = document.createElement('button')
+  none.type = 'button'
+  none.className = sePart ? 'chip' : 'chip chip--on'
+  none.textContent = '整张'
+  none.addEventListener('click', () => seShowPart(''))
+  sePartsEl.appendChild(none)
+
+  for (const one of SKIN_PARTS) {
+    const chip = document.createElement('button')
+    chip.type = 'button'
+    chip.className = sePart === one.key ? 'chip chip--on' : 'chip'
+    chip.textContent = one.label
+    chip.addEventListener('click', () => seShowPart(one.key))
+    sePartsEl.appendChild(chip)
+  }
+}
+
+/** 在画布上框出某个部位（不是"只让画这儿"，只是告诉你它在哪） */
+function seShowPart(key) {
+  sePart = key
+  const part = SKIN_PARTS.find((one) => one.key === key)
+
+  if (!part) {
+    seOutlineEl.hidden = true
+  } else {
+    // 画布是 64×64 铺满外面的框，所以用百分比定位，缩放变了也不用改
+    seOutlineEl.hidden = false
+    seOutlineEl.style.left = `${(part.x / 64) * 100}%`
+    seOutlineEl.style.top = `${(part.y / 64) * 100}%`
+    seOutlineEl.style.width = `${(part.w / 64) * 100}%`
+    seOutlineEl.style.height = `${(part.h / 64) * 100}%`
+  }
+
+  seBuildSide()
+}
+
+/** 鼠标位置 → 64×64 上的哪一个像素 */
+function sePixelAt(event) {
+  const rect = seCanvas.getBoundingClientRect()
+  if (rect.width === 0 || rect.height === 0) return null
+
+  const x = Math.floor(((event.clientX - rect.left) / rect.width) * 64)
+  const y = Math.floor(((event.clientY - rect.top) / rect.height) * 64)
+  if (x < 0 || y < 0 || x >= 64 || y >= 64) return null
+  return { x, y }
+}
+
+/** 在两个像素之间补点（拖快了也不会画出虚线） */
+function seLine(from, to, paint) {
+  let { x: x0, y: y0 } = from
+  const { x: x1, y: y1 } = to
+  const dx = Math.abs(x1 - x0)
+  const dy = Math.abs(y1 - y0)
+  const sx = x0 < x1 ? 1 : -1
+  const sy = y0 < y1 ? 1 : -1
+  let err = dx - dy
+
+  for (let guard = 0; guard < 300; guard++) {
+    paint(x0, y0)
+    if (x0 === x1 && y0 === y1) return
+    const e2 = 2 * err
+    if (e2 > -dy) {
+      err -= dy
+      x0 += sx
+    }
+    if (e2 < dx) {
+      err += dx
+      y0 += sy
+    }
+  }
+}
+
+function sePaintPixel(x, y) {
+  if (seTool === 'eraser') {
+    seCtx.clearRect(x, y, 1, 1)
+    return
+  }
+  seCtx.fillStyle = seColor
+  seCtx.fillRect(x, y, 1, 1)
+}
+
+function sePickColor(x, y) {
+  const data = seCtx.getImageData(x, y, 1, 1).data
+  if (data[3] === 0) return // 透明的地方没颜色可取
+  seSetColor(rgbHex(data[0], data[1], data[2]))
+  seTool = 'brush'
+  seHintEl.textContent = '取到颜色了，已经切回画笔。'
+  seBuildSide()
+}
+
+/** 油漆桶：把和这一格连成一片的同色区域整块换掉 */
+function seBucket(x, y) {
+  const image = seCtx.getImageData(0, 0, 64, 64)
+  const data = image.data
+  const at = (px, py) => (py * 64 + px) * 4
+
+  const start = at(x, y)
+  const target = [data[start], data[start + 1], data[start + 2], data[start + 3]]
+
+  const rgb = [
+    parseInt(seColor.slice(1, 3), 16),
+    parseInt(seColor.slice(3, 5), 16),
+    parseInt(seColor.slice(5, 7), 16)
+  ]
+
+  // 目标色和要涂的颜色一样就不用干了（否则会死循环）
+  if (target[0] === rgb[0] && target[1] === rgb[1] && target[2] === rgb[2] && target[3] === 255) {
+    return
+  }
+
+  const same = (px, py) => {
+    const i = at(px, py)
+    return (
+      data[i] === target[0] && data[i + 1] === target[1] &&
+      data[i + 2] === target[2] && data[i + 3] === target[3]
+    )
+  }
+
+  const stack = [[x, y]]
+  const seen = new Set()
+  let guard = 0
+
+  while (stack.length > 0 && guard < 20000) {
+    guard++
+    const [px, py] = stack.pop()
+    if (px < 0 || py < 0 || px >= 64 || py >= 64) continue
+    const key = py * 64 + px
+    if (seen.has(key)) continue
+    seen.add(key)
+    if (!same(px, py)) continue
+
+    const i = at(px, py)
+    data[i] = rgb[0]
+    data[i + 1] = rgb[1]
+    data[i + 2] = rgb[2]
+    data[i + 3] = 255
+
+    stack.push([px + 1, py], [px - 1, py], [px, py + 1], [px, py - 1])
+  }
+
+  seCtx.putImageData(image, 0, 0)
+}
+
+// ——— 鼠标 ———
+
+seCanvas.addEventListener('contextmenu', (event) => event.preventDefault())
+
+seCanvas.addEventListener('pointerdown', async (event) => {
+  const pixel = sePixelAt(event)
+  if (!pixel) return
+
+  // 右键 / Ctrl+左键 / 选着取色工具 = 取色
+  const wantPick = event.button === 2 || event.ctrlKey || seTool === 'picker'
+  if (wantPick) {
+    sePickColor(pixel.x, pixel.y)
+    return
+  }
+
+  sePushUndo()
+  seDrawing = true
+  seLastPixel = pixel
+  // 抓住指针：拖到画布外面再回来也不会断线。
+  // 【为什么要 try】探针用合成事件点它的時候 pointerId 是 0，会抛 NotFoundError。
+  // 真实鼠标不会，但这里挂了也不该影响画画。
+  try {
+    seCanvas.setPointerCapture(event.pointerId)
+  } catch {
+    /* 抓不住就算了，不影响画 */
+  }
+
+  if (seTool === 'bucket') {
+    seBucket(pixel.x, pixel.y)
+    seDrawing = false
+    return
+  }
+
+  sePaintPixel(pixel.x, pixel.y)
+})
+
+seCanvas.addEventListener('pointermove', (event) => {
+  if (!seDrawing || seTool === 'bucket') return
+  const pixel = sePixelAt(event)
+  if (!pixel) return
+
+  if (seLastPixel) seLine(seLastPixel, pixel, sePaintPixel)
+  else sePaintPixel(pixel.x, pixel.y)
+  seLastPixel = pixel
+})
+
+const seStop = () => {
+  seDrawing = false
+  seLastPixel = null
+}
+seCanvas.addEventListener('pointerup', seStop)
+seCanvas.addEventListener('pointercancel', seStop)
+seCanvas.addEventListener('pointerleave', seStop)
+
+// ——— 顶上的按钮 ———
+
+document.getElementById('se-undo').addEventListener('click', () => {
+  const shot = seUndoStack.pop()
+  if (!shot) return
+  const now = seSnapshot()
+  if (now) seRedoStack.push(now)
+  seRestore(shot)
+  seUpdateUndoButtons()
+})
+
+document.getElementById('se-redo').addEventListener('click', () => {
+  const shot = seRedoStack.pop()
+  if (!shot) return
+  const now = seSnapshot()
+  if (now) seUndoStack.push(now)
+  seRestore(shot)
+  seUpdateUndoButtons()
+})
+
+document.getElementById('se-reset').addEventListener('click', () => {
+  if (!seOriginal) return
+  sePushUndo()
+  seCtx.clearRect(0, 0, 64, 64)
+  seCtx.drawImage(seOriginal, 0, 0)
+  seHintEl.textContent = '回到刚打开时的样子了（还能撤销回来）。'
+})
+
+document.getElementById('se-close').addEventListener('click', () => {
+  seModal.hidden = true
+})
+
+document.getElementById('se-save').addEventListener('click', async () => {
+  const name =
+    seNameEl.value.trim() ||
+    `我自己画的 ${new Date().toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+
+  const dataUrl = seCanvas.toDataURL('image/png')
+
+  let result
+  try {
+    result = await window.api.saveEditedSkin(name, dataUrl)
+  } catch (error) {
+    result = { ok: false, error: error.message }
+  }
+
+  if (!result.ok) {
+    seHintEl.textContent = `没存进去：${result.error}`
+    return
+  }
+
+  seModal.hidden = true
+  skinLibCache = null
+  await renderSkinPage()
+
+  await askLocalConfirm({
+    title: result.duplicate ? '这张已经在库里了' : '画好了，已经存进皮肤库',
+    what: result.duplicate
+      ? '你画的这张和库里某一张一模一样，就没再存一份。'
+      : `存成了「${result.name}」。列表里点它的「使用」就能穿上。`,
+    okLabel: '好',
+    danger: false
+  })
+})
+
+seColorEl.addEventListener('input', () => seSetColor(seColorEl.value))
+
+// 快捷键：Ctrl+Z / Ctrl+Y（在编辑器开着的时候才有用）
+document.addEventListener('keydown', (event) => {
+  if (seModal.hidden) return
+  if (!event.ctrlKey) return
+
+  const key = String(event.key).toLowerCase()
+  if (key === 'z') {
+    event.preventDefault()
+    document.getElementById('se-undo').click()
+  } else if (key === 'y') {
+    event.preventDefault()
+    document.getElementById('se-redo').click()
+  }
+})
+
+/** 打开编辑器：拿"现在身上穿的"这张当底稿 */
+async function openSkinEditor() {
+  seModal.hidden = false
+
+  const base = await seGetBase()
+  seOriginal = base
+
+  seCtx.clearRect(0, 0, 64, 64)
+  seCtx.imageSmoothingEnabled = false
+  seCtx.drawImage(base, 0, 0)
+
+  seUndoStack = []
+  seRedoStack = []
+  seUpdateUndoButtons()
+
+  seTool = 'brush'
+  sePart = ''
+  seOutlineEl.hidden = true
+  seNameEl.value = ''
+  seHintEl.textContent = '左键画，右键（或按住 Ctrl）取色。放大显示，改的是一个像素一个像素。'
+
+  seBuildSide()
+  seRenderRecent()
+}
+
+seBuildPalette()
+seRenderRecent()
+seUpdateUndoButtons()
+
+document.getElementById('skin-draw').addEventListener('click', openSkinEditor)
+
 /** 读皮肤库（读不到就当空的，不拦着用户） */
 async function loadSkinLib() {
   try {

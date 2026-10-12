@@ -836,6 +836,7 @@
             </div>
             <div class="skin-head__actions">
               <button class="btn btn--ghost" type="button" id="skin-site">去皮肤站找皮肤</button>
+              <button class="btn btn--ghost" type="button" id="skin-draw">自己画一张…</button>
               <!-- M23：把挑好的皮肤真传上 Mojang。只有登了正版账号才出现
                    （正版登录要等 Mojang 审批，见帮助页） -->
               <button class="btn btn--ghost" type="button" id="skin-to-mojang" hidden>
@@ -2046,6 +2047,65 @@
         <div class="modal__actions modal__actions--end">
           <button class="btn btn--ghost" type="button" id="local-del-cancel">算了</button>
           <button class="btn btn--danger" type="button" id="local-del-ok">删掉</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 皮肤编辑器（M23）：不用会画图的软件，在启动器里直接改皮肤 -->
+    <div class="modal modal--top" id="skin-editor" hidden>
+      <div class="modal__box modal__box--editor">
+        <div class="modal__head">
+          <span class="modal__title">画皮肤</span>
+          <div class="modal__actions">
+            <button class="btn btn--ghost btn--sm" type="button" id="se-undo" title="Ctrl+Z">撤销</button>
+            <button class="btn btn--ghost btn--sm" type="button" id="se-redo" title="Ctrl+Y">重做</button>
+            <button class="btn btn--primary btn--sm" type="button" id="se-save">保存进皮肤库</button>
+            <button class="btn btn--ghost btn--sm" type="button" id="se-close">关闭</button>
+          </div>
+        </div>
+
+        <div class="se-body">
+          <div class="se-stage">
+            <!-- 画布就是 64×64，靠 CSS 放大 8 倍显示并开"像素不模糊"——
+                 这样鼠标坐标 ÷ 8 就是像素坐标，不用自己算缩放 -->
+            <div class="se-canvas-wrap" id="se-wrap">
+              <canvas id="se-canvas" width="64" height="64"></canvas>
+              <div class="se-outline" id="se-outline" hidden></div>
+            </div>
+            <p class="se-hint" id="se-hint">
+              左键画，右键（或按住 Ctrl）取色。放大显示，改的是一个像素一个像素。
+            </p>
+          </div>
+
+          <div class="se-side">
+            <div class="se-group">
+              <span class="se-label">画哪个部位</span>
+              <div class="chips" id="se-parts"></div>
+            </div>
+
+            <div class="se-group">
+              <span class="se-label">工具</span>
+              <div class="chips" id="se-tools"></div>
+            </div>
+
+            <div class="se-group">
+              <span class="se-label">颜色</span>
+              <div class="se-color">
+                <input type="color" id="se-color" value="#3aa0ff" />
+                <button class="btn btn--ghost btn--sm" type="button" id="se-reset">
+                  回到刚打开的样子
+                </button>
+              </div>
+              <div class="se-palette" id="se-palette"></div>
+              <span class="se-label se-label--small">最近用的</span>
+              <div class="se-palette" id="se-recent"></div>
+            </div>
+
+            <div class="se-group">
+              <span class="se-label">存成什么名字</span>
+              <input class="input" id="se-name" type="text" placeholder="我自己画的" />
+            </div>
+          </div>
         </div>
       </div>
     </div>

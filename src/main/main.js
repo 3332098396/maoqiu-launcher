@@ -1491,6 +1491,15 @@ function registerIpcHandlers() {
     }
   })
 
+  /** 皮肤编辑器画完的那张图存进皮肤库（M23） */
+  ipcMain.handle('skin:saveEdited', (_event, name, dataUrl) => {
+    try {
+      return skins.saveEdited(name, dataUrl)
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
   /** 在文件管理器里打开皮肤库（用户想自己往里丢图也行） */
   ipcMain.handle('skin:openFolder', async () => {
     try {

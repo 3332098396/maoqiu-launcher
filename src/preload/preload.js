@@ -522,6 +522,9 @@ contextBridge.exposeInMainWorld('api', {
   /** 官方的默认皮肤 Steve（从玩家自己的游戏文件里读出来的） */
   getOfficialSkin: (kind) => ipcRenderer.invoke('skin:official', kind),
 
+  /** 皮肤编辑器画完存进皮肤库（重名会自动换个编号，不会默默不存） */
+  saveEditedSkin: (name, dataUrl) => ipcRenderer.invoke('skin:saveEdited', name, dataUrl),
+
   // ——— 传到正版账号 / 披风（M23，等 Mojang 审批下来才用得上）———
 
   /** 把皮肤库里的一张真传到 Mojang 上（游戏里立刻生效） */

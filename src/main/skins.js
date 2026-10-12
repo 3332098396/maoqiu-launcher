@@ -140,6 +140,68 @@ function readPngSize(buffer) {
  */
 const SKIN_LIBRARY_LIMIT = 30
 
+/**
+ * 皮肤编辑器画完存进皮肤库（M23）。
+ *
+ * 【和 saveBuiltin 的区别】那个是"界面启动时补一份示例皮肤"，重名就跳过；
+ * 这个是人**主动点保存**，重名得给他换个名字存下来——
+ * 不然他画了半天点保存，什么都没发生（"我明明点了保存"）。
+ */
+function saveEdited(name, dataUrl) {
+  const match = /^data:image\/png;base64,(.+)$/i.exec(String(dataUrl || ''))
+  if (!match) return { ok: false, error: '不是 PNG 数据' }
+
+  let buffer
+  try {
+    buffer = Buffer.from(match[1], 'base64')
+  } catch {
+    return { ok: false, error: '数据解不开' }
+  }
+
+  const size = readPngSize(buffer)
+  if (!size.ok) return size
+  if (size.width !== 64 || size.height !== 64) {
+    return { ok: false, error: `皮肤得是 64×64，现在这张是 ${size.width}×${size.height}` }
+  }
+
+  const dir = skinsDir()
+  paths.ensureDir(dir)
+
+  // 和库里已有的完全一样 → 别存第二份
+  const hash = crypto.createHash('sha1').update(buffer).digest('hex')
+  for (const one of listLocal()) {
+    try {
+      if (crypto.createHash('sha1').update(fs.readFileSync(one.path)).digest('hex') === hash) {
+        return { ok: true, path: one.path, name: one.name, duplicate: true }
+      }
+    } catch {
+      // 读不到就比下一张
+    }
+  }
+
+  if (listUserSkins().length >= SKIN_LIBRARY_LIMIT) {
+    return {
+      ok: false,
+      error: `皮肤库已经放满 ${SKIN_LIBRARY_LIMIT} 张了。先「移除」几张不需要的再保存。`
+    }
+  }
+
+  const base = safeFileName(name || '我自己画的')
+  let target = path.join(dir, `${base}.png`)
+  let n = 2
+  while (fs.existsSync(target)) {
+    target = path.join(dir, `${base}-${n}.png`)
+    n++
+  }
+
+  try {
+    fs.writeFileSync(target, buffer)
+  } catch (error) {
+    return { ok: false, error: `存不下来：${error.message}` }
+  }
+  return { ok: true, path: target, name: path.basename(target, '.png') }
+}
+
 /** 随包发的那几张叫什么（用来把它们和用户自己传的区分开） */
 function bundledNames() {
   return new Set(bundledList().map((one) => safeFileName(one.name).toLowerCase()))
@@ -487,6 +549,7 @@ module.exports = {
   importFile,
   removeLocal,
   saveBuiltin,
+  saveEdited,
   seedBundled,
   bundledList,
   readPngSize,
