@@ -4673,7 +4673,10 @@ function renderVoxlink() {
   if (connText) lines.push(connText)
   // V4 起，客人拿到的 `address` 是**本机的一个地址**（桥开出来的），
   // 用途是让用户填进游戏的「加入服务器」——它**不是**"对方的地址"，别写错。
-  if (voxlinkConn?.address) lines.push(`把这一行填进游戏的「加入服务器」：${voxlinkConn.address}`)
+  //
+  // M23：这一个地址单独做成上面那张大卡（能一键复制），文字里就不重复了——
+  // 重复两遍反而让人以为"这两个地址不一样，该填哪个"。
+  paintGameAddress(voxlinkConn?.address || '')
   // 房间名要先过服务器审核。审核没放行时，服务器回的不是名字，而是一个
   // 占位符「name_pending_review」—— 那是给程序看的记号，原样显示给用户就是个谜语。
   const namePending = room.nameApproved === false || room.name === 'name_pending_review'
@@ -4702,6 +4705,39 @@ function renderVoxlink() {
     lines.push('接下来：等两边连上。连上后会给你一个地址，填进游戏就能进同一个世界。')
   }
   voxlinkStatusTextEl.textContent = lines.join('\n')
+}
+
+/** 房客拿到地址之后，把它做成一张醒目的大卡（M23） */
+function paintGameAddress(address) {
+  const card = document.getElementById('voxlink-addr-card')
+  const value = document.getElementById('voxlink-addr-value')
+  if (!card || !value) return
+
+  if (!address) {
+    card.hidden = true
+    return
+  }
+
+  card.hidden = false
+  value.textContent = address
+}
+
+const voxlinkCopyAddrEl = document.getElementById('voxlink-copy-addr')
+if (voxlinkCopyAddrEl) {
+  voxlinkCopyAddrEl.addEventListener('click', async () => {
+    const value = document.getElementById('voxlink-addr-value')
+    if (!value) return
+    try {
+      await navigator.clipboard.writeText(value.textContent)
+      voxlinkCopyAddrEl.textContent = '复制好了'
+      setTimeout(() => {
+        voxlinkCopyAddrEl.textContent = '复制地址'
+      }, 1500)
+    } catch (error) {
+      // 复制不了（剪贴板被别的程序占着之类）——地址就在屏幕上，手抄也行
+      voxlinkCopyAddrEl.textContent = '复制不了，手抄一下吧'
+    }
+  })
 }
 
 async function refreshVoxlink() {

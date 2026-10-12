@@ -3781,6 +3781,47 @@ body[data-theme='amber'] {
 }
 
 /* ══════════════════════════════════════════════
+   联机：填进游戏的那个地址大卡（M23）
+   ══════════════════════════════════════════════ */
+
+.gameaddr {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--accent-ring);
+  background: var(--surface-accent);
+}
+
+.gameaddr__label {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.gameaddr__value {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--accent-strong);
+  word-break: break-all;
+  margin-bottom: 10px;
+  /* 让用户一眼认出"这是要抄走的东西" */
+  user-select: all;
+}
+
+.gameaddr__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gameaddr__hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ══════════════════════════════════════════════
    皮肤编辑器（M23）
    ══════════════════════════════════════════════ */
 
