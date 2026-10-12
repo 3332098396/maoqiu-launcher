@@ -25,3 +25,6 @@ release/
 
 # 给 AI 看的工作说明书（只在本地，不公开）
 CLAUDE.md
+
+# Windows 快捷方式残留（误建出来的，不公开）
+*.lnk
