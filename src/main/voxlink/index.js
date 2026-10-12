@@ -180,6 +180,11 @@ class VoxLink {
 
       const room = {
         ...result,
+        // 房间名要过服务器审核。没放行之前，服务器回的 `name` 不是名字，
+        // 而是占位符 `name_pending_review` —— 把这串洋文显示给用户就是个谜语。
+        // 所以自己留一份"用户起的那个名字"，界面拿它说人话（别拿它顶替 result.name，
+        // 服务器给的才算数）。
+        requestedName: name,
         maxPlayers: MAX_PLAYERS,
         currentPlayers: 1,
         hasPassword: !!req.password,

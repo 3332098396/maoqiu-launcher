@@ -38,8 +38,14 @@ const content = require('./content')
 const downloader = require('./downloader')
 const pack = require('./pack')
 const online = require('./online')
-const voxlink = require('./voxlink')
+const { VoxLink } = require('./voxlink')
 const voxlinkPorts = require('./voxlink/ports')
+/**
+ * VoxLink 的实例：全程序**只有一个**（它自己记着"我在不在房间里"）。
+ * 注意不是在文件顶上就 new —— 建它的时候要读配置目录，
+ * 得等程序起来了才知道目录在哪，所以放在 `registerIpcHandlers()` 里建。
+ */
+let voxlink = null
 const frp = require('./frp')
 const loaders = require('./loaders')
 const forge = require('./forge')
@@ -366,6 +372,8 @@ function logNameToTime(name) {
 let contentRunning = false
 
 function registerIpcHandlers() {
+  voxlink = new VoxLink()
+
   /** 本机已装了哪些版本（跨所有认得的游戏目录，每项带着它在哪儿） */
   ipcMain.handle('versions:installed', () => paths.listAllInstalledVersions(settings.knownGameDirs()))
 

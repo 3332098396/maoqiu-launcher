@@ -4403,7 +4403,16 @@ function renderVoxlink() {
   const lines = []
   lines.push(voxlinkState.isHost ? '你是房主。' : '你在好友的房间里。')
   lines.push(`房间码：${voxlinkState.code}`)
-  if (room.name) lines.push(`房间名：${room.name}`)
+  // 房间名要先过服务器审核。审核没放行时，服务器回的不是名字，而是一个
+  // 占位符「name_pending_review」—— 那是给程序看的记号，原样显示给用户就是个谜语。
+  const namePending = room.nameApproved === false || room.name === 'name_pending_review'
+  if (namePending) {
+    lines.push(room.requestedName
+      ? `房间名：${room.requestedName}（服务器在审核，先按这个名字排着）`
+      : '房间名：服务器正在审核，暂时看不到')
+  } else if (room.name) {
+    lines.push(`房间名：${room.name}`)
+  }
   lines.push(`服务器：${voxlinkState.serverUrl}`)
   if (voxlinkState.state === 'hosting') {
     lines.push('把这个 6 位房间码发给好友。')
