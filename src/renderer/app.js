@@ -4013,6 +4013,17 @@ function renderDiagnosis(result) {
     const item = document.createElement('div')
     item.className = 'diag__item'
 
+    // 「有多大把握」的小标签（M23）。以前所有结论都长得一样肯定，
+    // 用户分不清哪条是铁证、哪条是猜的。
+    const sure = one.confidence === 'certain'
+    const badge = document.createElement('span')
+    badge.className = sure ? 'diag__badge diag__badge--sure' : 'diag__badge'
+    badge.textContent = sure ? '就是它' : '很可能是'
+    badge.title = sure
+      ? '日志里那个字符串只有这一种解释'
+      : '这个线索也可能对应别的原因，先照着试，不行再看下一条'
+    item.appendChild(badge)
+
     const title = document.createElement('b')
     title.className = 'diag__title'
     title.textContent = one.title
@@ -4034,6 +4045,29 @@ function renderDiagnosis(result) {
         list.appendChild(li)
       }
       item.appendChild(list)
+    }
+
+    // ——— 证据（M23）：日志里那几行原样摆出来 ———
+    //
+    // 【为什么要摆】只说"内存不够"，用户会问"你怎么看出来的"。
+    // 把命中的那几行连同前后一行展示出来，他既能自己判断，
+    // 也能直接截图发给别人——比让他自己在一屏英文里翻强得多。
+    if (Array.isArray(one.evidence) && one.evidence.length > 0) {
+      const details = document.createElement('details')
+      details.className = 'diag__evidence'
+
+      const summary = document.createElement('summary')
+      summary.textContent = `看日志里的证据（${one.evidence.length} 行）`
+      details.appendChild(summary)
+
+      const pre = document.createElement('pre')
+      pre.className = 'diag__evidence-box'
+      pre.textContent = one.evidence
+        .map((line) => `${String(line.line).padStart(6, ' ')} | ${line.text}`)
+        .join('\n')
+      details.appendChild(pre)
+
+      item.appendChild(details)
     }
 
     diagnosisEl.appendChild(item)

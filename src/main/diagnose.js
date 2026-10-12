@@ -226,6 +226,64 @@ const RULES = [
  *   found   按重要程度排好的结果（可能不止一条）
  *   unknown true = 一条都没认出来（这时候才值得去问 AI）
  */
+/**
+ * 每条规则"有多大把握"（M23，照 KAMUCL 的 diagnosticRules 那套分级）。
+ *
+ * 【为什么要分这个】以前所有结论都长得一样肯定，用户分不清
+ * "这是铁证"还是"我猜的"。可实际上差别很大：
+ *   certain  —— 这个字符串出现 = 就是它，没有第二种解释。
+ *               比如 `UnsupportedClassVersionError`，除了 Java 版本不对没别的可能。
+ *   possible —— 有可能，但也可能是别的原因。比如日志里出现 "OutOfMemoryError"
+ *               也可能是某个 Mod 自己把内存吃光了，不一定是给游戏的太少。
+ * 分了级，界面就能说"**很可能**是内存不够"和"**就是**Java 版本不对"，
+ * 用户按哪个先试心里有数。
+ *
+ * 【没有列在这儿的规则】默认按 possible 算——宁可说轻一点。
+ */
+const CERTAIN_RULES = new Set([
+  'java-version', // UnsupportedClassVersionError 只可能是这个原因
+  'java-missing', // ClassNotFoundException 同理
+  'native-crash', // EXCEPTION_ACCESS_VIOLATION 是 JVM 自己报的底层崩溃
+  'mixins', // mixin 的报错格式很固定
+  'authlib', // authlib-injector 挂载失败是它自己吐的
+  'download-failed' // 下载失败的报错是我们自己写的
+])
+
+/** 每条结论最多带几行"证据" */
+const MAX_EVIDENCE_LINES = 4
+
+/**
+ * 从日志里把"命中那一行"连同前后一两行抓出来给用户看。
+ *
+ * 【为什么要这一步】只说"内存不够"，用户会问"你怎么知道？"。
+ * 把日志里那几行原样摆出来，他既能自己判断，也能直接复制给别人看。
+ *
+ * @returns {Array<{line: number, text: string}>} line 是行号（从 1 数，日志里就长这样）
+ */
+function collectEvidence(text, pattern) {
+  const lines = text.split(/\r?\n/)
+  const hits = []
+
+  for (let i = 0; i < lines.length; i++) {
+    // 正则带 g 的话 lastIndex 会串味，每次现造一个
+    const one = new RegExp(pattern.source, pattern.flags.replace('g', ''))
+    if (!one.test(lines[i])) continue
+
+    // 命中那一行 + 前后各一行；太长的行截一下（日志里有整段 JSON）
+    const from = Math.max(0, i - 1)
+    const to = Math.min(lines.length - 1, i + 1)
+    const block = []
+    for (let j = from; j <= to; j++) {
+      block.push({ line: j + 1, text: lines[j].slice(0, 300) })
+    }
+
+    hits.push(block)
+    if (hits.length >= 3) break
+  }
+
+  return hits.slice(0, 3).flat().slice(0, MAX_EVIDENCE_LINES + 6)
+}
+
 function diagnose(logText, context = {}) {
   const text = String(logText || '')
   const crashed = context.crashed !== false // 不传就当崩了算（宁可多认几条）
@@ -239,7 +297,11 @@ function diagnose(logText, context = {}) {
       title: rule.title,
       why: rule.why,
       steps: rule.steps,
-      weight: rule.weight || 0
+      weight: rule.weight || 0,
+      // 把握程度：明确写了的按写的算，其余的按"有可能"
+      confidence: rule.confidence || (CERTAIN_RULES.has(rule.id) ? 'certain' : 'possible'),
+      // 证据：日志里那几行（界面会高亮出来）
+      evidence: rule.evidence === false ? [] : collectEvidence(text, rule.test)
     })
   }
 
@@ -250,7 +312,16 @@ function diagnose(logText, context = {}) {
   if (crashed && context.exitCode !== undefined && found.length === 0) {
     const byCode = EXIT_CODES[context.exitCode]
     if (byCode) {
-      found.push({ id: 'exit-code', title: byCode.title, why: byCode.why, steps: byCode.steps, weight: 10 })
+      found.push({
+        id: 'exit-code',
+        title: byCode.title,
+        why: byCode.why,
+        steps: byCode.steps,
+        weight: 10,
+        // 退出码是很硬的证据：进程就是这个码退的
+        confidence: 'certain',
+        evidence: []
+      })
     }
   }
 
