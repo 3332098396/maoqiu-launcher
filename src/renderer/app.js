@@ -507,6 +507,9 @@ const pickListEl = document.getElementById('pick-list')
 const pickEmptyEl = document.getElementById('pick-empty')
 const pickToggleEl = document.getElementById('pick-toggle')
 const pickToggleIconEl = document.getElementById('pick-toggle-icon')
+// 选版本那一整块。展开时给它挂 .pick--open：列表改成浮在卡片上，不撑高大启动卡
+// （2026-10-13 用户实测反馈：一点箭头整张大卡跟着长高）
+const pickBoxEl = pickToggleEl.closest('.pick')
 const launchBtnEl = document.getElementById('launch-btn')
 const launchTipEl = document.getElementById('launch-tip')
 const launchNoticeEl = document.getElementById('launch-notice')
@@ -1013,6 +1016,8 @@ function renderPickList() {
   // 箭头：展开着就是"往上"，收着就是"往下"
   pickToggleIconEl.textContent = pickerOpen ? '▴' : '▾'
   pickToggleEl.setAttribute('aria-expanded', pickerOpen ? 'true' : 'false')
+  // 展开时列表浮在卡片上（见 style.css 的 .pick--hero.pick--open）
+  if (pickBoxEl) pickBoxEl.classList.toggle('pick--open', pickerOpen)
   pickToggleEl.title = pickerOpen ? '收起版本列表' : `展开版本列表（一共 ${all.length} 个）`
 }
 

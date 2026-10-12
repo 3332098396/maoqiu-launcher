@@ -2729,7 +2729,6 @@ button.acc__tab:hover {
   padding: 20px 26px 14px;
   margin-bottom: 12px;
   border-radius: 18px;
-  overflow: hidden;
   /* 大启动卡铺风景图（M17.2 先做在霓虹紫青上，M17.x 铺开到全部主题——用户要求统一）
    * 【为什么还要压一层渐变】不压的话白字压在亮风景上看不清；
    * 这层是"上浅下深"——上半截留着看清风景，下半截压暗好放按钮和字。 */
@@ -2744,6 +2743,11 @@ button.acc__tab:hover {
     var(--hero-image, url('../../assets/hero-landscape.jpg')) center 42% / cover no-repeat;
   box-shadow: 0 16px 44px rgba(0, 0, 0, 0.3);
   color: var(--on-accent);
+  /* 【别改回 hidden】卡上的「选择版本」展开时，列表要浮到卡片下沿外面去
+     （见 .pick--hero.pick--open）。背景图本来就受 border-radius 自己裁剪，
+     这儿没有别的绝对定位元素需要剪。2026-10-13 用户实测：改回 hidden，
+     展开的版本列表下半截会被切掉 */
+  overflow: visible;
 }
 
 .hero__label {
@@ -2796,8 +2800,47 @@ button.acc__tab:hover {
 /* 大启动卡上的「选择版本」：原来是下面左栏里一张独占一列的卡，
    挪到按钮旁边就得收窄——固定 260px，长版本名交给省略号 */
 .pick--hero {
+  position: relative;
   width: 260px;
-  gap: 4px;
+  /* 收起时那三样各多高：标题 24 + 缝 4 + 一条版本 33（量的） */
+  --pick-gap: 4px;
+  --pick-title-h: 24px;
+  --pick-item-h: 33px;
+  gap: var(--pick-gap);
+  /**
+   * 【这个 min-height 别删】展开时版本列表浮起来、离开了文档流，
+   * 盒子就只剩标题那么高（24px）——大启动卡会跟着**矮下去 13 像素**：
+   * 按钮、下面的东西全往上抽一下（用户看到的就是"卡片被拉伸了"）。
+   * 拿收起时的高度把它顶住，两种状态卡片一模一样高。
+   */
+  min-height: calc(var(--pick-title-h) + var(--pick-gap) + var(--pick-item-h));
+}
+
+/**
+ * 展开版本列表的时候：列表要**浮**在卡片上，绝不能把大启动卡撑高。
+ *
+ * 【为什么】2026-10-13 用户实测：一点那个箭头，整张大启动卡跟着长高，
+ * 按钮和下面的东西全跟着往下跑——卡片是"一块背景板"，不该被里面的一串版本号拉变形。
+ * 所以展开时把它从文档流里拿出来（absolute），卡片高度一点都不变。
+ *
+ * 【为什么要配 .hero 的 overflow: visible】卡片是 overflow: hidden，
+ * 浮出来的列表一伸到卡片下沿就会被剪掉。卡片里没有别的绝对定位元素，
+ * 背景图本来就受 border-radius 自己裁剪，放开不会漏东西。
+ */
+.pick--hero.pick--open .pick__list {
+  position: absolute;
+  /* 正好落在收起时那一条版本的位置上（盒子被 min-height 顶住，底下这 33px 是空的），
+     展开时列表就从原地往下长，位置不跳 */
+  top: calc(100% - var(--pick-item-h));
+  left: 0;
+  width: 100%;
+  z-index: 5;
+  max-height: 240px;
+  padding: 6px;
+  background: var(--surface-a95);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.48);
 }
 
 /* 卡片上的字都压在风景图上，颜色得跟着走（用页面那套灰会糊在图上） */
@@ -2868,12 +2911,13 @@ button.acc__tab:hover {
   background: var(--on-accent-a25);
 }
 
-/* 下面这条：M17.5 那时是"左选版本 + 右皮肤预览"两栏。
-   2026-10-13 选版本挪到大启动卡上去了，这里只剩皮肤预览，所以改成整行
-   （别改回两栏——只有一列的话，原样会把它挤进左边那 34% 的窄条里） */
+/* 下面这条：左边那格空着，右边是皮肤预览。
+   【为什么左边留空】原来左边放「选择版本」，2026-10-13 挪到大启动卡上去了。
+   用户要求皮肤预览的**位置和大小一点都不许变**，所以左栏原样留着占位——
+   别顺手改成整行（那样皮肤卡会被拉宽、整个版面跟着变） */
 .launch-cols {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 34% minmax(0, 1fr);
   gap: 12px;
   align-items: start;
 }
