@@ -601,6 +601,9 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('voxlink:conn', (_event, payload) => callback(payload))
   },
 
+  /** 把这个版本导出成一个整合包 zip（存档/截图/日志不会进去） */
+  exportPack: (options) => ipcRenderer.invoke('pack:export', options),
+
   /** 整合包的进度与阶段提示 */
   onPackStage: (callback) => {
     ipcRenderer.on('pack:stage', (_event, text) => callback(text))

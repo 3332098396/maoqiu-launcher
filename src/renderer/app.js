@@ -2852,6 +2852,50 @@ verSettingsBtnEl.addEventListener('click', openVersionSettings)
 document.getElementById('ver-close').addEventListener('click', closeVersionSettings)
 document.getElementById('ver-save').addEventListener('click', saveVersionSettings)
 document.getElementById('ver-delete').addEventListener('click', askDeleteVersion)
+
+// ——— 导出成整合包（M23）：把配好的这个版本发朋友 ———
+//
+// 【为什么值得有】用户花一晚上配好几十个 Mod，想给朋友玩，
+// 以前只能让对方自己一个个照着装。现在导一个 zip 发过去就行。
+document.getElementById('ver-export').addEventListener('click', async () => {
+  const id = editingVersion
+  if (!id) return
+
+  const ok = await askLocalConfirm({
+    title: `把「${id}」导出成一个整合包？`,
+    what:
+      '会把这个版本的文件夹（Mod、配置、资源包…）打成一个 zip。\n' +
+      '存档、截图、日志**不会**进去——那些是你的私人东西，不该跟着包走。',
+    safe: '选好存哪儿之后就开始打包，几百 MB 的话要等一会儿。',
+    okLabel: '导出',
+    danger: false
+  })
+  if (!ok) return
+
+  verHintEl.textContent = '正在打包…'
+  verHintEl.classList.remove('verform__hint--bad')
+
+  let result
+  try {
+    result = await window.api.exportPack({ versionId: id, dir: editingDir })
+  } catch (error) {
+    result = { ok: false, error: error.message }
+  }
+
+  if (result.canceled) {
+    verHintEl.textContent = '没导出，你取消了。'
+    return
+  }
+  if (!result.ok) {
+    verHintEl.textContent = `导不出来：${result.error}`
+    verHintEl.classList.add('verform__hint--bad')
+    return
+  }
+
+  verHintEl.textContent =
+    `打包好了（${result.count} 个文件，${(result.bytes / 1024 / 1024).toFixed(0)} MB）。` +
+    `文件在那儿：${result.path}`
+})
 document.getElementById('del-ok').addEventListener('click', confirmDeleteVersion)
 document.getElementById('del-cancel').addEventListener('click', () => {
   delModalEl.hidden = true

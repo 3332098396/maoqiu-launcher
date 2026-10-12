@@ -223,12 +223,93 @@ function probeJavaAsync(exePath) {
 }
 
 /**
+ * 扫一遍"大家一般把 Java 装在哪儿"（M23，照 KAMUCL 的 java.ts 轻量版）。
+ *
+ * 【只找这几处，不翻全盘】翻全盘又慢又容易被杀毒软件拦、还会翻出一堆
+ * 游戏根本用不上的东西。下面这几个位置覆盖了绝大多数情况：
+ *   · JAVA_HOME 环境变量（装了 JDK 的人基本都设了）
+ *   · PATH 里每一个带 java.exe 的目录（能用 java 命令 = 就在这儿）
+ *   · 各家 JDK 的默认安装位置（Oracle / Eclipse Temurin / Microsoft / Zulu /
+ *     BellSoft / Amazon Corretto / GraalVM 都在这几个根目录下面）
+ *
+ * @returns {Array<{path: string, source: string}>}
+ */
+function scanCommonJavas() {
+  const out = []
+  const exeName = process.platform === 'win32' ? 'java.exe' : 'java'
+
+  const addCandidate = (exePath, source) => {
+    try {
+      if (exePath && fs.existsSync(exePath)) out.push({ path: exePath, source })
+    } catch {
+      // 路径里有非法字符之类，跳过
+    }
+  }
+
+  // ——— ① JAVA_HOME ———
+  if (process.env.JAVA_HOME) {
+    addCandidate(path.join(process.env.JAVA_HOME, 'bin', exeName), 'JAVA_HOME')
+  }
+
+  // ——— ② PATH 里能找到的 ———
+  for (const dir of String(process.env.PATH || '').split(path.delimiter)) {
+    if (!dir) continue
+    // 两种写法都要认，因为用户装的方式不一样：
+    //   · 安装程序通常往 PATH 里加的是 `<JDK 目录>\bin`（最常见）
+    //   · 也有人手动加的是 JDK 的**根目录**（那就还得再往里走一层 bin）
+    // 只认第一种的话，第二种人的 Java 就白装了。
+    addCandidate(path.join(dir, exeName), 'PATH')
+    addCandidate(path.join(dir, 'bin', exeName), 'PATH')
+  }
+
+  // ——— ③ 各家 JDK 的默认安装位置 ———
+  const roots =
+    process.platform === 'win32'
+      ? [
+          'C:\\Program Files\\Java', // Oracle / OpenJDK
+          'C:\\Program Files\\Eclipse Adoptium', // Temurin（最常见的那个）
+          'C:\\Program Files\\Microsoft', // Microsoft Build of OpenJDK
+          'C:\\Program Files\\Zulu', // Azul
+          'C:\\Program Files\\BellSoft', // Liberica
+          'C:\\Program Files\\Amazon Corretto',
+          'C:\\Program Files\\GraalVM',
+          'C:\\Program Files\\Common Files\\Oracle\\Java',
+          'C:\\Program Files (x86)\\Java'
+        ]
+      : ['/usr/lib/jvm', '/Library/Java/JavaVirtualMachines', '/opt/java']
+
+  for (const root of roots) {
+    let names = []
+    try {
+      names = fs.readdirSync(root)
+    } catch {
+      continue // 没装过，正常
+    }
+
+    for (const name of names) {
+      // Windows 上常见的两种布局：<根>/<名字>/bin/java.exe
+      // 以及 macOS 那种 <名字>/Contents/Home/bin/java
+      addCandidate(path.join(root, name, 'bin', exeName), '常见安装位置')
+      addCandidate(path.join(root, name, 'Contents', 'Home', 'bin', exeName), '常见安装位置')
+    }
+  }
+
+  return out
+}
+
+/**
  * 列出"本机能用哪些 Java"（设置页那个「Java 运行时」列表用它）。
  *
  * 【都从哪找】
  *   ① 游戏目录\runtime\ 下面每个运行时（毛球自己下的、别的启动器下的都在这儿）
  *   ② 用户自己"添加"进来的（存配置里，可能在任何地方）
- * 不去满硬盘乱翻——那是杀毒软件干的活，而且翻出来的多半是游戏用不上的。
+ *   ③ **JAVA_HOME / PATH / 常见安装目录**（M23 新加的，照 KAMUCL 那套扫描的轻量版）
+ * 不去满硬盘乱翻、也不扫注册表——那是杀毒软件干的活。
+ *
+ * 【为什么要加 ③】以前只找得到"我们自己下的"和"用户手动加过的"。
+ * 一个装了 JDK 但没用官方启动器、也没手动加过的用户，毛球会说"本机没有 Java"，
+ * 然后去下那个两百多 MB 的运行时——**明明他电脑里就有**。
+ * 加这三个地方成本很低，能把这件蠢事避免掉。
  *
  * @returns {Promise<Array<{path, name, source, added, ok, version?, major?, error?}>>}
  */
@@ -236,6 +317,7 @@ async function listJavas() {
   const found = []
   const seen = new Set()
   const push = (exePath, source, added) => {
+    if (!exePath) return
     const key = path.resolve(String(exePath)).toLowerCase()
     if (seen.has(key)) return
     seen.add(key)
@@ -254,6 +336,10 @@ async function listJavas() {
     push(one, '手动添加', true)
   }
 
+  for (const one of scanCommonJavas()) {
+    push(one.path, one.source, false)
+  }
+
   const out = await Promise.all(
     found.map(async (one) => {
       if (!fs.existsSync(one.path)) {
@@ -269,4 +355,4 @@ async function listJavas() {
   return out
 }
 
-module.exports = { findJava, probeJava, probeJavaAsync, parseMajor, parseBits, listJavas, javaPreference }
+module.exports = { findJava, probeJava, probeJavaAsync, parseMajor, parseBits, listJavas, scanCommonJavas, javaPreference }

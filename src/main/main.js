@@ -38,8 +38,10 @@ const modrinth = require('./modrinth')
 const content = require('./content')
 const localfiles = require('./localfiles')
 const servers = require('./servers')
+const secrets = require('./secrets')
 const notices = require('./notices')
 const isolation = require('./isolation')
+const packexport = require('./packexport')
 const logs = require('./logs')
 const downloader = require('./downloader')
 const pack = require('./pack')
@@ -538,7 +540,9 @@ function registerIpcHandlers() {
       gameDirs: dirs,
       // 上次拖包装到哪儿了——整合包对话框打开时默认选它
       lastPackDir: config.gameDirs.lastPackDir || '',
-      account: accounts.getAccount(),
+      // 账号信息（M23：**把令牌摘掉再发**——界面不需要它，它又不发请求，
+      // 不带出去就少一条"万一界面那边出问题，令牌被偷走"的路）
+      account: secrets.publicAccount(accounts.getAccount()),
       // 账号在列表里的标识。界面"退出登录"要拿它删账号——
       // 格式（类型+UUID）只在 accounts.js 里定义一次，界面别自己拼
       accountKey: accounts.accountKey(accounts.getAccount()),
@@ -573,7 +577,7 @@ function registerIpcHandlers() {
     const saved = accounts.saveAccount(result.account)
     if (!saved.ok) return saved
 
-    return { ok: true, account: saved.account, note: result.note || '' }
+    return { ok: true, account: secrets.publicAccount(saved.account), note: result.note || '' }
   })
 
   // ——— 正版登录（微软，M13）———
@@ -594,7 +598,7 @@ function registerIpcHandlers() {
     const saved = accounts.saveAccount(result.account)
     if (!saved.ok) return saved
 
-    return { ok: true, account: saved.account }
+    return { ok: true, account: secrets.publicAccount(saved.account) }
   })
 
   /** 存客户端 ID。顺手检查一下格式——抄错一位的话报错很难看懂 */
@@ -617,11 +621,15 @@ function registerIpcHandlers() {
   })
 
   ipcMain.handle('account:list', () => ({
-    accounts: accounts.listAccounts(),
+    // 列表也不带令牌（同 getGameInfo 里那条说明）
+    accounts: accounts.listAccounts().map(secrets.publicAccount),
     currentKey: accounts.accountKey(accounts.getAccount())
   }))
 
-  ipcMain.handle('account:switch', (_event, key) => accounts.setCurrent(key))
+  ipcMain.handle('account:switch', async (_event, key) => {
+    const result = accounts.setCurrent(key)
+    return result.ok ? { ...result, account: secrets.publicAccount(result.account) } : result
+  })
 
   ipcMain.handle('account:remove', (_event, key) => accounts.remove(key))
 
@@ -1923,6 +1931,37 @@ function registerIpcHandlers() {
       paths.ensureDir(dir)
       const failed = await shell.openPath(dir)
       return failed ? { ok: false, error: failed } : { ok: true, dir }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  // ——————————————————————————————————————————————
+  // 导出整合包（M23）：把自己配好的版本发朋友
+  // ——————————————————————————————————————————————
+
+  ipcMain.handle('pack:export', async (event, options) => {
+    try {
+      const versionId = options?.versionId || ''
+      if (!versionId) return { ok: false, error: '没说要导出哪个版本' }
+
+      const picked = await dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender), {
+        title: '把整合包存到哪儿',
+        defaultPath: path.join(app.getPath('desktop'), `${versionId}-整合包.zip`),
+        filters: [{ name: '整合包', extensions: ['zip'] }]
+      })
+      if (picked.canceled || !picked.filePath) return { ok: false, canceled: true }
+
+      const send = (text) => {
+        if (!event.sender.isDestroyed()) event.sender.send('pack:stage', text)
+      }
+
+      return await packexport.exportPack({
+        versionId,
+        outPath: picked.filePath,
+        dir: known(options?.dir),
+        onStage: send
+      })
     } catch (error) {
       return { ok: false, error: String(error?.message ?? error) }
     }

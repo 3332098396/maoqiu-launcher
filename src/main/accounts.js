@@ -22,6 +22,7 @@
 
 const crypto = require('node:crypto')
 const settings = require('./settings')
+const secrets = require('./secrets')
 
 /** 名字的规矩：跟游戏本体的限制一致（3~16 位，字母数字下划线） */
 const NAME_PATTERN = /^[A-Za-z0-9_]{3,16}$/
@@ -65,11 +66,15 @@ function offlineUuid(name) {
   ].join('-')
 }
 
-/** 当前用的账号。没设过返回 null */
+/**
+ * 当前用的账号。没设过返回 null。
+ * 【M23】令牌在配置里是加密存的（见 secrets.js），这里**解开来**再给出去——
+ * 上层拿到的还是原来那个形状，它不用知道底下存的是密文。
+ */
 function getAccount() {
   const account = settings.readConfig().account
   if (!account || !account.name) return null
-  return account
+  return secrets.unlockAccount(account)
 }
 
 /**
@@ -110,11 +115,26 @@ function accountKey(account) {
  */
 function listAccounts() {
   const config = settings.readConfig()
-  const list = Array.isArray(config.accounts) ? config.accounts.filter((a) => a && a.name) : []
-  if (list.length) return list
+  const raw = Array.isArray(config.accounts) ? config.accounts.filter((a) => a && a.name) : []
+  // 令牌解密之后再给出去（见 getAccount 的说明）
+  if (raw.length) return raw.map(secrets.unlockAccount)
 
   const legacy = config.account
-  return legacy && legacy.name ? [legacy] : []
+  return legacy && legacy.name ? [secrets.unlockAccount(legacy)] : []
+}
+
+/**
+ * 把账号写进配置。**这是唯一往配置里写账号的地方**——
+ * 所有调用都得走它，才不会漏掉加密那一步。
+ *
+ * 【为什么要集中】以前 setCurrent 是自己写 writeConfig 的，
+ * 要是只在 save 里加密，切一下账号就把明文令牌又写回去了。
+ */
+function writeAccounts(account, list) {
+  settings.writeConfig({
+    account: account ? secrets.lockAccount(account) : account,
+    accounts: (list || []).map(secrets.lockAccount)
+  })
 }
 
 /** 把账号存进列表并设为当前账号 */
@@ -127,7 +147,7 @@ function save(account, failPrefix = '账号存不下来') {
     if (at >= 0) list[at] = account
     else list.push(account)
 
-    settings.writeConfig({ account, accounts: list })
+    writeAccounts(account, list)
     return { ok: true, account }
   } catch (error) {
     return { ok: false, error: `${failPrefix}：${error.message}` }
@@ -145,7 +165,7 @@ function setCurrent(key) {
   if (!found) return { ok: false, error: '找不到这个账号，可能已经删掉了' }
 
   try {
-    settings.writeConfig({ account: found })
+    writeAccounts(found, listAccounts())
   } catch (error) {
     return { ok: false, error: `切换失败：${error.message}` }
   }
@@ -166,7 +186,7 @@ async function remove(key) {
   const nextCurrent = accountKey(current) === key ? rest[0] || null : current
 
   try {
-    settings.writeConfig({ account: nextCurrent, accounts: rest })
+    writeAccounts(nextCurrent, rest)
   } catch (error) {
     return { ok: false, error: `删账号失败：${error.message}` }
   }
