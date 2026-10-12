@@ -232,7 +232,9 @@
               <div class="hero__meta" id="hero-meta">先去「下载」页装一个</div>
             </div>
 
-            <!-- 底部那条：左边几个小胶囊，右边一个大启动按钮 -->
+            <!-- 底部那条：左边几个小胶囊，右边【选版本 + 大启动按钮】
+                 （2026-10-13 用户要求：「选择版本」从下面那两栏挪到这儿，
+                   紧挨着「开始游戏」——要换版本就在按按钮的地方换，不用往下找） -->
             <div class="hero__bar">
               <div class="hero__bar-left">
                 <button class="btn btn--herochip" type="button" id="ver-settings-btn" disabled>
@@ -242,9 +244,27 @@
                   刷新
                 </button>
               </div>
-              <button class="btn btn--primary btn--hero" type="button" id="launch-btn" disabled>
-                开始游戏 <span class="hero__play">▸</span>
-              </button>
+
+              <div class="hero__bar-right">
+                <div class="pick pick--hero">
+                  <div class="pick__title">
+                    <span>选择版本</span>
+                    <!-- 版本多了列表会很长，默认收起、点这个箭头展开（R5.6）。
+                         aria-expanded 是给读屏软件看的，跟着一起改 -->
+                    <button class="pick__toggle" type="button" id="pick-toggle" aria-expanded="false">
+                      <span id="pick-toggle-icon">▾</span>
+                    </button>
+                  </div>
+                  <ul class="pick__list" id="pick-list"></ul>
+                  <div class="pick__empty" id="pick-empty" hidden>
+                    这里空空的——还没装过版本。去「下载」页挑一个，装好就能玩了。
+                  </div>
+                </div>
+
+                <button class="btn btn--primary btn--hero" type="button" id="launch-btn" disabled>
+                  开始游戏 <span class="hero__play">▸</span>
+                </button>
+              </div>
             </div>
           </section>
 
@@ -330,25 +350,10 @@
             </button>
           </div>
 
-          <!-- ④ 两栏：左边选版本，右边皮肤预览（账号挪到头像弹窗里了，见 M17.5）-->
+          <!-- ④ 皮肤预览（账号挪到头像弹窗里了，见 M17.5）
+               【这行原来是两栏：左边选版本、右边皮肤预览。2026-10-13 用户要求把
+               "选择版本"挪到大启动卡上、紧挨着「开始游戏」，所以这儿只剩皮肤预览了】 -->
           <div class="launch-cols">
-            <div class="launch-col">
-              <div class="pick">
-                <div class="pick__title">
-                  <span>选择版本</span>
-                  <!-- 版本多了列表会很长，默认收起、点这个箭头展开（R5.6）。
-                       aria-expanded 是给读屏软件看的，跟着一起改 -->
-                  <button class="pick__toggle" type="button" id="pick-toggle" aria-expanded="false">
-                    <span id="pick-toggle-icon">▾</span>
-                  </button>
-                </div>
-                <ul class="pick__list" id="pick-list"></ul>
-                <div class="pick__empty" id="pick-empty" hidden>
-                  这里空空的——还没装过版本。去「下载」页挑一个，装好就能玩了。
-                </div>
-              </div>
-            </div>
-
             <div class="launch-col">
               <!-- 3D 皮肤预览（M14.4）：能拖着转，带走路动画 -->
               <section class="panel skin-card">

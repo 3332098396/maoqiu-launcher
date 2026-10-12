@@ -2784,6 +2784,28 @@ button.acc__tab:hover {
   flex-wrap: wrap;
 }
 
+/* 右边那一组：选版本 + 大启动按钮（2026-10-13 挪过来的） */
+.hero__bar-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* 大启动卡上的「选择版本」：原来是下面左栏里一张独占一列的卡，
+   挪到按钮旁边就得收窄——固定 260px，长版本名交给省略号 */
+.pick--hero {
+  width: 260px;
+  gap: 4px;
+}
+
+/* 卡片上的字都压在风景图上，颜色得跟着走（用页面那套灰会糊在图上） */
+.pick--hero .pick__title {
+  color: var(--on-accent);
+  opacity: 0.85;
+}
+
 /* 底部几个小胶囊：半透明深色，压在图上也不抢眼 */
 .btn--herochip {
   padding: 8px 18px;
@@ -2846,11 +2868,12 @@ button.acc__tab:hover {
   background: var(--on-accent-a25);
 }
 
-/* 下面两栏：左边账号 + 选版本，右边版本详情 */
+/* 下面这条：M17.5 那时是"左选版本 + 右皮肤预览"两栏。
+   2026-10-13 选版本挪到大启动卡上去了，这里只剩皮肤预览，所以改成整行
+   （别改回两栏——只有一列的话，原样会把它挤进左边那 34% 的窄条里） */
 .launch-cols {
   display: grid;
-  /* M17.5 照设计稿：左栏（版本选择）约占内容区三分之一，右栏（皮肤预览）占其余 */
-  grid-template-columns: 34% minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   align-items: start;
 }
