@@ -716,6 +716,8 @@ async function doMicrosoftLogin() {
     renderAccountCard()
     setMsHint(`登录成功，现在是「${result.account.name}」`, 'ok')
     setNotice(`已登录：${result.account.name}`, 'ok')
+    // 顺手把小人换成这个账号的皮肤（要联网取图，所以不等着它——别拖住上面那句"登录成功"）
+    refreshSkinAfterAccountChange().catch(() => {})
   } catch (error) {
     setMsHint(`登录时出了点意外：${error.message}`, 'error')
   } finally {
@@ -825,6 +827,8 @@ async function doYggdrasilLogin() {
     renderAccountCard()
     setLoginHint(result.note || `登录成功，现在是「${result.account.name}」`, 'ok')
     setNotice(`已登录：${result.account.name}`, 'ok')
+    // 同上：登录完立刻把小人的皮肤换过来，别等用户自己切一下才换
+    refreshSkinAfterAccountChange().catch(() => {})
   } catch (error) {
     setLoginHint(`登录时出了点意外：${error.message}`, 'error')
   } finally {
@@ -878,6 +882,8 @@ accSignoutEl.addEventListener('click', async () => {
   // 文案跟着账号类型走。这里原来写死了"外置账号"，
   // 结果退正版账号时也说"已退出外置账号"（2026-10-08 用户实际看到并指出）
   setNotice(account.type === 'microsoft' ? '已退出正版账号。' : '已退出外置账号。', 'ok')
+  // 退出了就别再穿人家的皮肤了——立刻换成"没登录时该穿的那张"
+  refreshSkinAfterAccountChange().catch(() => {})
   refreshLaunchUi()
 })
 
@@ -5783,6 +5789,32 @@ document.getElementById('skin-reset').addEventListener('click', async () => {
 let skinAccountKey = ''
 
 /**
+ * 账号皮肤没取到的时候，过几秒自己再试（2026-10-13）。
+ *
+ * 【为什么非要有这个】用户实测："登录完还是旧皮肤，得手动切一下别的皮肤再切回来，
+ * 才显示自己的皮肤。" 查出来的原因一点不玄：**Mojang 回 429（请求太频繁）**——
+ * 登录那一下刚问过一次 profile 接口（拿角色名），紧接着再问一次皮肤，
+ * 就被限流打回来了（`.probe/skin-fetch-error.log` 里两次 429、几秒后自己就好了）。
+ * 所以：等一会儿再问，问三次；再不行就先算了（用户下一次动界面自然会再试）。
+ */
+const ACCOUNT_SKIN_RETRY_MS = [4000, 12000, 30000]
+let accountSkinRetryTimer = null
+let accountSkinRetryTried = 0
+
+function scheduleAccountSkinRetry() {
+  if (accountSkinRetryTimer) return
+  if (accountSkinRetryTried >= ACCOUNT_SKIN_RETRY_MS.length) return
+
+  const wait = ACCOUNT_SKIN_RETRY_MS[accountSkinRetryTried]
+  accountSkinRetryTried++
+  accountSkinRetryTimer = setTimeout(() => {
+    accountSkinRetryTimer = null
+    skinAccountKey = '' // 清掉记号，这一次才会真去取
+    refreshAccountSkin()
+  }, wait)
+}
+
+/**
  * 账号变了就换皮肤。
  *
  * 【离线账号不管】它没有"网上的皮肤"，保持用户自己选的那张（或默认）。
@@ -5796,12 +5828,47 @@ async function refreshAccountSkin() {
   const showAccount = Boolean(useAccount)
   const key = showAccount ? `${account.type}:${account.uuid}` : ''
 
+  // 正等着重试呢——这会儿别再插队，免得把 Mojang 的限流撞得更狠
+  if (accountSkinRetryTimer) return
+
   const saved = String(settingsInfo?.look?.skin || '')
   const wanted = showAccount ? `account:${key}` : saved ? `file:${saved}` : 'default'
   if (wanted === skinAccountKey) return
+  const before = skinAccountKey
   skinAccountKey = wanted
 
-  whenSkinReady(() => applyCurrentSkin())
+  return whenSkinReady(async () => {
+    const got = await applyCurrentSkin()
+
+    /**
+     * 【没穿上就把记号退回去——2026-10-13 修"登录后皮肤不换"】
+     *
+     * skinAccountKey 的意思是"这张已经穿上了，不用再取"。可它以前是**开弓没有回头箭**：
+     * 想要"账号上的皮肤"却**取失败**（登录刚完、网络抖一下、令牌还没热），记号照样记上。
+     * 于是以后每次进来都被"跟上次一样"挡住，**再也不会重试**——
+     * 用户看到的正是："登录完还是旧皮肤，得手动切一下别的皮肤再切回来，才显示自己的皮肤"。
+     *
+     * 退回去之后，下一次 refreshAccountSkin（打开账号卡、切页面、点刷新…）就会再试一遍。
+     */
+    if (wanted.startsWith('account:') && got !== 'account') {
+      skinAccountKey = before
+      scheduleAccountSkinRetry()
+    } else if (got === 'account') {
+      accountSkinRetryTried = 0 // 成了就把次数归零，下次限流还能重新试三轮
+    }
+  })
+}
+
+/**
+ * 换了账号（登录成功 / 退出登录）之后，把"身上这张皮肤"重算一遍。
+ *
+ * 【为什么不能只靠 renderAccountCard 里那次】那次带"跟上次一样就不重取"的挡板，
+ * 而上次很可能就是**失败**的那次。所以这里先把记号清掉，强制重算。
+ */
+async function refreshSkinAfterAccountChange() {
+  skinAccountKey = ''
+  await refreshAccountSkin()
+  if (!document.querySelector('[data-page="skin"]').hidden) await renderSkinPage()
 }
 
 /**
@@ -5814,6 +5881,9 @@ async function refreshAccountSkin() {
  *
  * 【为什么要有这个函数】以前是"登了账号就自动盖掉你自己挑的那张"——
  * 用户完全不知道为什么自己选的皮肤不见了。现在这件事由用户说了算。
+ *
+ * @returns {Promise<'account'|'file'|'random'|'default'>} **最后穿上的到底是哪一路**。
+ *   （2026-10-13 为"登录后皮肤不换"加：调用方要按这个决定"下次还试不试"）
  */
 async function applyCurrentSkin() {
   const look = settingsInfo?.look || {}
@@ -5824,15 +5894,17 @@ async function applyCurrentSkin() {
   if (look.useAccountSkin !== false && remote) {
     const result = await window.api.fetchAccountSkin()
     if (result.ok) {
-      const image = new Image()
-      image.onload = () => {
+      // 【为什么要把图等出来再往下走】老写法是 onload 里异步贴图、这里直接 return，
+      // 于是"到底贴上没有"外面**谁都看不见**——图没解码成功也算成功。
+      // refreshAccountSkin 现在要靠"真穿上了没有"来决定后面还试不试，所以得等一下。
+      const image = await loadImageDataUrl(result.dataUrl)
+      if (image) {
         applySkin(image)
         const from =
           result.source === 'microsoft' ? '正版账号上的皮肤' : '皮肤站账号上的皮肤'
         skinBigFromEl.textContent = `来自：${from}`
+        return 'account'
       }
-      image.src = result.dataUrl
-      return
     }
     // 取不到（没设皮肤 / 网络抖一下）——不吭声，直接退回下面那两种
   }
@@ -5846,7 +5918,7 @@ async function applyCurrentSkin() {
     if (image) {
       applySkin(image)
       skinBigFromEl.textContent = '来自：官方默认皮肤'
-      return
+      return 'file'
     }
   }
 
@@ -5856,7 +5928,7 @@ async function applyCurrentSkin() {
       // 说清楚是"毛球自带"还是"我上传的"（见 skinSourceLabel 的注释）
       if (!skinLibCache) skinLibCache = await loadSkinLib()
       skinBigFromEl.textContent = skinSourceLabel(saved)
-      return
+      return 'file'
     }
   }
 
@@ -5866,7 +5938,7 @@ async function applyCurrentSkin() {
     if (picked) {
       applySkin(picked.image)
       skinBigFromEl.textContent = `来自：随机（${picked.from}）`
-      return
+      return 'random'
     }
   }
 
@@ -5875,12 +5947,23 @@ async function applyCurrentSkin() {
   if (official) {
     applySkin(official)
     skinBigFromEl.textContent = '来自：官方默认皮肤'
-    return
+    return 'default'
   }
 
   // ⑤ 实在没有（游戏还没装 / jar 读不出来）→ 用毛球自己画的那张顶着
   useDefaultSkinAndAvatar()
   skinBigFromEl.textContent = '来自：毛球自带的默认皮肤'
+  return 'default'
+}
+
+/** 从 data: 地址加载一张图（账号皮肤就是这么给过来的） */
+function loadImageDataUrl(dataUrl) {
+  return new Promise((resolve) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = () => resolve(null)
+    image.src = dataUrl
+  })
 }
 
 // ——— 随机皮肤（M21）———
