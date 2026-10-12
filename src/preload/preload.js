@@ -349,6 +349,25 @@ contextBridge.exposeInMainWorld('api', {
   /** 问一台服务器在不在线、几个人、延迟多少 */
   pingServer: (options) => ipcRenderer.invoke('servers:ping', options),
 
+  // ——— 通知中心（M23）———
+
+  /** 读通知列表和未读数 */
+  listNotices: () => ipcRenderer.invoke('notices:list'),
+
+  /** 记一条通知（界面这边发生的事） */
+  addNotice: (notice) => ipcRenderer.invoke('notices:add', notice),
+
+  /** 全部标记已读 */
+  readNotices: () => ipcRenderer.invoke('notices:read'),
+
+  /** 清空通知 */
+  clearNotices: () => ipcRenderer.invoke('notices:clear'),
+
+  // ——— 诊断包（M23）：带脱敏的 zip ———
+
+  /** 导出诊断包（会弹保存框） */
+  exportDiagnostics: (options) => ipcRenderer.invoke('diag:export', options),
+
   // ——— Java 运行时管理（M20）———
 
   /** 本机能用哪些 Java（设置页那个列表用） */

@@ -38,6 +38,8 @@ const modrinth = require('./modrinth')
 const content = require('./content')
 const localfiles = require('./localfiles')
 const servers = require('./servers')
+const notices = require('./notices')
+const logs = require('./logs')
 const downloader = require('./downloader')
 const pack = require('./pack')
 const online = require('./online')
@@ -1926,6 +1928,57 @@ function registerIpcHandlers() {
   })
 
   // ——————————————————————————————————————————————
+  // 通知中心（M23）：铃铛上那个小红点 + 点开的那一栏
+  // ——————————————————————————————————————————————
+
+  ipcMain.handle('notices:list', () => ({
+    ok: true,
+    notices: notices.list(),
+    unread: notices.unreadCount()
+  }))
+
+  /** 界面那边发生的事（游戏异常退出、安装失败…）记一条 */
+  ipcMain.handle('notices:add', (_event, notice) => {
+    try {
+      notices.add(notice || {})
+      return { ok: true, unread: notices.unreadCount() }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  ipcMain.handle('notices:read', () => ({ ok: true, notices: notices.markAllRead(), unread: 0 }))
+
+  ipcMain.handle('notices:clear', () => ({ ok: true, notices: notices.clear(), unread: 0 }))
+
+  // ——————————————————————————————————————————————
+  // 诊断包导出（M23）：带脱敏的 zip
+  // ——————————————————————————————————————————————
+
+  ipcMain.handle('diag:export', async (event, options) => {
+    try {
+      const stamp = new Date()
+      const pad = (n) => String(n).padStart(2, '0')
+      const suggested = `毛球诊断包-${stamp.getFullYear()}${pad(stamp.getMonth() + 1)}${pad(stamp.getDate())}-${pad(stamp.getHours())}${pad(stamp.getMinutes())}.zip`
+
+      const picked = await dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender), {
+        title: '把诊断包存到哪儿',
+        defaultPath: path.join(app.getPath('desktop'), suggested),
+        filters: [{ name: '压缩包', extensions: ['zip'] }]
+      })
+      if (picked.canceled || !picked.filePath) return { ok: false, canceled: true }
+
+      return await logs.exportDiagnostics({
+        outPath: picked.filePath,
+        dir: known(options?.dir),
+        versionId: options?.versionId || ''
+      })
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  // ——————————————————————————————————————————————
   // 服务器列表（M23）：读写的其实是游戏目录下的 servers.dat
   // ——————————————————————————————————————————————
 
@@ -2201,6 +2254,18 @@ function countSharedWorlds() {
 
 app.whenReady().then(() => {
   registerIpcHandlers()
+
+  // 日志轮转（M23）：每开一次游戏就多一份 launch-*.log，只增不减会堆成山。
+  // 留最近 20 份，多出来的删掉——**只删我们自己写的、名字格式对得上的**，
+  // 用户往那个文件夹里放别的东西一律不碰。
+  try {
+    const rotated = logs.rotateLauncherLogs()
+    if (rotated.removed > 0) {
+      console.log(`[启动器] 清掉了 ${rotated.removed} 份旧日志`)
+    }
+  } catch (error) {
+    console.warn('[启动器] 轮转日志时出错：', error.message)
+  }
 
   // 收拾"上一个毛球留下的联机进程"（M17.x）。
   // 毛球被强杀（装安装包、任务管理器结束进程）时 EasyTier 会残留，

@@ -1492,6 +1492,16 @@ window.api.onLaunchState((payload) => {
     } else {
       const logHint = payload.logFile ? `\n完整日志：${payload.logFile}` : ''
       setNotice(`${payload.title}。${payload.hint}${logHint}`, 'error')
+
+      // 出事就记一条通知（M23）——用户关掉启动器再回来，还知道刚才发生过什么
+      noteIt({
+        kind: payload.crashReport ? 'crash' : 'error',
+        title: payload.title,
+        text: payload.crashReport
+          ? `${payload.hint}\n崩溃报告：${payload.crashReport}`
+          : payload.hint,
+        logFile: payload.logFile || ''
+      })
     }
   } else if (payload.state === 'error') {
     launching = false
@@ -3598,6 +3608,69 @@ document
   .getElementById('help-open-config')
   .addEventListener('click', () => openHelpFolder('config', '配置目录'))
 
+// ——— 导出诊断包（M23）———
+//
+// 【为什么值得做】用户出问题要把日志发给别人看，但日志里可能有登录令牌、
+// Windows 用户名。导出时自动抹掉，他就不用担心"发出去会不会出事"。
+// 抹了几处会如实告诉他。
+//
+// 【helpStatusEl 上面已经声明过】这里直接用，别再声明一次（第一版就是这么撞的）。
+
+async function exportDiagnostics() {
+  const button = document.getElementById('log-export')
+  const oldLabel = button ? button.textContent : ''
+  if (button) {
+    button.disabled = true
+    button.textContent = '正在打包…'
+  }
+  setNotice && setNotice('正在把日志打包（令牌和用户名会自动抹掉）…')
+
+  let result
+  try {
+    result = await window.api.exportDiagnostics({
+      dir: selectedDir,
+      versionId: selectedVersion || ''
+    })
+  } catch (error) {
+    result = { ok: false, error: error.message }
+  }
+
+  if (button) {
+    button.disabled = false
+    button.textContent = oldLabel
+  }
+
+  const say = (text) => {
+    if (helpStatusEl) helpStatusEl.textContent = text
+    if (typeof setNotice === 'function') setNotice(text, result && result.ok ? 'ok' : 'error')
+  }
+
+  if (result && result.canceled) {
+    say('没导出，你取消了。')
+    return
+  }
+  if (!result || !result.ok) {
+    say(`导不出来：${(result && result.error) || '不知道什么原因'}`)
+    return
+  }
+
+  say(
+    `打包好了（${result.count} 份文件）。` +
+      (result.redactHits > 0
+        ? `里面 ${result.redactHits} 处敏感信息已经抹掉了。`
+        : '没发现需要抹掉的东西。') +
+      ` 文件在那儿：${result.path}`
+  )
+}
+
+document.getElementById('log-export').addEventListener('click', exportDiagnostics)
+
+document.getElementById('help-export-diag').addEventListener('click', async () => {
+  // 帮助页那个按钮：先跳过去让人看到提示文字，再打包
+  showPage('help')
+  await exportDiagnostics()
+})
+
 // 帮助页那块「AI 助手怎么用」底下那个按钮：直接带他去 AI 页（M22）
 document.getElementById('help-goto-ai').addEventListener('click', () => showPage('ai'))
 
@@ -3961,9 +4034,11 @@ document.getElementById('top-search').addEventListener('click', () => {
   document.getElementById('mr-search').focus()
 })
 
-// 铃铛：就是"运行记录"的另一个入口（跟左下角那个「日志」是同一件事）
+// 铃铛（M23）：现在点开是「通知」，不再是直接跳日志。
+// 通知里那条"游戏异常退出"点一下才会跳到日志。
 document.getElementById('top-bell').addEventListener('click', () => {
-  document.getElementById('log-btn').click()
+  if (noticesPanelEl.hidden) openNotices()
+  else closeNotices()
 })
 
 // ——— 窗口那三个键（M17.4：系统标题栏被我们去掉了，这三个只能自己接）———
@@ -6717,6 +6792,155 @@ frpStopEl.addEventListener('click', async () => {
 })
 
 // ═══════════════════════════════════════════════════════════
+// 通知中心（M23）：点顶栏铃铛弹出来的那一栏
+// ═══════════════════════════════════════════════════════════
+
+const noticesPanelEl = document.getElementById('notices-panel')
+const noticesListEl = document.getElementById('notices-list')
+const topbarBadgeEl = document.getElementById('topbar-badge')
+
+/** 手里这份通知（画面板用） */
+let noticeCache = []
+
+/** 把 dd 月 dd 日 hh:mm 说成"刚刚 / 12 分钟前 / 昨天 20:31" */
+function formatNoticeTime(ms) {
+  const at = Number(ms)
+  if (!Number.isFinite(at)) return ''
+
+  const diff = Date.now() - at
+  if (diff < 60 * 1000) return '刚刚'
+  if (diff < 60 * 60 * 1000) return `${Math.floor(diff / 60000)} 分钟前`
+
+  const date = new Date(at)
+  const pad = (n) => String(n).padStart(2, '0')
+  const clock = `${pad(date.getHours())}:${pad(date.getMinutes())}`
+
+  const today = new Date()
+  const sameDay =
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
+  if (sameDay) return clock
+
+  return `${date.getMonth() + 1}月${date.getDate()}日 ${clock}`
+}
+
+function paintNoticeBadge(count) {
+  if (count > 0) {
+    topbarBadgeEl.hidden = false
+    topbarBadgeEl.textContent = count > 99 ? '99+' : String(count)
+  } else {
+    topbarBadgeEl.hidden = true
+  }
+}
+
+function paintNotices() {
+  noticesListEl.textContent = ''
+
+  if (noticeCache.length === 0) {
+    const empty = document.createElement('p')
+    empty.className = 'notices__empty'
+    empty.textContent = '还没有通知。游戏万一出问题，这里会留一条记录。'
+    noticesListEl.appendChild(empty)
+    return
+  }
+
+  for (const one of noticeCache) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = one.read ? 'notice' : 'notice notice--new'
+
+    const title = document.createElement('div')
+    const bad = one.kind === 'crash' || one.kind === 'error'
+    title.className = bad ? 'notice__title notice__title--bad' : 'notice__title'
+    title.textContent = one.title
+    button.appendChild(title)
+
+    if (one.text) {
+      const text = document.createElement('div')
+      text.className = 'notice__text'
+      text.textContent = one.text
+      button.appendChild(text)
+    }
+
+    const time = document.createElement('div')
+    time.className = 'notice__time'
+    time.textContent = formatNoticeTime(one.at)
+    button.appendChild(time)
+
+    // 点一条 → 关面板、打开日志（用户想知道"到底怎么回事"）
+    button.addEventListener('click', () => {
+      closeNotices()
+      document.getElementById('log-btn').click()
+    })
+
+    noticesListEl.appendChild(button)
+  }
+}
+
+async function refreshNotices() {
+  try {
+    const result = await window.api.listNotices()
+    if (!result.ok) return
+    noticeCache = result.notices || []
+    paintNoticeBadge(result.unread || 0)
+    if (!noticesPanelEl.hidden) paintNotices()
+  } catch {
+    // 通知读不出来不该影响别的功能
+  }
+}
+
+async function openNotices() {
+  // 先用"还没标已读"的状态画一遍——这样这一屏还看得出来哪几条是新的
+  paintNotices()
+  noticesPanelEl.hidden = false
+
+  // 打开就算看过了（红点消掉），但当前这一屏的"新"标记留着
+  try {
+    const result = await window.api.readNotices()
+    if (result.ok) paintNoticeBadge(0)
+  } catch {
+    // 标不上就标不上，下次再说
+  }
+}
+
+function closeNotices() {
+  noticesPanelEl.hidden = true
+}
+
+// 点别的地方就把面板收掉（不然它会一直挂在那儿挡视线）
+document.addEventListener('click', (event) => {
+  if (noticesPanelEl.hidden) return
+  if (noticesPanelEl.contains(event.target)) return
+  if (event.target.closest && event.target.closest('#top-bell')) return
+  closeNotices()
+})
+
+document.getElementById('notices-read').addEventListener('click', async () => {
+  await window.api.readNotices()
+  noticeCache = noticeCache.map((one) => ({ ...one, read: true }))
+  paintNoticeBadge(0)
+  paintNotices()
+})
+
+document.getElementById('notices-clear').addEventListener('click', async () => {
+  await window.api.clearNotices()
+  noticeCache = []
+  paintNoticeBadge(0)
+  paintNotices()
+})
+
+/** 记一条通知并立刻刷新小红点（界面这边发生的事都走它） */
+async function noteIt(notice) {
+  try {
+    const result = await window.api.addNotice(notice)
+    if (result.ok) paintNoticeBadge(result.unread || 0)
+  } catch {
+    // 记不上就算了
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
 // 内容页（M23）：已经装了什么（Mod / 资源包 / 光影 / 存档）+ 服务器
 // ═══════════════════════════════════════════════════════════
 
@@ -7391,6 +7615,9 @@ function dirnameOf(filePath) {
 
 // ——————————————————————————————————————————————
 // 真正的最后一步：把启动页显示出来
-// （上面那条注释说的"踩过的坑"就是它——所以它必须在**最后一行**）
+// （上面那条注释说的"踩过的坑"就是它——所以它必须在**最后一行**。
+//   通知的读取特意放在它**前面**：那条"新代码一律加在 showPage 之前"的规矩，
+//   2026-10-12 加通知时也照办了。）
 // ——————————————————————————————————————————————
+refreshNotices()
 showPage('launch')

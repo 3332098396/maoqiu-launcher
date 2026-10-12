@@ -42,7 +42,9 @@
               <path d="m15.8 15.8 4.5 4.5" stroke-width="2.1" />
             </svg>
           </button>
-          <button class="topbar__icon" type="button" id="top-bell" title="看运行记录" aria-label="看运行记录">
+          <button class="topbar__icon" type="button" id="top-bell" title="通知" aria-label="通知">
+            <!-- 没看过的通知数（M23）。一条都没有的时候由 app.js 藏起来 -->
+            <span class="topbar__badge" id="topbar-badge" hidden>0</span>
             <svg viewBox="0 0 24 24">
               <circle cx="12" cy="2.9" r="1.4" fill="currentColor" />
               <path
@@ -81,6 +83,19 @@
           </button>
         </div>
       </header>
+
+      <!-- 通知面板（M23）：点顶栏铃铛弹出来的那一栏。
+           放在 topbar 外面是因为 topbar 整条是"拖动区"，里面的东西会被系统吃掉鼠标事件；
+           这个面板要能点，所以挂它下面一个独立的层。 -->
+      <div class="notices" id="notices-panel" hidden>
+        <div class="notices__head">
+          <span class="notices__title">通知</span>
+          <button class="linkbtn" type="button" id="notices-read">全标已读</button>
+          <button class="linkbtn" type="button" id="notices-clear">清空</button>
+        </div>
+        <div class="notices__list" id="notices-list"></div>
+        <p class="notices__foot">只留最近 30 条。点一条能跳到对应的日志。</p>
+      </div>
 
       <div class="shell__row">
         <!-- ——— 左侧导航（M14.2：原来在顶栏，挪到左边了，学 KAMUCL 的做法）——— -->
@@ -1581,6 +1596,9 @@
               <button class="btn btn--ghost" type="button" id="help-open-logs">
                 打开日志文件夹
               </button>
+              <button class="btn btn--ghost" type="button" id="help-export-diag">
+                导出诊断包（发给别人前自动抹掉令牌和用户名）
+              </button>
               <button class="btn btn--ghost" type="button" id="help-open-game">
                 打开游戏目录
               </button>
@@ -1676,6 +1694,10 @@
             </button>
             <button class="btn btn--ghost btn--sm" type="button" id="log-folder">
               打开日志文件夹
+            </button>
+            <!-- M23：把日志打成一个包发给别人。包里的令牌和用户名会自动抹掉 -->
+            <button class="btn btn--ghost btn--sm" type="button" id="log-export">
+              导出诊断包
             </button>
             <button class="btn btn--ghost btn--sm" type="button" id="log-close">关闭</button>
           </div>

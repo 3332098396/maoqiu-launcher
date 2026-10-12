@@ -671,6 +671,44 @@ const EXIT_CODES = {
  * 游戏退出后，说清楚"为什么退的"。
  * @returns {{ok: boolean, title: string, hint: string}}
  */
+/**
+ * 找这次启动产生的崩溃报告（M23）。
+ *
+ * 【为什么按时间找而不是按名字】`crash-reports\crash-2026-10-12_18.30.12-client.txt`
+ * 这名字里是**游戏那边的时间**，而且格式各版本不一样。
+ * 只看"比这次启动还新的"，比猜文件名靠谱得多。
+ *
+ * @param {string} runDir 游戏目录
+ * @param {number} since 这次启动的时间戳
+ */
+function findCrashReport(runDir, since) {
+  const folder = path.join(runDir, 'crash-reports')
+  let names = []
+  try {
+    names = fs.readdirSync(folder)
+  } catch {
+    return ''
+  }
+
+  let newest = ''
+  let newestAt = 0
+  for (const name of names) {
+    if (!name.toLowerCase().endsWith('.txt')) continue
+    const full = path.join(folder, name)
+    try {
+      const info = fs.statSync(full)
+      // 留 2 秒余量：文件的时间戳和进程启动可能差一点点
+      if (info.mtimeMs >= since - 2000 && info.mtimeMs >= newestAt) {
+        newest = full
+        newestAt = info.mtimeMs
+      }
+    } catch {
+      // 读不到就不算
+    }
+  }
+  return newest
+}
+
 function explainExit(code, recentLines) {
   const tail = recentLines.join('\n')
   const crashed = code !== 0
@@ -861,6 +899,8 @@ async function launch(versionId, options = {}) {
 
   // ——— ⑤ 这次启动用哪个"游戏目录"（版本隔离决定，在这个版本自己的游戏目录里算） ———
   const runDir = effectiveGameDir(versionId, dir)
+  // 这次启动是什么时候开始的。判"崩溃报告是不是这次的"要用它（见 findCrashReport）
+  const startedAt = Date.now()
   paths.ensureDir(runDir)
 
   // ——— ⑥ 日志配置（很小，没有就补下；下不到不致命） ———
@@ -1054,7 +1094,9 @@ async function launch(versionId, options = {}) {
       ok: explain.ok,
       title: explain.title,
       hint: explain.hint,
-      logFile
+      logFile,
+      // 这次启动有没有写崩溃报告（通知里要提一句，用户点开就知道去哪看）
+      crashReport: explain.ok ? '' : findCrashReport(runDir, startedAt)
     })
   })
 
