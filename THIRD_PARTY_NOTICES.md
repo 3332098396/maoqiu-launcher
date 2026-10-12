@@ -36,6 +36,8 @@
 | `src/main/voxlink/punchPolicy.js` | `network/` 下 PunchParams / PunchTuner / PortPredictor / NatClass / PunchStrategySelector / PunchFailureClassifier — 失败分类、自适应调参、端口预测 | **LGPL-3.0-only** |
 | `src/main/voxlink/punch.js` | `network/UdpHolePuncher.java` — 打洞主循环、控制包格式、发包限速 | **LGPL-3.0-only** |
 | `src/main/voxlink/session.js` | `SignalingWsTransport.java` / `RoomManager.java` — 房间内的信令收发（`/signal/send`、`/signal/poll`、`/room/heartbeat`）与去重、降频、散伙判定。毛球只走上游**自带的** HTTP 轮询退化分支，不用 WebSocket（见文件头说明） | **LGPL-3.0-only** |
+| `src/main/voxlink/punchRounds.js` | `ConnectionManager.java` — 打洞轮次驱动：周期/轮次推进、模板切换（20 秒节流）、重试与退避、终局判定 | **LGPL-3.0-only** |
+| `src/main/voxlink/engine.js` | `ConnectionManager.java` — 打洞总编排：敲门、探网、报价、互相报地址、打洞、挂可靠传输、重连与收摊。**不含** TCP 通路与 TURN/玩家中继（那是后续里程碑的活，文件头有说明） | **LGPL-3.0-only** |
 
 改写过程中参考了 [KAMUCL](https://github.com/kamubaba-i/KAMUCL) 的 JS 实现
 （`src/main/core/voxlink/`；该项目中对应部分同样按 LGPL-3.0-only 声明）。
