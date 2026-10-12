@@ -5426,15 +5426,30 @@ function ensureSkinCard() {
  * （开两个白烧一份显存，而且两边的"跟着鼠标转"会打架）。
  * 画布跟着当前显示的页面走，见 skin3d.js 的 mount。
  */
+/**
+ * 盯着这个容器的尺寸，一变就重新量一次画布。
+ *
+ * 【为什么非要有这个】画布该多大是 skin3d 在**挂上去的那一瞬间**量出来的。
+ * 可这一页的宽度是会变的：披风卡要等 `listCapes()` 那个网络请求回来之后才露出来，
+ * 一露出来就多一栏、大预览当场变窄（392 ← 574）。画布还按原来那个宽度定格着，
+ * CSS 又把画布按 100%×100% 拉满 → **小人被横向压扁**。
+ * （实测过：画布 574 宽的底子塞进 352 宽的框里。skin3d 自带的
+ * "量到 0 就重试"救不了——它不是 0，只是过时了。）
+ * 窗口大小变化那边 skin3d 自己听了，这里只管"布局偷偷变了"的情况。
+ */
+let skinStageObserver = null
+
+function watchdogSkinStage(container, zoom) {
+  if (typeof ResizeObserver !== 'function') return
+  if (skinStageObserver) skinStageObserver.disconnect()
+  skinStageObserver = new ResizeObserver(() => window.skinViewer.mount(container, zoom))
+  skinStageObserver.observe(container)
+}
+
 function moveSkinViewerTo(container, zoom) {
   if (!skinMounted || !window.skinViewer || !container) return
   window.skinViewer.mount(container, zoom)
-  // 【为什么还要再量一次】大预览那个框的高度是 flex 撑出来的（见 style.css 的 .skin-stage--big），
-  // 刚把页面显示出来这一瞬间**还没排版完**，第一次量到的只是 min-height。
-  // 画布按那个尺寸定格之后，CSS 再把 100%×100% 拉满 → 小人被竖着拉长（实测过：
-  // 画布 584×318 的底子塞进 576×522 的框里）。下一帧重量一次就把尺寸对上了。
-  // skin3d 里"量到 0 就重试"那套救不了这个 —— 它不是 0，只是偏小。
-  requestAnimationFrame(() => window.skinViewer.mount(container, zoom))
+  watchdogSkinStage(container, zoom)
 }
 
 document.getElementById('skin-pick').addEventListener('click', async () => {
