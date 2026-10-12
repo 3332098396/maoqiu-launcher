@@ -27,8 +27,8 @@ const DEFAULTS = {
    */
   download: {
     source: 'auto',
-    /** 同时下几个文件（M13，默认 8） */
-    concurrency: 8,
+    /** 同时下几个文件（M23 起默认 16，见 downloadConcurrency 的说明） */
+    concurrency: 16,
     /** 限速 KB/s（M13，0 = 不限） */
     speedLimitKB: 0
   },
@@ -249,10 +249,14 @@ function readConfig() {
   }
 }
 
-/** 同时下几个文件（1-32，默认 8）。网络不好时调小能稳一点 */
+/** 同时下几个文件（1-32，默认 16）。网络不好时调小能稳一点 */
 function downloadConcurrency() {
   const value = Number(readConfig().download?.concurrency)
-  if (!Number.isFinite(value) || value <= 0) return 8
+  // 默认 16（M23，对齐 KAMUCL 的 downloadLimits）。
+  // 【为什么从 8 提到 16】Mojang 和 Modrinth 的 CDN 是**按连接**限速的，
+  // 不是按总带宽——多开几个连接总速度能翻一倍上下。
+  // 但也不能无限加：连接太多小文件会互相抢，而且容易被当成异常流量。
+  if (!Number.isFinite(value) || value <= 0) return 16
   return Math.min(32, Math.max(1, Math.round(value)))
 }
 

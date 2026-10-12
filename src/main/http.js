@@ -27,9 +27,12 @@ const MAX_REDIRECTS = 5
  * 打开一个下载流。拿到响应后由调用方决定是"全部读进内存"还是"写进文件"。
  *
  * @param {string} url
- * @param {{timeout?: number, signal?: AbortSignal, redirectsLeft?: number}} options
- * @returns {Promise<{stream: import('node:stream').Readable, total: number}>}
- *          total 是服务器声明的内容长度；服务器没给就是 0
+ * @param {{timeout?: number, signal?: AbortSignal, redirectsLeft?: number,
+ *          headers?: object}} options
+ * @returns {Promise<{stream: import('node:stream').Readable, total: number,
+ *                    statusCode: number, headers: object}>}
+ *          total 是服务器声明的内容长度；服务器没给就是 0。
+ *          statusCode 206 表示服务器**只给了我们要的那一段**（断点续传时用）
  */
 function openStream(url, options = {}) {
   const { timeout = 30000, signal, redirectsLeft = MAX_REDIRECTS, headers = {} } = options
@@ -71,7 +74,8 @@ function openStream(url, options = {}) {
           return
         }
 
-        if (res.statusCode !== 200) {
+        // 200 = 整份内容；206 = "你要的那一段"（我们把 Range 头带上了才可能收到它）
+        if (res.statusCode !== 200 && res.statusCode !== 206) {
           res.resume()
           reject(new HttpError(res.statusCode))
           return
@@ -79,7 +83,9 @@ function openStream(url, options = {}) {
 
         resolve({
           stream: res,
-          total: Number(res.headers['content-length']) || 0
+          total: Number(res.headers['content-length']) || 0,
+          statusCode: res.statusCode,
+          headers: res.headers
         })
       }
     )

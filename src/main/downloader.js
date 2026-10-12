@@ -33,7 +33,13 @@ const settings = require('./settings')
 const mirror = require('./mirror')
 
 /** 同时下几个文件。8 是个平衡点：再多人家的服务器可能限速，再少下得慢 */
-const DEFAULT_CONCURRENCY = 8
+const DEFAULT_CONCURRENCY = 16
+
+/**
+ * 超过这么久没动过的半截文件（`.part`）就不再续了，直接扔掉（M23）。
+ * 7 天：用户断网重来一般就是当天或者第二天的事，隔了一周的多半早忘了。
+ */
+const STALE_PART_MS = 7 * 24 * 60 * 60 * 1000
 
 /** 一个文件最多试几次 */
 const MAX_ATTEMPTS = 3
@@ -201,12 +207,34 @@ function createThrottle(limitKB) {
  * 所以限速时**自己接管**：不 pipe，手动 write，写不动就等 'drain'，
  * 该歇就歇。不限速时照旧用 pipe（那条路最快、也最不容易出岔子）。
  */
-function streamToFile(url, dest, { signal, onBytes, throttle }) {
-  return openStream(url, { signal, timeout: REQUEST_TIMEOUT }).then(
-    ({ stream }) =>
+function streamToFile(url, dest, { signal, onBytes, throttle, offset = 0 }) {
+  // 断点续传（M23）：已经有半截文件的话，带一个 Range 头过去，从断的地方接着下。
+  const headers = offset > 0 ? { Range: `bytes=${offset}-` } : {}
+
+  return openStream(url, { signal, timeout: REQUEST_TIMEOUT, headers }).then(
+    ({ stream, statusCode }) =>
       new Promise((resolve, reject) => {
-        const out = fs.createWriteStream(dest)
+        // 【必须核对服务器的回应】不是所有服务器都认 Range。
+        // 它要是**不认**（回 200 而不是 206），那就是把整份内容从头发过来了——
+        // 这时候还往半截文件后面追加，就会得到"前半截 + 完整一份"的垃圾文件
+        // （校验能挡住，但白白下几百 MB）。所以：不认 Range 就清空重下。
+        const resumed = offset > 0 && statusCode === 206
+        const startAt = resumed ? offset : 0
+
+        if (offset > 0 && !resumed) {
+          try {
+            fs.unlinkSync(dest)
+          } catch {
+            // 本来就不在
+          }
+        }
+
+        const out = fs.createWriteStream(dest, { flags: resumed ? 'a' : 'w' })
         let settled = false
+
+        // 把已经下好的那部分也算进"这个文件收了多少"，
+        // 不然续传时进度条会从一半的地方往回跳
+        if (resumed && onBytes) onBytes(offset, true)
 
         const fail = (error) => {
           if (settled) return
@@ -293,13 +321,46 @@ async function downloadOneFile(file, { signal, preferMirror, onBytes, sourcePref
       if (signal.aborted) throw new Error('已取消')
 
       try {
+        // ——— 断点续传（M23）：看看上次是不是留了半截在这 ———
+        //
+        // 【为什么要这么做】几百 MB 的整合包，网一抖就得从头下——
+        // 这是用户最容易骂人的地方（"下了三回了"）。
+        // 只要服务器支持 Range（Mojang 和 Modrinth 的 CDN 都支持），
+        // 就能从断的地方接着下。
+        //
+        // 【为什么半截文件是安全的】我们**只认 `.part` 这个名字**，
+        // 下完还要校验 sha1 才改名成正式文件。所以半截文件永远不会被
+        // 当成"已经下好了"（判断那个走的是 file.saveTo，不是这里）。
+        let offset = 0
+        try {
+          const partInfo = fs.statSync(partPath)
+
+          // 已经不比目标小了 → 这份半截没用（可能服务器换过文件），重来
+          if (partInfo.size > 0 && (!file.size || partInfo.size < file.size)) {
+            // 太老的半截别要了：用户可能早就换了版本、或者干脆不下了。
+            // 【为什么要有这条】半截文件是**跨会话**留着的，没人管就会一直堆着——
+            // 断过几次网之后，游戏目录里躺着好几个 GB 的 .part，
+            // 而且用户完全不知道它们是什么。超过 7 天的一律扔掉。
+            if (Date.now() - partInfo.mtimeMs > STALE_PART_MS) {
+              fs.unlinkSync(partPath)
+            } else {
+              offset = partInfo.size
+            }
+          } else if (partInfo.size > 0) {
+            fs.unlinkSync(partPath)
+          }
+        } catch {
+          // 没有半截文件，从头下
+        }
+
         let bytes = 0
         await streamToFile(candidate.url, partPath, {
           signal,
           throttle,
-          onBytes: (n) => {
+          offset,
+          onBytes: (n, isResume) => {
             bytes += n
-            onBytes(n)
+            onBytes(n, isResume)
           }
         })
 
@@ -307,7 +368,10 @@ async function downloadOneFile(file, { signal, preferMirror, onBytes, sourcePref
         if (file.sha1) {
           const actual = await sha1OfFile(partPath)
           if (actual !== file.sha1) {
-            throw new Error('内容校验不通过（可能没下完，或者被拦截替换了）')
+            // 标一下：**内容本身不对**，那份半截没有续传价值，必须删掉重来
+            const bad = new Error('内容校验不通过（可能没下完，或者被拦截替换了）')
+            bad.checksumFailed = true
+            throw bad
           }
         }
 
@@ -317,11 +381,21 @@ async function downloadOneFile(file, { signal, preferMirror, onBytes, sourcePref
       } catch (error) {
         lastError = error
 
-        // 临时的半截文件必须删掉，否则下次会被误判成"已下好"
-        try {
-          fs.unlinkSync(partPath)
-        } catch {
-          /* 本来就不在就算了 */
+        // ——— 半截文件留还是删（M23）———
+        //
+        // · 校验不过：这份内容是坏的，留着只会一直坏 → 删
+        // · 用户主动取消：他不要了 → 删
+        // · 网络断了/超时：**留着**，下次（哪怕重启了启动器）能接着下
+        //
+        // 【为什么以前一律删】那时候没有续传，留着半截等于占着几百 MB 没用，
+        // 而且"下次下的时候又从头写一遍"。现在留着才有价值。
+        const keepPart = !signal.aborted && !error.checksumFailed
+        if (!keepPart) {
+          try {
+            fs.unlinkSync(partPath)
+          } catch {
+            /* 本来就不在就算了 */
+          }
         }
 
         if (signal.aborted) throw error
@@ -346,7 +420,7 @@ async function downloadOneFile(file, { signal, preferMirror, onBytes, sourcePref
  * @returns 控制器：{ start, pause, cancel, getStats }
  */
 function createTask(files, options = {}) {
-  // 并发数：调用方说了算；没说就按设置里的（默认 8），最后兜底成 8。
+  // 并发数：调用方说了算；没说就按设置里的（默认 16），最后兜底成 16。
   // 【注意别写成 Number.isFinite(concurrency)——那是在声明之前引用自己，
   //   会抛 TDZ 错误，而且一抛就是"所有下载全挂"。实测踩过。】
   const asked = Number.isFinite(options.concurrency)
@@ -512,9 +586,11 @@ function createTask(files, options = {}) {
             preferMirror,
             sourcePreference,
             throttle,
-            onBytes: (n) => {
+            // isResume=true 的是"上次已经下好的那部分"，只算进进度、
+            // **不算进速度**——不然续传一开始会显示一个离谱的速度
+            onBytes: (n, isResume) => {
               currentBytes += n
-              speed.add(n)
+              if (!isResume) speed.add(n)
               report()
             }
           })
