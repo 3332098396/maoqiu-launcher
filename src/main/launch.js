@@ -171,6 +171,10 @@ function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath
   const unknown = new Set()
 
   // ——— classpath：所有符合当前系统的库文件 + 客户端 jar（放最后） ———
+  //
+  // 【缺了的东西要连"从哪下"一起记下来】（M23 启动自愈）
+  // 以前这儿只记一个路径，缺了就只好让用户自己去点「重装」。
+  // 现在把 url / sha1 / size 一并带上，启动前能自己补下（见 launch() 里那段）。
   const cpFiles = []
   for (const lib of versionJson.libraries || []) {
     if (!install.rulesAllow(lib.rules, ctx)) continue
@@ -179,14 +183,31 @@ function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath
 
     const file = path.join(paths.librariesDir(dir), artifact.path)
     cpFiles.push(file)
-    if (!fs.existsSync(file)) missing.push(artifact.path)
+    if (!fs.existsSync(file)) {
+      missing.push({
+        name: artifact.path,
+        saveTo: file,
+        url: artifact.url || '',
+        sha1: (artifact.sha1 && String(artifact.sha1)) || '',
+        size: artifact.size || 0
+      })
+    }
   }
 
   // 客户端 jar：装了 Mod 加载器的版本自己没有，用最底下那个父版本的
   const jarOwner = rootId || versionId
   const clientJar = paths.versionJarFile(jarOwner, dir)
   cpFiles.push(clientJar)
-  if (!fs.existsSync(clientJar)) missing.push(`${jarOwner}.jar`)
+  if (!fs.existsSync(clientJar)) {
+    const client = versionJson.downloads && versionJson.downloads.client
+    missing.push({
+      name: `${jarOwner}.jar`,
+      saveTo: clientJar,
+      url: (client && client.url) || '',
+      sha1: (client && client.sha1) || '',
+      size: (client && client.size) || 0
+    })
+  }
 
   const classpath = cpFiles.join(path.delimiter)
   const assetsIndex =
@@ -947,11 +968,62 @@ async function launch(versionId, options = {}) {
     quickPlay
   })
 
+  // ——— ⑦.5 启动自愈：缺的文件自己补下（M23，照 KAMUCL 的 launchIntegrity）———
+  //
+  // 【为什么要这么做】库文件"不在了"的常见原因不是用户删了，而是：
+  //   · 上次装到一半断电/关窗口，留下一个残缺版本
+  //   · 手动挪过 .minecraft，漏了几百个库里的几个
+  //   · 清理软件"帮你"清掉了没在用的 jar
+  // 以前的做法是报一句"有 N 个文件不在了，去点重装"——把活儿推给用户。
+  // 现在直接补：反正版本 JSON 里就写着每个文件的地址和 sha1，
+  // 下完照样校验，校验不过就当没下成（跟别的下载走同一套规矩）。
   if (command.missing.length > 0) {
-    const sample = command.missing.slice(0, 3).join('、')
-    return {
-      ok: false,
-      error: `有 ${command.missing.length} 个游戏文件不在了（比如 ${sample}）。到「下载」页对着这个版本点「重装」，缺的会自动补上。`
+    const fixable = command.missing.filter((one) => one.url)
+    const unfixable = command.missing.filter((one) => !one.url)
+
+    if (fixable.length > 0) {
+      say(`[启动器] 发现 ${fixable.length} 个文件不在了，正在自动补下…`)
+
+      try {
+        const task = downloader.createTask(
+          fixable.map((one) => ({
+            name: one.name,
+            url: one.url,
+            saveTo: one.saveTo,
+            sha1: one.sha1 || '',
+            size: one.size || 0
+          })),
+          {
+            onProgress: (stats) => {
+              // 复用安装那条进度通道：界面上该转的圈照样转
+              state({ state: 'installing', stage: '正在补齐缺失的游戏文件…', stats })
+            }
+          }
+        )
+
+        const stats = await task.start()
+        if (stats.failed > 0) {
+          const first = stats.failures[0]
+          return {
+            ok: false,
+            error: `有 ${stats.failed} 个游戏文件补不下来（${(first && first.error) || '网络问题'}）。检查网络后重试；也可以到「下载」页点「重装」。`
+          }
+        }
+        say(`[启动器] 补好了 ${fixable.length} 个文件`)
+      } catch (error) {
+        return {
+          ok: false,
+          error: `补下缺的文件时出错：${error.message}。到「下载」页点「重装」也能补上。`
+        }
+      }
+    }
+
+    if (unfixable.length > 0) {
+      const sample = unfixable.slice(0, 3).map((one) => one.name).join('、')
+      return {
+        ok: false,
+        error: `有 ${unfixable.length} 个游戏文件不在了，而且版本信息里没写它们从哪下（比如 ${sample}）。到「下载」页对着这个版本点「重装」。`
+      }
     }
   }
 

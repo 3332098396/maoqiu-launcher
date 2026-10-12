@@ -1456,8 +1456,21 @@ launchBtnEl.addEventListener('click', () => {
 window.api.onLaunchLog((lines) => appendLog(lines))
 
 window.api.onLaunchState((payload) => {
-  if (payload.state === 'running') {
+  if (payload.state === 'installing') {
+    // 启动自愈（M23）：启动前发现缺文件，正在自己补下。
+    // 用底部那条进度面板显示——不然用户会以为"点了启动没反应"。
+    installEl.hidden = false
+    installTitleEl.textContent = '正在补齐缺失的游戏文件'
+    installCancelEl.hidden = true
+    setStage(payload.stage || '正在补齐…')
+    if (payload.stats) {
+      setFill(payload.stats.percent)
+      setDetail(progressLine(payload.stats))
+    }
+  } else if (payload.state === 'running') {
     launching = true
+    // 补下完了/不需要补，那条进度面板收掉
+    installEl.hidden = true
     refreshLaunchUi()
 
     // 设置里勾了"启动后关掉毛球"就自己退场（M23，照 KAMUCL 的 closeAfterLaunch）。
@@ -1799,6 +1812,18 @@ async function showSavePicker(button) {
   }
   if (!res.saves.length) {
     mrStatusEl.textContent = '你还没有存档 —— 先在游戏里建一个世界并存过盘，再回来装数据包'
+    return
+  }
+
+  // 只有一个世界就别问了，直接装进去（M23，照 KAMUCL 的 community.ts:647）。
+  // 【为什么】数据包只能装在某个世界里，用户只有一个世界的时候，
+  // 弹一个"选哪个世界"的框、里面只有一个选项，纯粹是白点一下。
+  if (res.saves.length === 1) {
+    const only = res.saves[0]
+    pendingSaveName = only.name
+    pendingSaveFolder = only.folder
+    mrStatusEl.textContent = `只有「${only.name}」一个世界，数据包直接装进它里面了。`
+    installMrProject(button)
     return
   }
 
@@ -2984,7 +3009,8 @@ function renderIsolationHint() {
     if (settingsInfo.sharedWorlds > 0) {
       text +=
         `\n注意：共享存档目录里还有 ${settingsInfo.sharedWorlds} 个世界，` +
-        '隔离开着在游戏里看不到它们——文件没丢，需要的话可以搬过来。'
+        '隔离开着在游戏里看不到它们——文件没丢。' +
+        '到「内容」页 →「存档（世界）」，点「搬公共存档过来」就能搬进某个版本。'
     }
     setIsolationHintEl.textContent = text
     setIsolationHintEl.classList.toggle('panel__desc--bad', settingsInfo.sharedWorlds > 0)
@@ -6962,6 +6988,7 @@ const localListEl = document.getElementById('local-list')
 const localFolderEl = document.getElementById('local-folder')
 const localAddEl = document.getElementById('local-add')
 const localUpdatesBtn = document.getElementById('local-updates')
+const localMoveSavesBtn = document.getElementById('local-move-saves')
 
 /** 左侧那五栏 */
 const LOCAL_TABS = [
@@ -7154,6 +7181,8 @@ async function renderLocalList() {
   localAddEl.hidden = localTab !== 'server'
   // 「检查更新」只在 Mod 那一栏出现（更新检测是 Modrinth 特有的，别的类型没有）
   localUpdatesBtn.hidden = localTab !== 'mod'
+  // 「搬公共存档过来」只在存档那一栏出现
+  localMoveSavesBtn.hidden = localTab !== 'world'
   localListEl.textContent = ''
 
   if (localTab === 'server') {
@@ -7698,6 +7727,75 @@ localVersionEl.addEventListener('change', () => {
 })
 
 localUpdatesBtn.addEventListener('click', checkModUpdates)
+
+// ——— 把公共存档搬进这个版本（M23，照 KAMUCL 的 isolationFiles.ts）———
+//
+// 【为什么要有这个】默认开着版本隔离，于是用户以前在原版启动器里建的、
+// 或者关着隔离时建的世界，在隔离打开之后就"看不见"了。
+// 界面上早就提示了这件事，但一直只能干看着——这个按钮就是那个"搬"。
+
+localMoveSavesBtn.addEventListener('click', async () => {
+  const target = localTarget()
+  if (!target) return
+
+  let plan
+  try {
+    plan = await window.api.planIsolationMove({ versionId: target.id, dir: target.dir })
+  } catch (error) {
+    plan = { ok: false, error: error.message }
+  }
+
+  if (!plan.ok) {
+    localHintEl.textContent = plan.error
+    return
+  }
+
+  if (plan.movable === 0) {
+    localHintEl.textContent =
+      plan.items.length === 0
+        ? '公共存档目录里没有世界可以搬（那边要么是空的，要么只有不成形的文件夹）。'
+        : `公共目录里有 ${plan.items.length} 个世界，但这个版本里已经有同名的了。` +
+          '毛球绝不会覆盖存档，所以这次没得搬——要搬的话先给其中一个改个名字。'
+    return
+  }
+
+  const list = plan.items
+    .filter((one) => !one.conflict)
+    .map((one) => `· ${one.name}（${formatSize(one.bytes)}）`)
+    .join('\n')
+
+  const ok = await askLocalConfirm({
+    title: `把公共存档里的 ${plan.movable} 个世界搬进「${target.id}」？`,
+    what:
+      list +
+      (plan.conflicts > 0 ? `\n\n还有 ${plan.conflicts} 个重名的会被跳过（毛球绝不覆盖存档）。` : ''),
+    safe:
+      '是复制过去，公共目录里那份原封不动地留着。' +
+      '中途万一出问题，这次已经搬过去的会自动退回来，等于什么都没发生。',
+    okLabel: '搬过去',
+    danger: false
+  })
+  if (!ok) return
+
+  localHintEl.textContent = '正在搬…'
+  let answer
+  try {
+    answer = await window.api.moveIsolationSaves({ versionId: target.id, dir: target.dir })
+  } catch (error) {
+    answer = { ok: false, error: error.message }
+  }
+
+  localHintEl.textContent = answer.ok
+    ? `搬好了 ${answer.moved} 个世界${answer.skipped ? `，跳过 ${answer.skipped} 个重名的` : ''}。现在进游戏就能看见它们了。`
+    : answer.error
+
+  await renderLocalList()
+})
+
+// 搬存档的进度（搬一个几百 MB 的世界要几秒，得让用户看见在动）
+window.api.onIsolationStage((text) => {
+  localHintEl.textContent = text
+})
 
 document.getElementById('local-refresh').addEventListener('click', () => loadLocalPage(true))
 

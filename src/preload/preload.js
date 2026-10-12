@@ -332,6 +332,17 @@ contextBridge.exposeInMainWorld('api', {
   /** 打开存档文件夹 */
   openWorldFolder: (options) => ipcRenderer.invoke('worlds:openFolder', options),
 
+  /** 版本隔离：先算一遍"能搬几个世界" */
+  planIsolationMove: (options) => ipcRenderer.invoke('isolation:plan', options),
+
+  /** 版本隔离：真搬（调用前必须先确认过） */
+  moveIsolationSaves: (options) => ipcRenderer.invoke('isolation:move', options),
+
+  /** 搬存档的进度提示 */
+  onIsolationStage: (callback) => {
+    ipcRenderer.on('isolation:stage', (_event, text) => callback(text))
+  },
+
   /** 检查已装的 Mod 有没有新版本（只发哈希，不发文件） */
   checkModUpdates: (options) => ipcRenderer.invoke('local:checkUpdates', options),
 

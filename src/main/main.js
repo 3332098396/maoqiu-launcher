@@ -39,6 +39,7 @@ const content = require('./content')
 const localfiles = require('./localfiles')
 const servers = require('./servers')
 const notices = require('./notices')
+const isolation = require('./isolation')
 const logs = require('./logs')
 const downloader = require('./downloader')
 const pack = require('./pack')
@@ -2024,6 +2025,31 @@ function registerIpcHandlers() {
       return await servers.ping(options?.ip, { timeout: Number(options?.timeout) || 6000 })
     } catch (error) {
       return { ok: false, online: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /**
+   * 版本隔离：把公共 saves 里的世界搬进这个版本自己的文件夹（M23）。
+   * 不带 confirm 就是"先算一遍给用户看"，带上才是真搬。
+   */
+  ipcMain.handle('isolation:plan', (_event, options) => {
+    try {
+      return isolation.planSaveMove(options?.versionId || '', known(options?.dir))
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  ipcMain.handle('isolation:move', (event, options) => {
+    try {
+      const send = (text) => {
+        if (!event.sender.isDestroyed()) event.sender.send('isolation:stage', text)
+      }
+      return isolation.moveSaves(options?.versionId || '', known(options?.dir), {
+        onStage: send
+      })
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
     }
   })
 
