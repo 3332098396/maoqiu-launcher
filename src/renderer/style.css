@@ -3031,62 +3031,53 @@ button.acc__tab:hover {
   color: var(--text-muted);
 }
 
-/* 三栏：账号 / 大预览 / 皮肤列表（照设计稿：左右窄、中间宽） */
+/* 两栏：大预览 / 皮肤列表。
+   【设计稿上本来是三栏】最左边还有一张"当前账号"卡（头像 + 名字 + 登录按钮）。
+   2026-10-13 用户问"这卡片有用吗"，结论是没什么用：它显示的头像和点开的账号弹窗，
+   **左边栏顶上那个头像完全一样**（点它也开同一个弹窗），唯一多出来的只是把账号名写成字。
+   删掉之后大预览宽了 220 像素 —— 这页真正要看的就是那个 3D 小人。
+
+   腾出来的那一栏给了「披风」（用户 2026-10-13 点名要的）：
+   **只有披风那张卡露出来的时候才变成三栏**，没有披风的账号（大多数）就还是两栏、
+   大预览照样宽。 */
 .skin-cols {
   display: grid;
-  grid-template-columns: 210px minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 300px;
   gap: 12px;
   align-items: stretch;
 }
 
-/* 窗口窄的时候（用户把窗口拉小）自动堆成一列，别挤成三条缝 */
-@media (max-width: 1080px) {
-  .skin-cols {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.skin-cols:has(#cape-panel:not([hidden])) {
+  grid-template-columns: 210px minmax(0, 1fr) 300px;
 }
 
-.skin-account {
+/* 披风卡：竖着的窄栏，所以里面的小圆片要能换行、别用那个"靠右对齐"的写法 */
+.skin-cape {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  text-align: center;
-  /* 设计稿上左栏是虚线框，像"还没放东西"的位置 */
-  border-style: dashed;
 }
 
-.skin-account__avatar {
-  width: 84px;
-  height: 84px;
-  border-radius: 50%;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface-soft);
-  border: 2px solid var(--accent-ring);
+.skin-cape .chips {
+  margin-left: 0;
+  flex-wrap: wrap;
+  align-items: flex-start;
 }
 
-.skin-account__avatar canvas,
-.skin-account__avatar img {
-  width: 100%;
-  height: 100%;
-  image-rendering: pixelated;
-  display: block;
+/* 【别删】.panel__desc 自己写了 flex:1 1 auto（在别的面板里它要把剩下的地方撑满），
+   到了这一栏就会把下面的披风小圆片一路顶到底下去，中间空一大块。
+   这里让它别长，标题 + 说明 + 小圆片挨着排。 */
+.skin-cape .panel__desc {
+  flex: 0 0 auto;
 }
 
-.skin-account__name {
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.skin-account__hint {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.5;
+/* 窗口窄的时候（用户把窗口拉小）自动堆成一列，别挤成三条缝。
+   ⚠️ 带上 :has() 那一条 —— 它比单独的 .skin-cols **更具体**，不一起写的话，
+   披风开着的时候窄窗口还是会硬挤出三栏。 */
+@media (max-width: 1080px) {
+  .skin-cols,
+  .skin-cols:has(#cape-panel:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .skin-big {
@@ -3247,9 +3238,14 @@ button.acc__tab:hover {
   display: block;
 }
 
-/* 皮肤页那个大的：占满中间那一栏 */
+/* 皮肤页那个大的：占满中间那一栏。
+   【2026-10-13】原来写死 320px 高；删掉左边的账号卡之后这一栏宽了 220 像素，
+   固定高度就显得很扁。改成"至少 320、有地方就撑满" ——
+   撑满**不会让整页变高**：整页高度是右边那张皮肤列表定的，这边只是把空地方用起来
+   （地方大了，3D 小人也会跟着放大，当"大预览"正合适）。 */
 .skin-stage--big {
-  height: 320px;
+  flex: 1 1 auto;
+  min-height: 320px;
   width: 100%;
   margin: 0;
 }

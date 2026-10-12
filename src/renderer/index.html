@@ -101,7 +101,9 @@
         <!-- ——— 左侧导航（M14.2：原来在顶栏，挪到左边了，学 KAMUCL 的做法）——— -->
         <nav class="rail" id="nav">
         <!-- 顶上这一块（M17.5 照设计稿）：圆头像 + 「毛球」 + 小徽章 -->
-        <div class="rail__brand">
+        <!-- 「皮肤」页原来还有一张"当前账号"卡，2026-10-13 删了（点它开的还是这个弹窗、
+             显示的头像也和这块一样）。所以这块得把话说清楚，加个悬停提示。 -->
+        <div class="rail__brand" title="账号：点这里登录 / 切换账号">
           <!-- 头像（M17.x）：**没登录**时就用启动动画里那个品牌图标（紫→青渐变的草方块）；
                **登录之后**，JS 会往这儿塞一张 canvas——把皮肤图里的"头部"那块裁出来当头像，
                见 app.js 的 paintAvatar() -->
@@ -367,10 +369,10 @@
                        游戏里的皮肤是**问账号服务器要的**，离线账号没人可问，
                        就穿自带的默认皮肤。不说明白，用户会以为"我挑了半天怎么进游戏不是这张"。 -->
                   <div class="notice notice--skin" id="skin-notice">
-                    <b>这里的皮肤 ≠ 游戏里的皮肤</b>
+                    <b>游戏里到底穿哪张？</b>
                     <span>
-                      游戏里的皮肤问的是账号服务器，跟这儿挑的没关系；<b>离线账号</b>进游戏只会穿官方默认皮肤。
-                      想换皮肤：<b>登录账号</b>（皮肤站 / 正版）在网站上上传，或者<b>给这个版本装皮肤 Mod</b>。
+                      <b>没登账号</b>时，进游戏穿的就是你挑的这张（<b>只有你自己看得到</b>）；
+                      <b>登了账号</b>则以账号服务器上的为准，跟这儿挑的没关系。
                     </span>
                   </div>
                 </div>
@@ -780,21 +782,25 @@
                用户要求两处都留着（"皮肤页顶的也不用挪走"）。
                两处的 id 必须不一样，不然 getElementById 只会拿到前一个。 -->
           <div class="notice notice--skin notice--skin--wide" id="skin-notice-page">
-            <b>这里的皮肤 ≠ 游戏里显示的皮肤</b>
+            <b>游戏里到底穿哪张？</b>
             <span>
-              游戏里的皮肤问的是账号服务器，跟这儿挑的没关系；<b>离线账号</b>进游戏只会穿官方默认皮肤。想换皮肤：<b>登录账号</b>（皮肤站 / 正版）在网站上上传，或者<b>给这个版本装皮肤 Mod</b>。<br />
-              登了<b>正版账号</b>的话，可以直接在列表里点一张的「传到正版」——传上去游戏里立刻生效
-              （正版登录还在等 Mojang 审批，批下来之前这个按钮不会出现）。
+              · <b>没登账号（离线）</b>：下面「离线进游戏也穿这张」开着的话，进游戏穿的就是你挑的这张
+              —— <b>只有你自己看得到</b>，别人看到的还是默认小人。<br />
+              · <b>登了账号</b>（皮肤站 / 正版）：游戏里以<b>账号服务器上的皮肤</b>为准，跟这儿挑的没关系。
+              正版账号可以在列表里点一张的「<b>传到正版</b>」，传上去游戏里立刻生效；皮肤站的到它网站上换。
             </span>
           </div>
 
           <div class="skin-cols">
-            <!-- 左：当前账号 -->
-            <section class="panel skin-account" id="skin-account">
-              <div class="skin-account__avatar" id="skin-account-avatar"></div>
-              <div class="skin-account__name" id="skin-account-name">未登录</div>
-              <p class="skin-account__hint" id="skin-account-hint">登录之后能直接用账号上的皮肤</p>
-              <button class="btn btn--primary btn--sm" type="button" id="skin-account-btn">登录账户</button>
+            <!-- 左：披风（M23 加的，2026-10-13 从页面底部挪到这一栏 —— 那一栏原来放的是
+                 "当前账号"卡，用户问"有用吗"、确认没用之后删了，腾出来的地方给披风。
+                 只有正版账号、而且名下真有披风时才显示；不显示时这一栏整个收掉（见 CSS）。 -->
+            <section class="panel skin-cape" id="cape-panel" hidden>
+              <h3 class="panel__title">披风</h3>
+              <p class="panel__desc" id="cape-hint">
+                披风是官方账号才有的（买 Java 版送的、活动发的）。这儿能看有哪些、戴哪一条。
+              </p>
+              <div class="chips" id="cape-list"></div>
             </section>
 
             <!-- 中：大预览 -->
@@ -845,16 +851,6 @@
               </div>
             </section>
           </div>
-
-          <!-- 披风（M23）：只有正版账号有官方披风，没有就不显示这一栏 -->
-          <section class="panel panel--full" id="cape-panel" hidden>
-            <h3 class="panel__title">披风</h3>
-            <p class="panel__desc" id="cape-hint">
-              披风是官方账号才有的（买 Java 版送的、活动发的）。这儿能看有哪些、戴哪一条。
-            </p>
-            <div class="chips" id="cape-list"></div>
-          </section>
-
         </div>
       </section>
 

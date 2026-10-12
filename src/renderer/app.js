@@ -5429,6 +5429,12 @@ function ensureSkinCard() {
 function moveSkinViewerTo(container, zoom) {
   if (!skinMounted || !window.skinViewer || !container) return
   window.skinViewer.mount(container, zoom)
+  // 【为什么还要再量一次】大预览那个框的高度是 flex 撑出来的（见 style.css 的 .skin-stage--big），
+  // 刚把页面显示出来这一瞬间**还没排版完**，第一次量到的只是 min-height。
+  // 画布按那个尺寸定格之后，CSS 再把 100%×100% 拉满 → 小人被竖着拉长（实测过：
+  // 画布 584×318 的底子塞进 576×522 的框里）。下一帧重量一次就把尺寸对上了。
+  // skin3d 里"量到 0 就重试"那套救不了这个 —— 它不是 0，只是偏小。
+  requestAnimationFrame(() => window.skinViewer.mount(container, zoom))
 }
 
 document.getElementById('skin-pick').addEventListener('click', async () => {
@@ -5802,10 +5808,6 @@ const skinListEl = document.getElementById('skin-list')
 // index.html 里那个元素也删了——只留下面“来自：xxx”那一行
 const skinBigFromEl = document.getElementById('skin-big-from')
 const skinStageMainEl = document.getElementById('skin-stage-main')
-const skinAccountAvatarEl = document.getElementById('skin-account-avatar')
-const skinAccountNameEl = document.getElementById('skin-account-name')
-const skinAccountHintEl = document.getElementById('skin-account-hint')
-const skinAccountBtnEl = document.getElementById('skin-account-btn')
 
 /** 皮肤库里有哪些（主进程读回来的；上传/删除后要重建） */
 let skinLibCache = null
@@ -5890,24 +5892,6 @@ async function renderSkinPage() {
     if (showing.kind === 'account') return Boolean(opts.isAccount)
     if (showing.kind === 'random') return showing.path ? samePath(showing.path, opts.path) : Boolean(opts.isDefault)
     return samePath(showing.path, opts.path)
-  }
-
-  // ——— 左：账号卡（头像用"当前正在用的那张皮肤"的脑袋）———
-  // 【为什么不是"账号上的那个脑袋"】离线账号压根没有，卡片上会是个空圈看着像坏了。
-  // 这一栏要说的是"你现在长什么样"，那用当前皮肤的脑袋最合适。
-  // 【为什么是现裁一个而不是复制现成的】见 currentSkinImage 那段注释：canvas 复制出来是空的
-  skinAccountAvatarEl.textContent = ''
-  if (currentSkinImage) skinAccountAvatarEl.appendChild(headCanvas(currentSkinImage))
-  skinAccountNameEl.textContent = account ? account.name || '已登录' : '未登录'
-  if (remote) {
-    skinAccountHintEl.textContent =
-      account.type === 'microsoft' ? '正版账号，能直接用账号上的皮肤' : '皮肤站账号，能直接用账号上的皮肤'
-    skinAccountBtnEl.hidden = true
-  } else {
-    skinAccountHintEl.textContent = account
-      ? '离线账号进游戏只会穿官方默认皮肤'
-      : '登录之后能直接用账号上的皮肤'
-    skinAccountBtnEl.hidden = false
   }
 
   // ——— 右：皮肤列表 ———
@@ -6907,11 +6891,6 @@ for (const button of skinVariantEl.querySelectorAll('[data-skin-variant]')) {
     renderOfflineSkinControls()
   })
 }
-
-skinAccountBtnEl.addEventListener('click', () => {
-  // 复用启动页左上角头像那个弹窗——账号的事只有一处，别做第二套
-  openAccountModal()
-})
 
 // ——————————————————————————————————————————————
 // 最后一步：把启动页显示出来
