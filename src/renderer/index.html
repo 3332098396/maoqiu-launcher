@@ -372,10 +372,13 @@
         <div class="content">
           <!-- 两种联机方式（M17.x）：两张正方形卡片并排当入口，点哪个下面显示哪个的内容。
                原来是竖着摞一大条，又长又不知道从哪看起。 -->
-          <div class="online-modes">
+          <!-- ⚠️ 2026-10-12：「房间码联机」（EasyTier）那张入口卡片**撤掉了**（用户要求换成 VoxLink）。
+               注意：**主进程那一套一行没删** —— `src/main/easytier.js`、`src/main/online.js`、
+               `online:*` 那几个 IPC、`%APPDATA%\毛球\easytier\` 组件都原样在。
+               要恢复：把下面这段注释解开、并把 VoxLink 卡上的 mode-card--on 去掉；
+               HTML 底下那个 data-online-pane="room" 的面板也要去掉 hidden。
             <button class="mode-card mode-card--on" type="button" data-online-mode="room">
               <span class="mode-card__icon" aria-hidden="true">
-                <!-- 联机＝大圆角方框 + 拐角连线（导航里那个图标）-->
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
                   <path d="M9.05 15.1V11.6h6.55" />
@@ -383,6 +386,20 @@
               </span>
               <span class="mode-card__name">房间码联机</span>
               <span class="mode-card__desc">一个人建房拿到房间码，好友输码进来，就像坐在同一个 WiFi 下</span>
+            </button>
+            -->
+          <div class="online-modes">
+            <button class="mode-card mode-card--on" type="button" data-online-mode="voxlink">
+              <span class="mode-card__icon" aria-hidden="true">
+                <!-- VoxLink＝两台机器中间一颗星（公共服务器在中间牵线） -->
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2.4" y="9" width="6" height="6" rx="2" />
+                  <rect x="15.6" y="9" width="6" height="6" rx="2" />
+                  <path d="M11.4 11.2l1.2-1.2 1.2 1.2M12.6 10v4M11.4 12.8l1.2 1.2 1.2-1.2" />
+                </svg>
+              </span>
+              <span class="mode-card__name">VoxLink 房间码</span>
+              <span class="mode-card__desc">借 VoxLink 的公共服务器牵线，6 位房间码直接开房间</span>
             </button>
 
             <button class="mode-card" type="button" data-online-mode="frp">
@@ -398,23 +415,12 @@
               <span class="mode-card__name">樱花内网穿透</span>
               <span class="mode-card__desc">自己配一条隧道，不用管理员权限；好友手动连你的地址</span>
             </button>
-
-            <button class="mode-card" type="button" data-online-mode="voxlink">
-              <span class="mode-card__icon" aria-hidden="true">
-                <!-- VoxLink＝两台机器中间一颗星（公共服务器在中间牵线） -->
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="2.4" y="9" width="6" height="6" rx="2" />
-                  <rect x="15.6" y="9" width="6" height="6" rx="2" />
-                  <path d="M11.4 11.2l1.2-1.2 1.2 1.2M12.6 10v4M11.4 12.8l1.2 1.2 1.2-1.2" />
-                </svg>
-              </span>
-              <span class="mode-card__name">VoxLink 房间码</span>
-              <span class="mode-card__desc">借 VoxLink 的公共服务器牵线，6 位房间码直接开房间</span>
-            </button>
           </div>
 
-          <!-- ——— 房间码联机的内容 ——— -->
-          <div class="online-mode" data-online-pane="room">
+          <!-- ——— 房间码联机（EasyTier）的内容 ———
+               ⚠️ 2026-10-12 入口卡片撤了，这里也加了 hidden（整块代码原样留着，随时能恢复）。
+                  恢复时要一并去 HTML 顶上把那张卡的注释解开。 -->
+          <div class="online-mode" data-online-pane="room" hidden>
           <div class="notice" id="online-notice">
             两个人不在一个地方也能一起玩：一个人「创建房间」拿到房间码，
             另一个人输码进来，之后就<b>像坐在同一个 WiFi 下</b>一样联机。
@@ -491,14 +497,14 @@
           </div>
 
           <!-- ——— VoxLink 房间码：第三种联机方式 ———
-               ⚠️ 现在还只说"房间"这一步：房间码是真的、服务器认得，
-                  **但数据怎么在两个人之间走还没做，所以还不能真的联机玩**。
-                  界面上必须把这句话写在最显眼的地方，不许含糊。 -->
-          <div class="online-mode" data-online-pane="voxlink" hidden>
+               V4 起这条路**真能一起玩**了：房主在游戏里点「对局域网开放」再建房，
+               好友进来会拿到一个本机地址，填进游戏的「加入服务器」就进同一个世界。
+               界面上必须把"房主要先开局域网"说清楚 —— 不说清楚，好友填了地址也是空的。 -->
+          <div class="online-mode" data-online-pane="voxlink">
             <div class="notice" id="voxlink-notice">
-              这是 VoxLink 的房间：<b>房间码是真的，服务器认得</b>。
-              但"把游戏连起来"那一步还没做完，所以<b>现在还不能真的联机玩</b>——
-              这一步只是把地基打好。
+              这是 VoxLink 的房间：<b>房间码是真的，服务器认得</b>，
+              两个启动器会自己打通一条路，<b>打通之后真的能进同一个世界</b>。<br>
+              当房主的话，先在游戏里点「对局域网开放」，再建房。
             </div>
 
             <div class="online-grid" id="voxlink-start">

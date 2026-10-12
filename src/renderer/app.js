@@ -4376,8 +4376,8 @@ const voxlinkLeaveEl = document.getElementById('voxlink-leave')
 const voxlinkCopyEl = document.getElementById('voxlink-copy')
 
 const VOXLINK_DEFAULT_NOTICE =
-  '这是 VoxLink 的房间：房间码是真的，服务器认得，两个启动器会自己互相连上。' +
-  '但"把游戏数据接到这条路上"还没做完，所以现在还不能真的进同一个世界玩。'
+  '这是 VoxLink 的房间：房间码是真的，服务器认得，两个启动器会自己打通一条路。' +
+  '打通之后会给你一个地址，填进游戏里的「加入服务器」，就能进同一个世界了。'
 
 let voxlinkState = { ok: true, state: 'idle', code: '', isHost: false, room: null, serverUrl: '' }
 
@@ -4420,7 +4420,9 @@ function renderVoxlink() {
   // 打通没有，是这一页最要紧的一句话，所以放在房间码下面。
   const connText = voxlinkConnText()
   if (connText) lines.push(connText)
-  if (voxlinkConn?.address) lines.push(`对方地址：${voxlinkConn.address}`)
+  // V4 起，客人拿到的 `address` 是**本机的一个地址**（桥开出来的），
+  // 用途是让用户填进游戏的「加入服务器」——它**不是**"对方的地址"，别写错。
+  if (voxlinkConn?.address) lines.push(`把这一行填进游戏的「加入服务器」：${voxlinkConn.address}`)
   // 房间名要先过服务器审核。审核没放行时，服务器回的不是名字，而是一个
   // 占位符「name_pending_review」—— 那是给程序看的记号，原样显示给用户就是个谜语。
   const namePending = room.nameApproved === false || room.name === 'name_pending_review'
@@ -4440,10 +4442,14 @@ function renderVoxlink() {
   if (stageList.length) lines.push(`进度：${stageList.map((s) => s.detail).join(' → ')}`)
 
   lines.push(`服务器：${voxlinkState.serverUrl}`)
-  if (voxlinkState.state === 'hosting') {
+  if (voxlinkState.isHost) {
     lines.push('把这个 6 位房间码发给好友。')
+    lines.push('接下来：游戏里的「对局域网开放」**一直开着别关**，好友那边填上地址就会进来。')
+  } else if (voxlinkConn?.address) {
+    lines.push('接下来：游戏里选「多人游戏 → 加入服务器」，地址填上面那一行，就能进他的世界了。')
+  } else {
+    lines.push('接下来：等两边连上。连上后会给你一个地址，填进游戏就能进同一个世界。')
   }
-  lines.push('（提醒：现在两个启动器能互相连上，但游戏数据还没接到这条路上——还不能进同一个世界。）')
   voxlinkStatusTextEl.textContent = lines.join('\n')
 }
 

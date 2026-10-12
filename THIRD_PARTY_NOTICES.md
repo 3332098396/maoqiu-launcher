@@ -37,7 +37,9 @@
 | `src/main/voxlink/punch.js` | `network/UdpHolePuncher.java` — 打洞主循环、控制包格式、发包限速 | **LGPL-3.0-only** |
 | `src/main/voxlink/session.js` | `SignalingWsTransport.java` / `RoomManager.java` — 房间内的信令收发（`/signal/send`、`/signal/poll`、`/room/heartbeat`）与去重、降频、散伙判定。毛球只走上游**自带的** HTTP 轮询退化分支，不用 WebSocket（见文件头说明） | **LGPL-3.0-only** |
 | `src/main/voxlink/punchRounds.js` | `ConnectionManager.java` — 打洞轮次驱动：周期/轮次推进、模板切换（20 秒节流）、重试与退避、终局判定 | **LGPL-3.0-only** |
-| `src/main/voxlink/engine.js` | `ConnectionManager.java` — 打洞总编排：敲门、探网、报价、互相报地址、打洞、挂可靠传输、重连与收摊。**不含** TCP 通路与 TURN/玩家中继（那是后续里程碑的活，文件头有说明） | **LGPL-3.0-only** |
+| `src/main/voxlink/engine.js` | `ConnectionManager.java` — 打洞总编排：敲门、探网、报价、互相报地址、打洞、挂可靠传输、重连与收摊。**不含** TURN/玩家中继（那是后续里程碑的活，文件头有说明） | **LGPL-3.0-only** |
+| `src/main/voxlink/tcpPunch.js` | `network/TcpHolePuncher.java` / `P2PBridge.java` — TCP「同时打开」（UDP 打不通时的第二条路）与把已打通的 TCP 接上游戏（修订 721c7fae；上游文件头自带此说明） | **LGPL-3.0-only** |
+| `src/main/voxlink/bridge.js` | `P2PBridge.java` — 把游戏数据在「本地 TCP」和「可靠 UDP 管道」之间对搬（房主先等客人发数据再回连本机游戏）。⚠️ **据实说明**：KAMUCL 里这个文件头部**自称 MIT**（"KAMUCL stream adapter"），但它对应的上游是 `P2PBridge.java`，而同目录里真正从 VoxLink 译过来的文件它都标了 LGPL —— 本项目**按最保守的处理**，标 LGPL-3.0-only | **LGPL-3.0-only** |
 
 改写过程中参考了 [KAMUCL](https://github.com/kamubaba-i/KAMUCL) 的 JS 实现
 （`src/main/core/voxlink/`；该项目中对应部分同样按 LGPL-3.0-only 声明）。

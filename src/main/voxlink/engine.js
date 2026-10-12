@@ -13,9 +13,10 @@
 // 本文件就是**总指挥**：谁该在什么时候做上面哪件事，以及"通了"之后把 rudp 挂上去。
 //
 // 这一版的**边界**（**故意的**，不是漏了）：
-//   ① TCP 那条路（同时打开直连、游戏数据搬运 `bridge.ts`）—— **V4 的活**，这里只做到
-//      "UDP 洞打通了、rudp 挂上了、两边互相看得见"。
-//   ② TURN 中继、玩家中继 —— **V3 的活**。所以下面凡是出现 `this._turn` / `this._tcp` 的地方，
+//   ① TCP 那条路（同时打开、把游戏数据搬过去）—— **V4 已接上**：
+//      `tcpPunch.js`（TCP 同时打开）+ `bridge.js`（把游戏接上去、搬字节）。
+//      所以现在"连通"之后**游戏真的能连进来**了，不再只是"两边互相看得见"。
+//   ② TURN 中继、玩家中继 —— **V3 的活**。所以下面凡是出现 `this._turn` 的地方，
 //      都是**照抄上游的守卫形状**，但那个子系统此刻是空的（`ABSENT_TURN`）——
 //      **守卫一个没删**，等 V3 接进来把桩换成真的就行。
 //   ③ 因此本文件里 `mode` 永远是 'p2p'、`turnChoices` 永远是空集。
@@ -32,6 +33,8 @@ const { Puncher, PunchFailure, punchListen } = require('./punch')
 const { fromProfile, predict, deltaPredict, selectStrategy, symmetric } = require('./punchPolicy')
 const { PunchRounds } = require('./punchRounds')
 const { RudpConn } = require('./rudp')
+const { TcpBridge, startHostLazyBridge } = require('./bridge')
+const { chooseTcpPunchPort, tcpSimOpen, bridgePunchedSocket } = require('./tcpPunch')
 const { derivePunchKey } = require('./punchAuth')
 const { NAT_RAW_LABELS, natLabel } = require('./room')
 
@@ -67,6 +70,8 @@ class ConnEngine extends EventEmitter {
     this.clientID = ''
     this.session = null
     this.room = null
+    // 上游同一个字段：房客记着"房主的公网 IP"，TCP 同时打开要朝它拨（上游 engine.ts:348）
+    this.tcpPeerIp = ''
     this.joinedAt = 0
     this.lastConnection = null
     this.stages = {}
@@ -122,9 +127,9 @@ class ConnEngine extends EventEmitter {
     return p
   }
 
-  /** 别再用这些 socket / 连接打这个对端了 */
-  stopPeerPunching(peer, keep) {
-    for (const key of this.tcp.keys()) if (key === peer || key.startsWith(peer + ':direct:')) this._cancelTcp(key)
+  /** 别再用这些 socket / 连接打这个对端了。`keepTcp` = 这一条 TCP 通路**留着别撤** */
+  stopPeerPunching(peer, keep, keepTcp) {
+    for (const key of this.tcp.keys()) if ((key === peer || key.startsWith(peer + ':direct:')) && key !== keepTcp) this._cancelTcp(key)
     for (const [id, link] of this.links) if (link.peer === peer && link !== keep) this.drop(id)
   }
 
@@ -185,6 +190,7 @@ class ConnEngine extends EventEmitter {
     clearTimeout(link.timer)
     link.punch.stop()
     for (const punch of link.punchers) punch.stop()
+    link.bridge?.stop()
     link.rudp?.close()
     for (const socket of link.sockets) try { socket.close() } catch {}
   }
@@ -422,14 +428,25 @@ class ConnEngine extends EventEmitter {
       rc.start()
       if (this.isHost) {
         rc.setOnClosed(() => { if (this.links.get(id) === link) { this.winner.delete(link.peer); this.drop(id) } })
-        // V4 才会在这里把游戏端口接上去（上游是 startHostLazyBridge）
+        // V4：房主这一支 —— **先等房客发数据过来，再回头连本机游戏**（这个顺序在 bridge.js 里，别改）
+        void startHostLazyBridge(rc, this.hostPort, this.deps.netLog).catch((error) => this.deps.netLog('warn', error.message))
         this.stage('host_punch', 'ok', '玩家通路已建立，等待游戏连接')
       } else {
-        // V4 才会在这里起 TcpBridge.startGuest 搬游戏数据；这一步只宣布"路通了"
+        // V4：房客这一支 —— 开个本地端口，把地址交给界面显示给用户
+        const result = await TcpBridge.startGuest(rc, () => {
+          if (this.links.get(id) === link) {
+            this.winner.delete(link.peer)
+            this.drop(id)
+            this.state(relay ? 'prelay' : 'p2p', 'failed', '', '游戏通路已关闭')
+            this.reconnect()
+          }
+        })
+        if (epoch !== this.generation || this.links.get(id) !== link) { result.bridge.stop(); return }
+        link.bridge = result.bridge
         this._turn.stop()
         this.relayPending = false
-        this.state(relay ? 'prelay' : 'p2p', 'success', `${link.mapped.ip}:${link.mapped.port}`, relay ? '玩家中继已连接' : '连接成功')
-        this.stage(relay ? 'relay' : 'punch', 'ok', '通路已就绪')
+        this.state(relay ? 'prelay' : 'p2p', 'success', result.addr, relay ? '玩家中继已连接' : '连接成功，请在游戏中输入下方地址')
+        this.stage(relay ? 'relay' : 'punch', 'ok', '游戏地址已就绪')
         void this.sendSignal('connected', {}, 'host').catch((error) => this.deps.netLog('warn', error.message))
       }
     } catch (error) {
@@ -440,7 +457,14 @@ class ConnEngine extends EventEmitter {
       this.drop(id)
       this.stage(this.isHost ? 'host_punch' : relay ? 'relay' : 'punch', 'retry', policy.terminal ? '未收到对方回应，可手动选择中继' : '本轮未连通，继续尝试')
       if (!this.isHost && !relay) {
-        // ConnectionManager.java: 第二轮才轮到 TCP（Wave 2）—— **V4 的活**，这里只把重连排上
+        // ConnectionManager.java: 第二轮才轮到 TCP（Wave 2）；**直连那条路从不选中继**
+        const direct = this.runDirect(this.hostIp, this.hostPort)
+        if (link.remote) void this.runDirect(link.remote.ip, this.hostPort || link.remote.port)
+        if (!this.tcp.has('host')) {
+          const port = await chooseTcpPunchPort()
+          if (this.canRetry()) void this.sendSignal('tcp_punch_info', { tcpPunchIp: link.mapped.ip, tcpPunchPort: port }, 'host').catch(() => {})
+        }
+        await direct
         if (epoch === this.generation) this.reconnect(failures.some((e) => e instanceof PunchFailure && e.result.firewallDetected))
       }
     }
@@ -458,6 +482,102 @@ class ConnEngine extends EventEmitter {
       [`${prefix}EasySym`]: link.nat === 'EASY_SYM',
     }
   }
+
+  // ---------------------------------------------------------------- TCP 那条路（V4）
+
+  /**
+   * 上游 engine.ts 的 `runDirect`：**直连**——直接拨房主的公网 ip:port 试一下。
+   * 同一个局域网、或本来就在同一个公网 IP 下的，它就成了，比打洞省事得多。
+   * 通了照样把游戏接上去（房客这边开本地端口）。
+   */
+  async runDirect(ip, port) {
+    if (this.isHost || this.mode !== 'p2p' || this.winner.has('host') || !net.isIP(ip) || !Number.isInteger(port) || port < 1 || port > 65535) return
+    const id = `host:direct:${ip}:${port}`
+    if (this.tcp.has(id)) return
+    const controller = new AbortController()
+    const operation = { controller }
+    const epoch = this.generation
+    this.tcp.set(id, operation)
+    const socket = new net.Socket()
+    const abort = () => socket.destroy()
+    controller.signal.addEventListener('abort', abort, { once: true })
+    const valid = () => epoch === this.generation && this.tcp.get(id) === operation && this.mode === 'p2p' && !this.winner.has('host')
+    try {
+      await new Promise((resolve, reject) => {
+        // ConnectionManager.java: TCP_CONNECT_TIMEOUT_MS
+        const timer = setTimeout(() => { socket.destroy(); reject(new Error('直连未命中')) }, 5000)
+        socket.once('error', reject)
+        socket.once('close', () => { clearTimeout(timer); reject(new Error('直连已关闭')) })
+        socket.connect(port, ip, () => { clearTimeout(timer); resolve() })
+      })
+      if (!valid()) { socket.destroy(); return }
+      const bridge = await bridgePunchedSocket(socket, null, () => {
+        if (this.tcp.get(id) !== operation) return
+        this.tcp.delete(id)
+        controller.abort()
+        if (this.winner.get('host') === id) {
+          this.winner.delete('host')
+          this.state('p2p', 'failed', '', '游戏通路已关闭')
+          this.reconnect()
+        }
+      })
+      if (!valid()) { bridge.stop(); return }
+      operation.stop = bridge.stop
+      this.winner.set('host', id)
+      this.stopPeerPunching('host', undefined, id)
+      this.state('p2p', 'success', bridge.address, '连接成功，请在游戏中输入下方地址')
+      this.stage('punch', 'ok', '直连游戏地址已就绪')
+    } catch {
+      socket.destroy()
+    } finally {
+      if (!operation.stop && this.tcp.get(id) === operation) {
+        this.tcp.delete(id)
+        controller.abort()
+        this.reconnect()
+      }
+    }
+  }
+
+  /**
+   * 上游 engine.ts 的 `runTcp`：**TCP 同时打开**那条路（UDP 打不通才轮到它）。
+   * 两边同时朝对方拨同一个端口，撞上了就成；数据搬运走 `bridgePunchedSocket`。
+   */
+  async runTcp(id, ip, port) {
+    if (this.tcp.has(id) || this.winner.has(id) || this._turn.hasPeer(id) || (!this.isHost && this.mode !== 'p2p')) return
+    const controller = new AbortController()
+    const operation = { controller }
+    this.tcp.set(id, operation)
+    const epoch = this.generation
+    try {
+      const socket = await tcpSimOpen(ip, port, this.isHost, controller.signal)
+      controller.signal.addEventListener('abort', () => socket.destroy(), { once: true })
+      if (epoch !== this.generation || this.tcp.get(id) !== operation || this.winner.has(id) || this._turn.hasPeer(id) || (!this.isHost && this.mode !== 'p2p')) { socket.destroy(); return }
+      const bridge = await bridgePunchedSocket(socket, this.isHost ? this.hostPort : null, () => {
+        if (this.tcp.get(id) !== operation) return
+        this.tcp.delete(id)
+        this.winner.delete(id)
+        controller.abort()
+        if (!this.isHost) { this.state('p2p', 'failed', '', 'TCP 游戏通路已关闭'); this.reconnect() }
+      })
+      if (epoch !== this.generation || this.tcp.get(id) !== operation || this.winner.has(id) || this._turn.hasPeer(id) || (!this.isHost && this.mode !== 'p2p')) { bridge.stop(); return }
+      operation.stop = bridge.stop
+      this.winner.set(id, 'tcp')
+      for (const [key, link] of this.links) if (link.peer === id) this.drop(key)
+      this.stage(this.isHost ? 'host_punch' : 'punch', 'ok', 'TCP 同时打开通路已建立')
+      if (!this.isHost) { this._turn.stop(); this.state('p2p', 'success', bridge.address, 'TCP 打洞已连接') }
+    } catch (error) {
+      if (!controller.signal.aborted && epoch === this.generation) this.deps.netLog('info', `TCP 辅助打洞未命中：${error.message}`)
+    } finally {
+      if (!operation.stop && this.tcp.get(id) === operation) {
+        this.tcp.delete(id)
+        controller.abort()
+        if (!this.isHost) this.reconnect()
+      }
+    }
+  }
+
+  /** 上游 engine.ts 的 `canRetry`：还能不能再试（房客、还在 p2p、房间还在） */
+  canRetry() { return this.mode === 'p2p' && !this.winner.has('host') && !!this.session }
 
   // ---------------------------------------------------------------- 重连编排
 
@@ -530,7 +650,14 @@ class ConnEngine extends EventEmitter {
       const strategy = selectStrategy(link.nat, remoteNat, policy.cycle, false)
       const target = endpoint(data, 'hostMapped')
       if (!target) throw new Error('房主网络地址尚未就绪')
-      // ConnectionManager.java: 第一波（Wave 1）里 TCP / IPv6 和 UDP 一起抢 —— **V4 的活**（runDirect 没搬）
+      this.tcpPeerIp = target.ip
+      // ConnectionManager.java: 第一波（Wave 1）里 **TCP / IPv6 和 UDP 一起抢**
+      const localIp = String(data.hostLocalIp ?? '')
+      const ipv6 = String(data.hostIpv6 ?? '')
+      // StunDetector.java: isSameLan 按 /24 判 —— 前三位一样就当同一个局域网
+      const sameLan = net.isIPv4(localIp) && Object.values(os.networkInterfaces()).flat().some((a) => a?.family === 'IPv4' && a.address.split('.').slice(0, 3).join('.') === localIp.split('.').slice(0, 3).join('.'))
+      if (sameLan || link.mapped.ip === target.ip) void this.runDirect(localIp, this.hostPort)
+      if (net.isIPv6(ipv6) && Object.values(os.networkInterfaces()).flat().some((a) => a?.family === 'IPv6' && !a.internal && !a.address.startsWith('fe80:'))) void this.runDirect(ipv6, this.hostPort)
       // ConnectionManager.java: Wave 1 按策略分派，反向那条路另开 socket
       const reverse = policy.params?.skipDirectPunch || strategy === 'REVERSE_ONLY' || strategy === 'REVERSE_THEN_FORWARD' ||
         strategy === 'PARALLEL_FROM_START' || (strategy === 'REVERSE_FIRST' && policy.cycle === 0) ||
@@ -553,7 +680,11 @@ class ConnEngine extends EventEmitter {
       } else {
         this.drop('host')
       }
-      // 上游这里还有 cycle>=1 时发 tcp_punch_info —— **V4 的活**（TCP 通路没搬）
+      // 第二轮开始，把"我这个 TCP 打洞端口"报给房主，两边好同时打开
+      if (policy.cycle >= 1) {
+        const port = await chooseTcpPunchPort()
+        if (this.mode === 'p2p' && !this.winner.has('host')) await this.sendSignal('tcp_punch_info', { tcpPunchIp: link.mapped.ip, tcpPunchPort: port }, 'host')
+      }
     } catch (error) {
       this.deps.netLog('warn', error.message)
       this.reconnect()
@@ -617,7 +748,15 @@ class ConnEngine extends EventEmitter {
       }
       if (type === 'peer_port') return // 观测到的对端地址只是诊断用，**永远不是**我们的目标
       if (this.isHost) {
-        if (type === 'tcp_punch_info') return // TCP 同时打开 —— V4 的活
+        if (type === 'tcp_punch_info') {
+          const target = endpoint(data, 'tcpPunch')
+          if (target && target.port >= 1024 && !this.tcp.has(from) && !this.links.get(from)?.rudp?.isConnected() && !this._turn.hasPeer(from)) {
+            const work = this.runTcp(from, target.ip, target.port)
+            // 先回一句"可以打了"再开打 —— 两边得**同时**朝对方拨，先后错开就撞不上
+            await this.sendSignal('tcp_punch_go', { tcpPunchPort: target.port }, from)
+            void work
+          }
+        }
         if (type === 'join_request') await this.hostOffer(from, data)
         if (type === 'punch_info' || type === 'reverse_holepunch_offer') {
           const reverse = type === 'reverse_holepunch_offer'
@@ -631,7 +770,7 @@ class ConnEngine extends EventEmitter {
         }
         if (type === 'relay_request') return // 玩家中继 —— V3 的活
       } else if (from === 'host') {
-        if (type === 'tcp_punch_go') return // TCP 同时打开 —— V4 的活
+        if (type === 'tcp_punch_go' && this.tcpPeerIp && this.lastConnection?.status !== 'success') void this.runTcp('host', this.tcpPeerIp, Number(data.tcpPunchPort))
         if (type === 'holepunch_offer') await this.guestOffer(data)
         if (type === 'holepunch_mapped' || type === 'reverse_punch_info') {
           const id = type === 'reverse_punch_info' ? 'host:reverse' : 'host'
@@ -670,8 +809,18 @@ class ConnEngine extends EventEmitter {
     void run().catch((error) => { if (this.session) this.deps.netLog('warn', error.message) })
   }
 
-  /** 上游是"这条信号我认不认"的守卫，V2c 里先照抄成"都认"（V4 接游戏时才有得挑） */
-  acceptSignal(_type, _from) { return true }
+  /**
+   * 上游的"这条信号我认不认"守卫（engine.ts:472-477）：只认服务器、房主，和**打过照面的**对端。
+   * 房主正是在收到 join_request 那一刻把对方记进 `knownPeers` 的 —— 所以在房间里乱发信号的
+   * 陌生人会被直接丢掉。**这道守卫别删**（V4 接了游戏以后，放进来的是真流量）。
+   */
+  acceptSignal(type, from) {
+    if (typeof from !== 'string' || !from || from.length > 128) return false
+    if (from === 'server' || from === 'host') return true
+    if (this.isHost && type === 'join_request') { this.knownPeers.add(from); return true }
+    if (!this.knownPeers.has(from)) this.deps.netLog('info', `丢掉一条不认识的对端发来的信号：${type}（来自 ${from.slice(0, 24)}）`)
+    return this.knownPeers.has(from)
+  }
 
   // ---------------------------------------------------------------- 收摊
 
@@ -689,6 +838,7 @@ class ConnEngine extends EventEmitter {
     this.winner.clear()
     this.turnChoices.clear()
     this.reconnectPending = false
+    this.tcpPeerIp = ''
     for (const id of [...this.tcp.keys()]) this._cancelTcp(id)
     this._turn.stop()
     for (const id of [...this.links.keys()]) this.drop(id)
