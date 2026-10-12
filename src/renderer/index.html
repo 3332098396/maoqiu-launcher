@@ -836,6 +836,11 @@
             </div>
             <div class="skin-head__actions">
               <button class="btn btn--ghost" type="button" id="skin-site">去皮肤站找皮肤</button>
+              <!-- M23：把挑好的皮肤真传上 Mojang。只有登了正版账号才出现
+                   （正版登录要等 Mojang 审批，见帮助页） -->
+              <button class="btn btn--ghost" type="button" id="skin-to-mojang" hidden>
+                传到正版账号…
+              </button>
               <button class="btn btn--primary" type="button" id="skin-upload">上传皮肤…</button>
             </div>
           </div>
@@ -846,7 +851,9 @@
           <div class="notice notice--skin notice--skin--wide" id="skin-notice-page">
             <b>这里的皮肤 ≠ 游戏里显示的皮肤</b>
             <span>
-              游戏里的皮肤问的是账号服务器，跟这儿挑的没关系；<b>离线账号</b>进游戏只会穿官方默认皮肤。想换皮肤：<b>登录账号</b>（皮肤站 / 正版）在网站上上传，或者<b>给这个版本装皮肤 Mod</b>。
+              游戏里的皮肤问的是账号服务器，跟这儿挑的没关系；<b>离线账号</b>进游戏只会穿官方默认皮肤。想换皮肤：<b>登录账号</b>（皮肤站 / 正版）在网站上上传，或者<b>给这个版本装皮肤 Mod</b>。<br />
+              登了<b>正版账号</b>的话，可以直接在列表里点一张的「传到正版」——传上去游戏里立刻生效
+              （正版登录还在等 Mojang 审批，批下来之前这个按钮不会出现）。
             </span>
           </div>
 
@@ -885,6 +892,15 @@
               </div>
             </section>
           </div>
+
+          <!-- 披风（M23）：只有正版账号有官方披风，没有就不显示这一栏 -->
+          <section class="panel panel--full" id="cape-panel" hidden>
+            <h3 class="panel__title">披风</h3>
+            <p class="panel__desc" id="cape-hint">
+              披风是官方账号才有的（买 Java 版送的、活动发的）。这儿能看有哪些、戴哪一条。
+            </p>
+            <div class="chips" id="cape-list"></div>
+          </section>
 
         </div>
       </section>

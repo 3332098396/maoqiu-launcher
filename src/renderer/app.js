@@ -6098,6 +6098,17 @@ async function renderSkinPage() {
       row.appendChild(use)
     }
 
+    // 「传到正版」（M23）：只有登了微软正版账号、而且是 64×64 的皮肤才给这个按钮
+    if (opts.canUpload) {
+      const up = document.createElement('button')
+      up.className = 'btn btn--ghost btn--sm'
+      up.type = 'button'
+      up.textContent = '传到正版'
+      up.title = '把这张真传到 Mojang 上，游戏里立刻生效'
+      up.addEventListener('click', () => opts.canUpload())
+      row.appendChild(up)
+    }
+
     if (opts.canRemove) {
       const del = document.createElement('button')
       del.className = 'skin-item__remove'
@@ -6110,6 +6121,11 @@ async function renderSkinPage() {
 
     skinListEl.appendChild(row)
   }
+
+  // 「传到正版账号」这一路（M23）：只有微软正版账号才有这个能力。
+  // 皮肤站的账号（外置登录）是在**它自己的网站**上传的，Mojang 不认，所以不给这个按钮。
+  const canUploadToMojang = account?.type === 'microsoft'
+  skinToMojangBtn.hidden = !canUploadToMojang
 
   // ① 账号上的（只有账号支持才列）
   if (remote) {
@@ -6132,6 +6148,7 @@ async function renderSkinPage() {
       image,
       on,
       canUse: on ? null : () => chooseSkin(one.path),
+      canUpload: canUploadToMojang ? () => uploadSkinToMojang(one) : null,
       // 毛球自带的那几张不给删——它们是"随机"的底子，删了随机就没得挑了
       canRemove: builtinSource(one) ? null : () => removeSkinFromLib(one)
     })
@@ -6154,6 +6171,9 @@ async function renderSkinPage() {
   skinRandomEl.checked = settingsInfo?.look?.randomSkin !== false
   skinShuffleEl.hidden = !randomActive()
 
+  // 披风（M23）：只有正版账号有官方披风，别的账号连这一栏都不显示
+  renderCapes(canUploadToMojang)
+
   // ——— 中间那行名字/来源：就说身上穿的那张 ———
   if (showing.kind === 'default') {
     skinBigFromEl.textContent = defaultFrom
@@ -6164,6 +6184,157 @@ async function renderSkinPage() {
   } else {
     skinBigFromEl.textContent = skinSourceLabel(showing.path)
   }
+}
+
+// ——————————————————————————————————————————————
+// 传到正版账号 / 披风（M23）
+// ——————————————————————————————————————————————
+//
+// 【现在能不能用】不能，卡在 Mojang 审批上（见 docs/09）。
+// 没有正版令牌就调不动 Mojang 那两个接口，所以这儿把话说清楚，
+// 别让用户点了半天以为是软件坏了。
+
+const skinToMojangBtn = document.getElementById('skin-to-mojang')
+const capePanelEl = document.getElementById('cape-panel')
+const capeListEl = document.getElementById('cape-list')
+const capeHintEl = document.getElementById('cape-hint')
+
+/**
+ * 顶上那个「传到正版账号…」：传"现在身上穿的这张"。
+ * 【为什么要先问一句是哪张】用户点这个按钮时想的可能是"我正在看的那张"，
+ * 而身上穿的可能是随机的、也可能是账号上的。说不清是哪张就让他去列表里点，
+ * 列表里每一行都有明确的「传到正版」。
+ */
+skinToMojangBtn.addEventListener('click', async () => {
+  const current = currentSkinChoice()
+  if (!current || current === 'default' || current === 'account') {
+    await askLocalConfirm({
+      title: '先在右边挑一张',
+      what: '现在身上穿的这张不是皮肤库里的（可能是官方的默认皮肤，或者账号上本来就有的）。',
+      safe: '在右边列表里点一张你自己的，再点那一行的「传到正版」。',
+      okLabel: '知道了',
+      danger: false
+    })
+    return
+  }
+
+  const found = (skinLibCache || []).find((one) => samePath(one.path, current))
+  if (!found) {
+    await askLocalConfirm({
+      title: '找不到这张图',
+      what: '它可能已经不在皮肤库里了。',
+      okLabel: '知道了',
+      danger: false
+    })
+    return
+  }
+
+  await uploadSkinToMojang(found)
+})
+
+/** 把一张皮肤真传上 Mojang */
+async function uploadSkinToMojang(one) {
+  const ok = await askLocalConfirm({
+    title: `把「${one.name}」传到你的正版账号上？`,
+    what: '传上去之后，游戏里**立刻**就是这张脸（不用重启，也不用等）。',
+    safe: '官方的皮肤会保留一份历史，换回来也容易。',
+    warn: 'Mojang 只收 64×64 的 PNG，而且换了之后别人在多人游戏里也能看到。',
+    okLabel: '传上去',
+    danger: false
+  })
+  if (!ok) return
+
+  let result
+  try {
+    result = await window.api.skinToMojang({ path: one.path })
+  } catch (error) {
+    result = { ok: false, error: error.message }
+  }
+
+  if (!result.ok) {
+    await askLocalConfirm({
+      title: '没传上去',
+      what: result.error,
+      safe: '皮肤还在你自己的库里，什么都没动。',
+      okLabel: '知道了',
+      danger: false
+    })
+    return
+  }
+
+  await askLocalConfirm({
+    title: '传好了',
+    what: '进游戏看看——应该已经是这张脸了（如果网络慢，最多等一两分钟）。',
+    okLabel: '好',
+    danger: false
+  })
+
+  // 账号上的皮肤变了，把 3D 小人和账号卡重新读一遍
+  skinLibCache = null
+  await renderSkinPage()
+}
+
+/** 披风那一栏 */
+async function renderCapes(isMicrosoft) {
+  if (!isMicrosoft) {
+    capePanelEl.hidden = true
+    return
+  }
+
+  capePanelEl.hidden = false
+  capeListEl.textContent = ''
+
+  let result
+  try {
+    result = await window.api.listCapes()
+  } catch (error) {
+    result = { ok: false, error: error.message }
+  }
+
+  if (!result.ok) {
+    capeHintEl.textContent = `读不出来：${result.error}`
+    return
+  }
+
+  const capes = result.capes || []
+  if (capes.length === 0) {
+    capeHintEl.textContent =
+      '这个账号名下没有披风。披风是买 Java 版、参加官方活动（比如 MineCon）才会发的，自己去不了哪儿领。'
+    return
+  }
+
+  capeHintEl.textContent = '点一条穿上，点正在戴的那条摘下来。'
+  const wearing = capes.find((one) => one.active)
+
+  for (const one of capes) {
+    const chip = document.createElement('button')
+    chip.type = 'button'
+    chip.className = one.active ? 'chip chip--on' : 'chip'
+    chip.textContent = one.name
+    chip.addEventListener('click', async () => {
+      const answer = await window.api.setCape(one.active ? '' : one.id)
+      if (!answer.ok) {
+        capeHintEl.textContent = answer.error
+        return
+      }
+      await renderCapes(true)
+    })
+    capeListEl.appendChild(chip)
+  }
+
+  const off = document.createElement('button')
+  off.type = 'button'
+  off.className = wearing ? 'chip' : 'chip chip--on'
+  off.textContent = '不戴披风'
+  off.addEventListener('click', async () => {
+    const answer = await window.api.setCape('')
+    if (!answer.ok) {
+      capeHintEl.textContent = answer.error
+      return
+    }
+    await renderCapes(true)
+  })
+  capeListEl.appendChild(off)
 }
 
 /** 读皮肤库（读不到就当空的，不拦着用户） */

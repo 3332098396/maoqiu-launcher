@@ -135,7 +135,10 @@ function post(url, payload, options = {}) {
     signal,
     headers = {},
     contentType = 'application/json; charset=utf-8',
-    body
+    body,
+    // 【为什么要能换方法】微软那套接口里有 PUT（换披风）和 DELETE（取消披风），
+    // 逻辑和 POST 一模一样，只有动词不同——没必要为它们各写一遍
+    method = 'POST'
   } = options
 
   return new Promise((resolve, reject) => {
@@ -153,7 +156,7 @@ function post(url, payload, options = {}) {
     const req = client.request(
       parsed,
       {
-        method: 'POST',
+        method,
         headers: {
           'User-Agent': USER_AGENT,
           Accept: 'application/json',
@@ -242,6 +245,16 @@ function postForm(url, fields, options = {}) {
   })
 }
 
+/** PUT 一个 JSON（微软那套接口里换披风用的是 PUT） */
+function putJson(url, payload, options = {}) {
+  return post(url, payload, { ...options, method: 'PUT' })
+}
+
+/** DELETE（取消披风用的是它）。微软这个接口不要请求体 */
+function del(url, options = {}) {
+  return post(url, null, { ...options, method: 'DELETE', body: Buffer.alloc(0) })
+}
+
 /** 下载一个地址，当作 UTF-8 文本返回 */
 async function fetchText(url, options) {
   return (await fetchBuffer(url, options)).toString('utf8')
@@ -257,4 +270,4 @@ async function fetchJson(url, options) {
   }
 }
 
-module.exports = { openStream, fetchBuffer, fetchText, fetchJson, post, postJson, postForm, HttpError, USER_AGENT }
+module.exports = { openStream, fetchBuffer, fetchText, fetchJson, post, postJson, postForm, putJson, del, HttpError, USER_AGENT }

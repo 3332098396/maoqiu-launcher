@@ -24,7 +24,7 @@
 
 const crypto = require('node:crypto')
 const { BrowserWindow } = require('electron')
-const { postJson, postForm, fetchJson, HttpError } = require('./http')
+const { post, postJson, postForm, putJson, del, fetchJson, HttpError } = require('./http')
 
 /**
  * 微软登录的"入口"有两个，**必须和应用的配置对上**，对不上会被当场拒。
@@ -483,10 +483,148 @@ async function skinUrl(account) {
   return active?.url || ''
 }
 
+// ——————————————————————————————————————————————
+// 换皮肤 / 换披风（M23）
+// ——————————————————————————————————————————————
+//
+// 【这一段现在能不能用】**暂时不能，卡在 Mojang 审批上**（见 docs/09）。
+// 正版登录本身要 Mojang 人工批准了才拿得到令牌，拿不到令牌就调不了下面这几个接口。
+// 代码是按官方接口文档写好的，批下来就能用；在那之前界面上会明说用不了。
+//
+// 【为什么不内置一个 client ID 把它"跑起来"】那是拿别人的应用身份冒充用户，
+// 等于把账号密码印在传单上发——红线，不碰。
+
+/** 换皮肤用的接口 */
+const MC_SKIN_URL = 'https://api.minecraftservices.com/minecraft/profile/skins'
+/** 换披风用的接口 */
+const MC_CAPE_URL = 'https://api.minecraftservices.com/minecraft/profile/capes/active'
+
+/**
+ * 拼一个 multipart/form-data 的请求体。
+ * 【为什么自己拼】Node 没有现成的 FormData（要 18 以上才有，而且我们还要兼容
+ * 打包后的环境），而这个格式本身很简单：一段一段用分隔线隔开就行。
+ */
+function buildMultipart(parts, boundary) {
+  const chunks = []
+  for (const part of parts) {
+    const head = [`--${boundary}`, `Content-Disposition: form-data; name="${part.name}"`]
+    if (part.filename) head[1] += `; filename="${part.filename}"`
+    head.push(`Content-Type: ${part.contentType || 'text/plain'}`)
+    chunks.push(Buffer.from(`${head.join('\r\n')}\r\n\r\n`, 'utf8'))
+    chunks.push(Buffer.isBuffer(part.data) ? part.data : Buffer.from(String(part.data), 'utf8'))
+    chunks.push(Buffer.from('\r\n', 'utf8'))
+  }
+  chunks.push(Buffer.from(`--${boundary}--\r\n`, 'utf8'))
+  return Buffer.concat(chunks)
+}
+
+/**
+ * 把一张皮肤真的传上 Mojang。
+ *
+ * @param {object} account 正版账号（要有 mcAccessToken）
+ * @param {Buffer} png 64×64 的 PNG
+ * @param {'classic'|'slim'} variant 体型：经典 / 纤细
+ */
+async function uploadSkin(account, png, variant = 'classic') {
+  if (!account?.mcAccessToken) {
+    return { ok: false, error: '得先用正版账号登录才能换皮肤' }
+  }
+
+  const boundary = `----maoqiu${Date.now().toString(16)}`
+  const body = buildMultipart(
+    [
+      { name: 'variant', data: variant === 'slim' ? 'slim' : 'classic' },
+      { name: 'file', filename: 'skin.png', contentType: 'image/png', data: png }
+    ],
+    boundary
+  )
+
+  try {
+    await post(MC_SKIN_URL, null, {
+      body,
+      contentType: `multipart/form-data; boundary=${boundary}`,
+      headers: { Authorization: `Bearer ${account.mcAccessToken}` },
+      timeout: 30000
+    })
+    return { ok: true, variant: variant === 'slim' ? 'slim' : 'classic' }
+  } catch (error) {
+    return { ok: false, error: skinUploadErrorText(error) }
+  }
+}
+
+/** 把换皮肤失败的响应翻成人话 */
+function skinUploadErrorText(error) {
+  if (error instanceof HttpError) {
+    if (error.statusCode === 401 || error.statusCode === 403) {
+      return '登录状态过期了，重新登录一次再试'
+    }
+    if (error.statusCode === 400) {
+      return 'Mojang 说这张图不合规（皮肤要 64×64 的 PNG，而且不能是违规内容）'
+    }
+    if (error.statusCode === 429) {
+      return '换皮肤换得太勤了，等一会儿再试（官方有限制）'
+    }
+    return `Mojang 那边返回 ${error.statusCode}${error.text ? `：${String(error.text).slice(0, 120)}` : ''}`
+  }
+  return `传不上去：${error.message}`
+}
+
+/** 这个正版账号现在有哪些披风、正在戴哪一条 */
+async function listCapes(account) {
+  if (!account?.mcAccessToken) return { ok: false, error: '得先用正版账号登录才能看披风' }
+
+  try {
+    const data = await fetchJson(MC_PROFILE_URL, {
+      timeout: 15000,
+      headers: { Authorization: `Bearer ${account.mcAccessToken}` }
+    })
+
+    const capes = (data.capes || []).map((one) => ({
+      id: one.id,
+      // 官方的披风名是英文（Migrator / MineCon 2011…），照原样显示，不硬翻
+      name: one.alias || one.id,
+      url: one.url || '',
+      active: one.state === 'ACTIVE'
+    }))
+
+    return { ok: true, capes }
+  } catch (error) {
+    return { ok: false, error: `披风列表读不出来：${error.message}` }
+  }
+}
+
+/** 戴上一件披风；capeId 传空就是摘下来 */
+async function setCape(account, capeId) {
+  if (!account?.mcAccessToken) return { ok: false, error: '得先用正版账号登录才能换披风' }
+
+  try {
+    if (capeId) {
+      await putJson(MC_CAPE_URL, { capeId }, {
+        headers: { Authorization: `Bearer ${account.mcAccessToken}` },
+        timeout: 20000
+      })
+    } else {
+      await del(MC_CAPE_URL, {
+        headers: { Authorization: `Bearer ${account.mcAccessToken}` },
+        timeout: 20000
+      })
+    }
+    return { ok: true }
+  } catch (error) {
+    if (error instanceof HttpError && (error.statusCode === 401 || error.statusCode === 403)) {
+      return { ok: false, error: '登录状态过期了，重新登录一次再试' }
+    }
+    return { ok: false, error: `换不了披风：${error.message}` }
+  }
+}
+
 module.exports = {
   REDIRECT_URI,
   login,
   refresh,
   skinUrl,
-  dashedUuid
+  dashedUuid,
+  uploadSkin,
+  listCapes,
+  setCape
 }

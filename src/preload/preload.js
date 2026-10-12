@@ -522,6 +522,17 @@ contextBridge.exposeInMainWorld('api', {
   /** 官方的默认皮肤 Steve（从玩家自己的游戏文件里读出来的） */
   getOfficialSkin: (kind) => ipcRenderer.invoke('skin:official', kind),
 
+  // ——— 传到正版账号 / 披风（M23，等 Mojang 审批下来才用得上）———
+
+  /** 把皮肤库里的一张真传到 Mojang 上（游戏里立刻生效） */
+  skinToMojang: (options) => ipcRenderer.invoke('skin:toMojang', options),
+
+  /** 这个正版账号有哪些官方披风 */
+  listCapes: () => ipcRenderer.invoke('skin:capes'),
+
+  /** 戴 / 摘披风（capeId 传空就是摘下来） */
+  setCape: (capeId) => ipcRenderer.invoke('skin:setCape', capeId),
+
   /** 帮助页的一键打开：'game' 游戏目录 / 'config' 配置目录 */
   openAppFolder: (which) => ipcRenderer.invoke('app:openFolder', which),
 

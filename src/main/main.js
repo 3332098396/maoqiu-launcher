@@ -1415,6 +1415,68 @@ function registerIpcHandlers() {
     }
   })
 
+  // ——————————————————————————————————————————————
+  // 换到正版账号上 / 披风（M23）
+  // ——————————————————————————————————————————————
+  //
+  // 【现在能不能用】不能，卡在 Mojang 审批上（见 docs/09）。
+  // 没有正版令牌就调不动这两个接口，界面上会明说。
+
+  /** 把皮肤库里的一张**真传上 Mojang**（正版账号换皮肤，游戏里立刻生效） */
+  ipcMain.handle('skin:toMojang', async (_event, options) => {
+    try {
+      const account = accounts.getAccount()
+      if (account?.type !== 'microsoft') {
+        return { ok: false, error: '得先登录微软正版账号才能传到 Mojang 上' }
+      }
+
+      const target = String(options?.path || '')
+      if (!target || !fs.existsSync(target)) {
+        return { ok: false, error: '找不到这张皮肤文件' }
+      }
+
+      const buffer = fs.readFileSync(target)
+      const size = skins.readPngSize(buffer)
+      if (!size.ok) return size
+      // Mojang 只认 64×64（64×32 的老式皮肤传上去会被拒）
+      if (size.width !== 64 || size.height !== 64) {
+        return {
+          ok: false,
+          error: `Mojang 只收 64×64 的皮肤，这张是 ${size.width}×${size.height}`
+        }
+      }
+
+      const result = await microsoft.uploadSkin(account, buffer, options?.variant)
+      return result
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 这个正版账号有哪些披风 */
+  ipcMain.handle('skin:capes', async () => {
+    try {
+      const account = accounts.getAccount()
+      if (account?.type !== 'microsoft') return { ok: true, capes: [], notMicrosoft: true }
+      return await microsoft.listCapes(account)
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 戴/摘披风 */
+  ipcMain.handle('skin:setCape', async (_event, capeId) => {
+    try {
+      const account = accounts.getAccount()
+      if (account?.type !== 'microsoft') {
+        return { ok: false, error: '得先登录微软正版账号' }
+      }
+      return await microsoft.setCape(account, String(capeId || ''))
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
   /**
    * 打开皮肤站（用户可以去那儿找喜欢的皮肤，下下来再用「上传皮肤…」装进来）。
    * 【地址写死在主进程】界面只能"请求打开皮肤站"，不能自己指定网址——

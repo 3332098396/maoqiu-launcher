@@ -106,6 +106,7 @@ async function fetchFor(account) {
 
 const fs = require('node:fs')
 const path = require('node:path')
+const crypto = require('node:crypto')
 const paths = require('./paths')
 
 /** 皮肤库的文件夹 */
@@ -130,6 +131,24 @@ function readPngSize(buffer) {
   const width = buffer.readUInt32BE(16)
   const height = buffer.readUInt32BE(20)
   return { ok: true, width, height }
+}
+
+/**
+ * 皮肤库里最多放几张**用户自己传的**（M23，照 KAMUCL 的上限 30）。
+ * 【注意是"用户自己传的"】随软件打包的那几张（M21）不算在里面，
+ * 不然用户一进来就少了 6 个名额，他也不知道为什么。
+ */
+const SKIN_LIBRARY_LIMIT = 30
+
+/** 随包发的那几张叫什么（用来把它们和用户自己传的区分开） */
+function bundledNames() {
+  return new Set(bundledList().map((one) => safeFileName(one.name).toLowerCase()))
+}
+
+/** 只列"用户自己传的"（供上限判断用） */
+function listUserSkins() {
+  const bundled = bundledNames()
+  return listLocal().filter((one) => !bundled.has(String(one.name).toLowerCase()))
 }
 
 /** 把文件名里 Windows 不认的字符换掉（用户挑的文件名什么都可能有） */
@@ -190,6 +209,38 @@ function importFile(sourcePath) {
 
   const dir = skinsDir()
   paths.ensureDir(dir)
+
+  // ——— 同一张图不重复收（M23，照 KAMUCL 的"按内容去重"）———
+  //
+  // 【为什么按内容而不是按文件名】用户从同一个网址下两次皮肤，
+  // 文件名可能都是 `skin.png`，内容是同一张——按名字去重会漏，
+  // 按内容（sha1）去重才是"这张我已经有了"的准确含义。
+  const hash = crypto.createHash('sha1').update(buffer).digest('hex')
+  for (const one of listLocal()) {
+    try {
+      const same = crypto.createHash('sha1').update(fs.readFileSync(one.path)).digest('hex')
+      if (same === hash) {
+        return { ok: true, path: one.path, name: one.name, duplicate: true }
+      }
+    } catch {
+      // 读不到就跳过，继续比下一张
+    }
+  }
+
+  // ——— 皮肤库有上限（M23）———
+  //
+  // 【为什么不直接删最老的】红线：删用户文件必须二次确认。
+  // 这些虽然是我们复制进来的，但对用户来说就是"我传过的皮肤"。
+  // 所以到上限时**说清楚、不偷偷删**——他自己去列表里点「移除」。
+  const userSkins = listUserSkins()
+  if (userSkins.length >= SKIN_LIBRARY_LIMIT) {
+    return {
+      ok: false,
+      error:
+        `皮肤库已经放满 ${SKIN_LIBRARY_LIMIT} 张了。` +
+        '到右边那个列表里「移除」几张不需要的，再传新的（不会自动帮你删）。'
+    }
+  }
 
   // 重名就往后加数字：别覆盖用户之前传的那张
   const base = safeFileName(path.basename(sourcePath))
@@ -439,5 +490,7 @@ module.exports = {
   seedBundled,
   bundledList,
   readPngSize,
+  listUserSkins,
+  SKIN_LIBRARY_LIMIT,
   officialDefault
 }
