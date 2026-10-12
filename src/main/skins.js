@@ -541,8 +541,23 @@ function officialDefault(dir, kind = 'steve') {
   }
 }
 
+/**
+ * 拿官方默认皮肤的**原始字节**（不是 dataUrl）。
+ * 【给谁用】离线皮肤进游戏（M25）：那个 Java 小代理要的是 PNG 字节，
+ * 而官方那两张不是硬盘上的文件，得从游戏资产 / jar 里现读。
+ * @returns {{buffer: Buffer, from: string}|null}
+ */
+function officialSkinBuffer(dir, kind = 'steve') {
+  try {
+    return readFromAssets(dir, kind) || readFromJars(dir, kind)
+  } catch {
+    return null
+  }
+}
+
 module.exports = {
   hasRemoteSkin,
+  officialSkinBuffer,
   fetchFor,
   skinsDir,
   listLocal,

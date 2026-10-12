@@ -2988,6 +2988,20 @@ button.acc__tab:hover {
   margin-top: 10px;
 }
 
+/* 「胳膊粗细」那一排（M25）：一行标签 + 两个小按钮 */
+.skin-variant {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.skin-variant__label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
 .skin-list__tip .linkbtn {
   font-size: inherit;
 }

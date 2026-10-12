@@ -30,6 +30,7 @@ const install = require('./install')
 const downloader = require('./downloader')
 const inherit = require('./inherit')
 const authlibUtil = require('./authlib')
+const offlineSkinUtil = require('./offlineSkin')
 const microsoft = require('./microsoft')
 
 const LAUNCHER_NAME = '毛球'
@@ -1040,8 +1041,32 @@ async function launch(versionId, options = {}) {
   // ——— ⑧ natives 目录 ———
   prepareNatives(versionId, fullJson, dir)
 
+  // ——— ⑧.5 离线皮肤：让离线账号进游戏也穿自己挑的那张（M25） ———
+  //
+  // 【为什么放在这么靠后】它会占一个本机端口、往磁盘写一份临时配置。
+  // 前面几步（补文件、查 Java）都有"到此为止、下次再来"的提前返回，
+  // 放在前面的话那些情况下这份临时东西就白准备了、还得逐个去收拾。
+  //
+  // 【失败不拦着启动】皮肤挂不上顶多是小人还是默认那张，游戏照常能玩——
+  // 跟上面外置登录"配不上就别启动"正好相反，别照抄那段的写法。
+  let offlineSkin = null
+  let skinArgs = []
+  if (account.type === 'offline') {
+    try {
+      offlineSkin = await offlineSkinUtil.prepare(account, runDir, (text) => say(text))
+      if (offlineSkin) {
+        skinArgs = offlineSkin.args
+        say('[启动器] 离线皮肤组件就绪（只会在你自己这台电脑的游戏里显示）')
+      }
+    } catch (error) {
+      offlineSkin = null
+      say(`[启动器] 离线皮肤没准备好（${error.message}），这次先不穿皮肤`)
+    }
+  }
+
   // ——— ⑨ 起进程 ———
-  const args = [...command.jvmArgs, fullJson.mainClass, ...command.gameArgs]
+  // skinArgs 全是 `-javaagent:` / `-D`，必须排在主类**前面**才生效
+  const args = [...command.jvmArgs, ...skinArgs, fullJson.mainClass, ...command.gameArgs]
 
   paths.ensureDir(paths.logsDir())
   // 【不能用 toISOString()】那是**世界时**，比北京时间早 8 小时：上午 9 点起的日志
@@ -1126,8 +1151,14 @@ async function launch(versionId, options = {}) {
   } catch (error) {
     log.line(`[启动器] 启动失败：${error.message}`)
     log.finish()
+    if (offlineSkin) await offlineSkin.dispose().catch(() => {})
     return { ok: false, error: `游戏没能启动：${error.message}` }
   }
+
+  // 【这一步必须紧跟着 spawn 做】上面占的那个端口只是"挑一个没人用的号"，
+  // 真正用它的是游戏进程里的那个小代理。不赶紧让出来的话，代理绑不上端口、
+  // premain 抛异常 —— 那会让**整个游戏起不来**（比没皮肤严重得多）。
+  if (offlineSkin) offlineSkin.releasePort().catch(() => {})
 
   current = { child, versionId, startedAt: Date.now(), logFile }
 
@@ -1145,6 +1176,7 @@ async function launch(versionId, options = {}) {
     current = null
     log.line(`[启动器] 进程起不来：${error.message}`)
     log.finish()
+    if (offlineSkin) offlineSkin.dispose().catch(() => {})
     state({ state: 'error', error: `游戏进程起不来：${error.message}`, logFile })
   })
 
@@ -1152,6 +1184,8 @@ async function launch(versionId, options = {}) {
     if (settled) return
     settled = true
     current = null
+    // 游戏退了，这次启动那份临时配置就没用了（正常情况下代理自己会删，这里兜个底）
+    if (offlineSkin) offlineSkin.dispose().catch(() => {})
 
     log.line(`[启动器] 游戏进程结束（退出码 ${code}${signal ? `，信号 ${signal}` : ''}）`)
 

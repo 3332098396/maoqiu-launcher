@@ -26,6 +26,7 @@ const accounts = require('./accounts')
 const yggdrasil = require('./yggdrasil')
 const microsoft = require('./microsoft')
 const skins = require('./skins')
+const offlineSkin = require('./offlineSkin')
 const javaUtil = require('./java')
 const launch = require('./launch')
 const diagnose = require('./diagnose')
@@ -1076,6 +1077,13 @@ function registerIpcHandlers() {
       if (typeof look.builtinsSeeded === 'boolean') {
         lookPatch.builtinsSeeded = look.builtinsSeeded
       }
+      // 离线皮肤进游戏（M25）：开关 + 粗/细胳膊
+      if (typeof look.offlineSkinInGame === 'boolean') {
+        lookPatch.offlineSkinInGame = look.offlineSkinInGame
+      }
+      if (look.skinVariant === 'slim' || look.skinVariant === 'classic') {
+        lookPatch.skinVariant = look.skinVariant
+      }
       if (look.bgmVolume !== undefined) {
         lookPatch.bgmVolume = Math.min(100, Math.max(0, Math.round(Number(look.bgmVolume) || 0)))
       }
@@ -1498,6 +1506,15 @@ function registerIpcHandlers() {
       return { ok: false, error: String(error?.message ?? error) }
     }
   })
+
+  /**
+   * 界面告诉主进程"现在预览里穿的是哪张"（M25）。
+   *
+   * 【为什么非要有这条】"没登录时每次开软件随机穿一张"（M21）是**界面现挑的**，
+   * 配置里没有。主进程启动游戏时得知道同一张，不然会出现"预览里是 A、游戏里是 B"。
+   * 只放内存里，不落盘。
+   */
+  ipcMain.handle('skin:reportCurrent', (_event, choice) => offlineSkin.report(choice))
 
   /** 在文件管理器里打开皮肤库（用户想自己往里丢图也行） */
   ipcMain.handle('skin:openFolder', async () => {

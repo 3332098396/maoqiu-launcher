@@ -1,7 +1,10 @@
 # 第三方组件与许可 / Third-party notices
 
-毛球（Maoqiu）**不包含任何 Minecraft 游戏文件**，也**不包含**下面这些组件的二进制文件——
-它们是启动器在运行时从各项目的官方发布地址下载、校验哈希之后才使用的。
+毛球（Maoqiu）**不包含任何 Minecraft 游戏文件**。
+
+下面第一节列的组件**都不随安装包分发**——启动器在运行时从各项目的官方发布地址下载、
+校验哈希之后才使用。**唯一的例外**是第三节那个「离线皮肤小代理」：它是从 GPL 源码
+编译出来、随安装包一起发的（GPL 要求同时提供源码，源码就在本仓库里）。
 原作者的版权与许可权利归各作者所有。
 
 ---
@@ -49,17 +52,41 @@
 > （*upstream code whose historical permission remains unresolved*）。
 > 毛球沿用同样的处理办法——按 LGPL-3.0-only 提供、在此逐一点名，不作超出此范围的主张。
 
-## 三、开发时使用（不进入安装包）
+## 三、离线皮肤小代理（GPL-3.0-or-later，随安装包分发）
+
+「离线账号进游戏也穿自己挑的那张皮肤」（M25）用到的 Java 小代理
+`assets/offline-skin/maoqiu-offline-skin.jar` **随安装包一起发**。
+
+- **来源**：`offline-skin-agent/src/cn/kamucl/skin/OfflineSkinAgent.java` ——
+  [KAMUCL](https://github.com/kamubaba-i/KAMUCL) 的原创组件，
+  **GPL-3.0-or-later**（上游 `THIRD_PARTY_NOTICES.md` 里写明）。
+- **源码**：完整 Java 源码随本仓库提供，在
+  [`build/offline-skin-agent/`](build/offline-skin-agent/)；许可证全文见
+  [`build/offline-skin-agent/licenses/GPL-3.0.txt`](build/offline-skin-agent/licenses/GPL-3.0.txt)。
+- **对本文件的改动**：**没有**。源码与原版逐字节一致，毛球只自己编译它
+  （`npm run skin-agent`）。编译产物不含任何 Minecraft 代码。
+- **它做什么**：在被启动的那个游戏进程里开一个只监听 `127.0.0.1` 的小服务，
+  把用户选的那张皮肤（只在本机）当成一个皮肤站的皮肤发给游戏。
+  它**不代管任何联网服务器的登录**（join 一律回 403），也就是穿上皮肤不代表能进正版服务器。
+
+配套的启动器侧接线代码
+[`src/main/offlineSkin.js`](src/main/offlineSkin.js) 移植自 KAMUCL 的
+`src/main/core/offlineSkinLaunch.ts`（KAMUCL 原创部分为 **MIT**，
+Copyright (c) KAMUCL contributors，按 MIT 条款使用并在此致谢）。
+
+## 四、开发时使用（不进入安装包）
 
 - Electron（MIT）、three.js（MIT）等，完整列表见 [`package.json`](package.json) 的 `devDependencies`
 - `minizip-asm.js` / `archiver` / `archiver-zip-encrypted` —— **仅用于开发时生成加密压缩包的测试样本**，不进入安装包
+- **编译那个 Java 小代理要一份 JDK**（`javac`），只在开发/打包时用，**不随安装包分发**
+  （最终用户不需要装 Java —— 游戏本身就跑在 Java 上）
 
-## 四、使用的服务
+## 五、使用的服务
 
 - [Modrinth](https://modrinth.com) 公开 API —— 搜索并下载 Mod / 资源包 / 光影 / 整合包 / 数据包
 - Mojang 官方源与 BMCLAPI 镜像 —— 下载游戏本体文件
 
-## 五、你的数据
+## 六、你的数据
 
 账号名、设置、皮肤、备份等**全部保存在你自己的电脑上**（`%APPDATA%\毛球\`），**不上传**。
 AI 报错助手用的 API Key 只存在本机，**绝不打包进安装包，也不随任何请求发给第三方**。

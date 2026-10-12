@@ -32,3 +32,6 @@ CLAUDE.md
 # 误建出来的乱码垃圾目录（不公开）
 **
 //
+
+# 离线皮肤小代理的编译中间产物（最终那个 jar 在 assets/offline-skin/ 里，要入库）
+build/offline-skin-agent/build/

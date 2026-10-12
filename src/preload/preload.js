@@ -525,6 +525,13 @@ contextBridge.exposeInMainWorld('api', {
   /** 皮肤编辑器画完存进皮肤库（重名会自动换个编号，不会默默不存） */
   saveEditedSkin: (name, dataUrl) => ipcRenderer.invoke('skin:saveEdited', name, dataUrl),
 
+  /**
+   * 告诉主进程"现在预览里穿的是哪张"（M25，离线皮肤进游戏要用）。
+   * 传 `{ path }`（皮肤库里的文件）或 `{ official: 'steve' | 'alex' }`；
+   * 传 null 表示"没有确定的"。
+   */
+  reportCurrentSkin: (choice) => ipcRenderer.invoke('skin:reportCurrent', choice),
+
   // ——— 传到正版账号 / 披风（M23，等 Mojang 审批下来才用得上）———
 
   /** 把皮肤库里的一张真传到 Mojang 上（游戏里立刻生效） */

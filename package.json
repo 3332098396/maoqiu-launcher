@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node scripts/start.js",
     "icons": "node scripts/make-icons.js",
+    "skin-agent": "node scripts/build-offline-skin.js",
     "dist": "node scripts/build.js"
   },
   "devDependencies": {
@@ -27,6 +28,9 @@
     "files": [
       "src/**/*",
       "assets/**/*"
+    ],
+    "asarUnpack": [
+      "assets/offline-skin/*"
     ],
     "win": {
       "target": [

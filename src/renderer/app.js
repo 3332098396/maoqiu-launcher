@@ -5552,6 +5552,22 @@ async function refreshSkinAfterAccountChange() {
  * @returns {Promise<'account'|'file'|'random'|'default'>} **最后穿上的到底是哪一路**。
  *   （2026-10-13 为"登录后皮肤不换"加：调用方要按这个决定"下次还试不试"）
  */
+/**
+ * 告诉主进程"现在预览里穿的是哪张"（M25）。
+ *
+ * 【为什么非要报一声】"没登录时每次开软件随机穿一张"（M21）是**在这儿现挑的**，
+ * 配置里根本没存。而启动游戏是主进程干的活——不报的话会出现
+ * "预览里是这张、游戏里是另一张"。
+ * 报失败也无所谓（顶多游戏里还是默认皮肤），所以不弹错。
+ */
+function reportCurrentSkin(choice) {
+  try {
+    window.api.reportCurrentSkin(choice).catch(() => {})
+  } catch {
+    // 老版本 preload 没有这个方法，忽略
+  }
+}
+
 async function applyCurrentSkin() {
   const look = settingsInfo?.look || {}
   const account = launchInfo?.account
@@ -5570,6 +5586,8 @@ async function applyCurrentSkin() {
         const from =
           result.source === 'microsoft' ? '正版账号上的皮肤' : '皮肤站账号上的皮肤'
         skinBigFromEl.textContent = `来自：${from}`
+        // 账号上的皮肤是服务器发的，跟"离线皮肤进游戏"没关系
+        reportCurrentSkin(null)
         return 'account'
       }
     }
@@ -5585,6 +5603,7 @@ async function applyCurrentSkin() {
     if (image) {
       applySkin(image)
       skinBigFromEl.textContent = '来自：官方默认皮肤'
+      reportCurrentSkin({ official: saved.slice(1) })
       return 'file'
     }
   }
@@ -5595,6 +5614,7 @@ async function applyCurrentSkin() {
       // 说清楚是"毛球自带"还是"我上传的"（见 skinSourceLabel 的注释）
       if (!skinLibCache) skinLibCache = await loadSkinLib()
       skinBigFromEl.textContent = skinSourceLabel(saved)
+      reportCurrentSkin({ path: saved })
       return 'file'
     }
   }
@@ -5605,6 +5625,8 @@ async function applyCurrentSkin() {
     if (picked) {
       applySkin(picked.image)
       skinBigFromEl.textContent = `来自：随机（${picked.from}）`
+      // 随机到官方那两张时它们不是硬盘上的文件，得报记号（跟存配置的写法一样）
+      reportCurrentSkin(picked.path ? { path: picked.path } : { official: picked.official })
       return 'random'
     }
   }
@@ -5614,12 +5636,14 @@ async function applyCurrentSkin() {
   if (official) {
     applySkin(official)
     skinBigFromEl.textContent = '来自：官方默认皮肤'
+    reportCurrentSkin({ official: 'steve' })
     return 'default'
   }
 
   // ⑤ 实在没有（游戏还没装 / jar 读不出来）→ 用毛球自己画的那张顶着
   useDefaultSkinAndAvatar()
   skinBigFromEl.textContent = '来自：毛球自带的默认皮肤'
+  reportCurrentSkin(null)
   return 'default'
 }
 
@@ -5995,6 +6019,7 @@ async function renderSkinPage() {
   // 那个开关和"换一张"按钮：只有"随机"在生效的时候才有意义
   skinRandomEl.checked = settingsInfo?.look?.randomSkin !== false
   skinShuffleEl.hidden = !randomActive()
+  renderOfflineSkinControls()
 
   // 披风（M23）：只有正版账号有官方披风，别的账号连这一栏都不显示
   renderCapes(canUploadToMojang)
@@ -6851,6 +6876,37 @@ skinRandomEl.addEventListener('change', async () => {
   await renderSkinPage()
   refreshLaunchFacts()
 })
+
+// ——— 离线皮肤进游戏（M25）———
+
+const skinOfflineInGameEl = document.getElementById('skin-offline-ingame')
+const skinVariantEl = document.getElementById('skin-variant')
+
+/** 把两个控件按配置画一遍（进皮肤页时调） */
+function renderOfflineSkinControls() {
+  const look = settingsInfo?.look || {}
+  skinOfflineInGameEl.checked = look.offlineSkinInGame !== false
+  const variant = look.skinVariant === 'slim' ? 'slim' : 'classic'
+  for (const button of skinVariantEl.querySelectorAll('[data-skin-variant]')) {
+    button.classList.toggle('chip--on', button.dataset.skinVariant === variant)
+  }
+}
+
+skinOfflineInGameEl.addEventListener('change', async () => {
+  const on = skinOfflineInGameEl.checked
+  await saveLook({ offlineSkinInGame: on })
+  if (settingsInfo) settingsInfo.look = { ...settingsInfo.look, offlineSkinInGame: on }
+  refreshLaunchFacts()
+})
+
+for (const button of skinVariantEl.querySelectorAll('[data-skin-variant]')) {
+  button.addEventListener('click', async () => {
+    const variant = button.dataset.skinVariant === 'slim' ? 'slim' : 'classic'
+    await saveLook({ skinVariant: variant })
+    if (settingsInfo) settingsInfo.look = { ...settingsInfo.look, skinVariant: variant }
+    renderOfflineSkinControls()
+  })
+}
 
 skinAccountBtnEl.addEventListener('click', () => {
   // 复用启动页左上角头像那个弹窗——账号的事只有一处，别做第二套

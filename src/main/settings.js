@@ -81,6 +81,18 @@ const DEFAULTS = {
      * 【不联网】随机池全是本机现成的：官方 Steve、毛球自带的几套配色、你自己传的。
      */
     randomSkin: true,
+    /**
+     * 离线账号进游戏时，也把现在这张皮肤穿上（M25，默认开）。
+     * 关掉的话游戏里就是默认的 Steve/Alex（以前一直是这样）。
+     */
+    offlineSkinInGame: true,
+    /**
+     * 自己挑的那张皮肤是"粗胳膊"还是"细胳膊"（M25）。
+     * 【为什么得让用户说】皮肤图上**看不出来**——Steve 型和 Alex 型都是 64×64，
+     * 差别只在游戏怎么解释它。官方那两张我们不用问（steve=粗、alex=细）。
+     * 'classic' = 粗（Steve）/ 'slim' = 细（Alex）
+     */
+    skinVariant: 'classic',
     /** 示例皮肤已经存进皮肤库了没有（存过一次就不再自动补，免得用户删了又冒出来） */
     builtinsSeeded: false,
     /** 背景图的完整路径（空 = 不设） */
