@@ -38,6 +38,8 @@ const content = require('./content')
 const downloader = require('./downloader')
 const pack = require('./pack')
 const online = require('./online')
+const voxlink = require('./voxlink')
+const voxlinkPorts = require('./voxlink/ports')
 const frp = require('./frp')
 const loaders = require('./loaders')
 const forge = require('./forge')
@@ -1547,6 +1549,121 @@ function registerIpcHandlers() {
   ipcMain.handle('online:leave', () => {
     try {
       return online.leave()
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  // ———————————————— 联机：VoxLink（房间这一层）————————————————
+  //
+  // 这是 VoxLink 的第一步：只做到"房间"。房间码是真的、服务器认得，
+  // 但**还不能联机玩**——数据怎么在两个人之间走，是下一步的事。
+  // 所以界面上别把它说成"能玩了"，免得用户白高兴一场。
+
+  /** VoxLink 现在什么情况（没进房间就是 state:'idle'） */
+  ipcMain.handle('voxlink:status', () => {
+    try {
+      return { ok: true, ...voxlink.getState() }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error), state: 'idle' }
+    }
+  })
+
+  /** VoxLink 服务器活着吗（打开页面时探一下，别让用户对着死服务器白点） */
+  ipcMain.handle('voxlink:ping', async () => voxlink.serverStatus())
+
+  /**
+   * 找本机游戏的「对局域网开放」端口。
+   * 建房必须知道它——房间建出来就是把好友引到这个端口上。
+   */
+  ipcMain.handle('voxlink:ports', async () => {
+    try {
+      const ports = await voxlinkPorts.detectMcPorts()
+      return { ok: true, ports }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error), ports: [] }
+    }
+  })
+
+  /** 建 VoxLink 房间。没给端口就自动找；找不到就明说"先去游戏里开局域网"。 */
+  ipcMain.handle('voxlink:create', async (event, options) => {
+    const send = (text) => {
+      if (!event.sender.isDestroyed()) event.sender.send('voxlink:stage', text)
+    }
+    try {
+      let hostPort = Number(options?.hostPort ?? 0)
+      if (!hostPort) {
+        send('正在找游戏的端口…')
+        const ports = await voxlinkPorts.detectMcPorts()
+        if (!ports.length) {
+          return { ok: false, error: '没找到正在运行的游戏。请先启动游戏，进一个世界，点「对局域网开放」。' }
+        }
+        hostPort = ports[0].port
+      }
+      send('正在向服务器申请房间码…')
+      const result = await voxlink.createRoom({
+        name: options?.name,
+        hostPort,
+        password: options?.password,
+        category: options?.category,
+        visible: options?.visible,
+        loader: options?.loader,
+        gameVersion: options?.gameVersion
+      })
+      return { ok: true, ...result, room: voxlink.getState().room }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 进别人的 VoxLink 房间 */
+  ipcMain.handle('voxlink:join', async (event, options) => {
+    const send = (text) => {
+      if (!event.sender.isDestroyed()) event.sender.send('voxlink:stage', text)
+    }
+    try {
+      const result = await voxlink.joinRoom({
+        code: options?.code,
+        password: options?.password,
+        onStage: send
+      })
+      return { ok: true, ...result }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 退房 */
+  ipcMain.handle('voxlink:leave', async () => {
+    try {
+      return { ok: true, ...(await voxlink.leaveRoom()) }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 查房间（这个码是真的吗、里面几个人） */
+  ipcMain.handle('voxlink:info', async (event, code) => {
+    try {
+      return { ok: true, info: await voxlink.roomInfo(String(code ?? '')) }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 大厅列表 + 分类（以后做大厅用；现在只用来验证服务器通不通） */
+  ipcMain.handle('voxlink:rooms', async (event, query) => {
+    try {
+      return { ok: true, ...(await voxlink.listRooms(query ?? {})) }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error), rooms: [] }
+    }
+  })
+
+  /** 改 VoxLink 自己的设置（服务器地址、允不允许走中继） */
+  ipcMain.handle('voxlink:settings', (event, patch) => {
+    try {
+      return { ok: true, ...voxlink.updateSettings(patch ?? {}) }
     } catch (error) {
       return { ok: false, error: String(error?.message ?? error) }
     }

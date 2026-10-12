@@ -469,6 +469,43 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('online:stage', (_event, text) => callback(text))
   },
 
+  // ——— 联机：VoxLink ———
+  //
+  // ⚠️ 这一套现在只做到"房间"：能真的从服务器拿到 6 位房间码，好友的码也认得。
+  //    **但还不能联机玩**——数据怎么在两个人之间走，是下一步的事。
+
+  /** VoxLink 现在什么情况：state 是 'idle' / 'hosting' / 'in_room' */
+  voxlinkStatus: () => ipcRenderer.invoke('voxlink:status'),
+
+  /** VoxLink 服务器活着吗 → { ok: true } 或 { ok: false, error } */
+  voxlinkPing: () => ipcRenderer.invoke('voxlink:ping'),
+
+  /** 找本机游戏的「对局域网开放」端口 → { ok, ports: [{port, pid}] } */
+  voxlinkPorts: () => ipcRenderer.invoke('voxlink:ports'),
+
+  /** 建 VoxLink 房间（不传 hostPort 就自动找） */
+  voxlinkCreate: (options) => ipcRenderer.invoke('voxlink:create', options),
+
+  /** 进别人的 VoxLink 房间（options.code 是 6 位房间码） */
+  voxlinkJoin: (options) => ipcRenderer.invoke('voxlink:join', options),
+
+  /** 退 VoxLink 房间 */
+  voxlinkLeave: () => ipcRenderer.invoke('voxlink:leave'),
+
+  /** 查某个房间码 → { ok, info } */
+  voxlinkInfo: (code) => ipcRenderer.invoke('voxlink:info', code),
+
+  /** 大厅列表 */
+  voxlinkRooms: (query) => ipcRenderer.invoke('voxlink:rooms', query),
+
+  /** 改 VoxLink 设置（serverUrl / allowRelay） */
+  voxlinkSettings: (patch) => ipcRenderer.invoke('voxlink:settings', patch),
+
+  /** VoxLink 的阶段提示（"正在找游戏的端口…"） */
+  onVoxlinkStage: (callback) => {
+    ipcRenderer.on('voxlink:stage', (_event, text) => callback(text))
+  },
+
   /** 整合包的进度与阶段提示 */
   onPackStage: (callback) => {
     ipcRenderer.on('pack:stage', (_event, text) => callback(text))

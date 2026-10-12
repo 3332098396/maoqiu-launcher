@@ -4355,6 +4355,151 @@ onlineLeaveEl.addEventListener('click', async () => {
 window.api.onOnlineStage((text) => setOnlineNotice(text))
 
 // ═══════════════════════════════════════
+// 联机：VoxLink（现在只做到「房间」这一层）
+// ═══════════════════════════════════════
+//
+// ⚠️ 这一块跟上面的「房间码联机」（EasyTier）是**两码事**，别混：
+//    · 上面那套 —— 毛球自己用 EasyTier 搭虚拟局域网（8 位码）
+//    · 这一套 —— 借 VoxLink 的公共服务器牵线（6 位码）
+// 现在这一套只做到"房间码是真的、服务器认得"，**还连不上游戏**。
+// 所以下面所有文案都必须把这句话说清楚，不许含糊成"能联机了"。
+
+const voxlinkNoticeEl = document.getElementById('voxlink-notice')
+const voxlinkStartEl = document.getElementById('voxlink-start')
+const voxlinkStatusPanelEl = document.getElementById('voxlink-status-panel')
+const voxlinkStatusTextEl = document.getElementById('voxlink-status-text')
+const voxlinkNameEl = document.getElementById('voxlink-name')
+const voxlinkCodeInputEl = document.getElementById('voxlink-code-input')
+const voxlinkCreateEl = document.getElementById('voxlink-create')
+const voxlinkJoinEl = document.getElementById('voxlink-join')
+const voxlinkLeaveEl = document.getElementById('voxlink-leave')
+const voxlinkCopyEl = document.getElementById('voxlink-copy')
+
+const VOXLINK_DEFAULT_NOTICE =
+  '这是 VoxLink 的房间：房间码是真的，服务器认得。' +
+  '但"把游戏连起来"那一步还没做完，所以现在还不能真的联机玩——这一步只是把地基打好。'
+
+let voxlinkState = { ok: true, state: 'idle', code: '', isHost: false, room: null, serverUrl: '' }
+
+function setVoxlinkNotice(text, kind = 'info') {
+  if (!voxlinkNoticeEl) return
+  voxlinkNoticeEl.textContent = text
+  voxlinkNoticeEl.classList.toggle('notice--ok', kind === 'ok')
+  voxlinkNoticeEl.classList.toggle('notice--error', kind === 'error')
+}
+
+/** 按当前状态把这一块画出来 */
+function renderVoxlink() {
+  if (!voxlinkStartEl) return
+  const inRoom = voxlinkState.state === 'hosting' || voxlinkState.state === 'in_room'
+
+  voxlinkStartEl.hidden = inRoom
+  voxlinkStatusPanelEl.hidden = !inRoom
+  if (!inRoom) return
+
+  // 注意：房间名是从服务器回来的，属于"外部内容"，只能用 textContent 拼，
+  // 不能用 innerHTML —— 这是毛球的死规矩。
+  const room = voxlinkState.room || {}
+  const lines = []
+  lines.push(voxlinkState.isHost ? '你是房主。' : '你在好友的房间里。')
+  lines.push(`房间码：${voxlinkState.code}`)
+  if (room.name) lines.push(`房间名：${room.name}`)
+  lines.push(`服务器：${voxlinkState.serverUrl}`)
+  if (voxlinkState.state === 'hosting') {
+    lines.push('把这个 6 位房间码发给好友。')
+  }
+  lines.push('（提醒：现在还连不上游戏，这一步只是房间建出来了。）')
+  voxlinkStatusTextEl.textContent = lines.join('\n')
+}
+
+async function refreshVoxlink() {
+  try {
+    const status = await window.api.voxlinkStatus()
+    voxlinkState = status
+    renderVoxlink()
+  } catch (error) {
+    setVoxlinkNotice(`读不到 VoxLink 状态：${error.message}`, 'error')
+  }
+}
+
+// 点到这张卡片时刷一次（顺便探一下服务器活着没——省得对着死服务器白点）
+document.querySelector('[data-online-mode="voxlink"]')?.addEventListener('click', async () => {
+  await refreshVoxlink()
+  if (voxlinkState.state === 'idle') {
+    const ping = await window.api.voxlinkPing()
+    if (!ping.ok) {
+      setVoxlinkNotice(`连不上 VoxLink 服务器（${ping.error}）。等会儿再试，或者在设置里换一台。`, 'error')
+    }
+  }
+})
+
+voxlinkCreateEl?.addEventListener('click', async () => {
+  voxlinkCreateEl.disabled = true
+  try {
+    setVoxlinkNotice('正在建房…')
+    const result = await window.api.voxlinkCreate({
+      name: String(voxlinkNameEl?.value || '').trim() || undefined
+    })
+    if (!result.ok) {
+      setVoxlinkNotice(`建房没成功：${result.error}`, 'error')
+      return
+    }
+    await refreshVoxlink()
+    setVoxlinkNotice(`房间建好了，房间码是 ${result.code}。把它发给好友。`, 'ok')
+  } finally {
+    voxlinkCreateEl.disabled = false
+  }
+})
+
+voxlinkJoinEl?.addEventListener('click', async () => {
+  const code = String(voxlinkCodeInputEl?.value || '').trim().toUpperCase()
+  if (code.length !== 6) {
+    setVoxlinkNotice('房间码是 6 位（字母和数字，不含 I、O、0、1）。', 'error')
+    return
+  }
+  voxlinkJoinEl.disabled = true
+  try {
+    setVoxlinkNotice('正在加入…')
+    const result = await window.api.voxlinkJoin({ code })
+    if (!result.ok) {
+      setVoxlinkNotice(`进不去：${result.error}`, 'error')
+      return
+    }
+    await refreshVoxlink()
+    setVoxlinkNotice('进去了。', 'ok')
+  } finally {
+    voxlinkJoinEl.disabled = false
+  }
+})
+
+voxlinkLeaveEl?.addEventListener('click', async () => {
+  voxlinkLeaveEl.disabled = true
+  try {
+    await window.api.voxlinkLeave()
+    await refreshVoxlink()
+    setVoxlinkNotice('已经退出来了。', 'ok')
+  } finally {
+    voxlinkLeaveEl.disabled = false
+  }
+})
+
+voxlinkCopyEl?.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(voxlinkState.code || '')
+    voxlinkCopyEl.textContent = '复制好了'
+    setTimeout(() => (voxlinkCopyEl.textContent = '复制房间码'), 1500)
+  } catch {
+    voxlinkCopyEl.textContent = '复制不了，手动抄一下吧'
+    setTimeout(() => (voxlinkCopyEl.textContent = '复制房间码'), 1500)
+  }
+})
+
+// 主进程推过来的阶段提示（"正在找游戏的端口…"）
+window.api.onVoxlinkStage((text) => setVoxlinkNotice(text))
+
+refreshVoxlink()
+
+// ═══════════════════════════════════════
 // 版本号
 // ═══════════════════════════════════════
 

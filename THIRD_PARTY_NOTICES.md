@@ -15,14 +15,29 @@
 | authlib-injector | 外置登录（皮肤站账号） | 见上游仓库 | https://github.com/yushijinhun/authlib-injector |
 | Terracotta | 打洞辅助（配合 VoxLink 使用） | **AGPL-3.0** | https://github.com/burningtnt/Terracotta |
 
-## 二、参考与待移植
+## 二、从 VoxLink 移植的代码（LGPL-3.0-only，逐个点名）
 
-| 项目 | 说明 | 许可 |
+[VoxLink](https://github.com/AUGUHDAR/VoxLink)（作者 AUGUHDAR 及贡献者，**LGPL-3.0**）
+的联机协议实现被移植进毛球，用于「联机」页的 VoxLink 房间功能。
+
+**下列文件是移植/改写成果，按 LGPL-3.0-only 提供（不是 MIT）**；
+对这些文件的修改部分，同样以 LGPL-3.0-only 发布：
+
+| 毛球里的文件 | 来源（上游） | 许可 |
 |---|---|---|
-| [VoxLink](https://github.com/AUGUHDAR/VoxLink) | 联机协议参考实现。**本项目移植其协议的部分，将按 LGPL-3.0-only 单独提供** | **LGPL-3.0** |
+| `src/main/voxlink/api.js` | `network/SignalingClient.java` — HTTP 信封与端点契约 | **LGPL-3.0-only** |
+| `src/main/voxlink/index.js` | `room/ConnectionManager.java` — 房间流程、加入重试节奏 | **LGPL-3.0-only** |
+| `src/main/voxlink/room.js` | `network/NatLabels.java` — 网络类型取值与显示名 | **LGPL-3.0-only** |
+| `src/main/voxlink/ports.js` | 上游的「本机游戏端口探测」行为（对应文件待核实） | **LGPL-3.0-only** |
 
-> **现状说明（请以本段为准）**：截至本文件最后一次更新，毛球**尚未包含**任何从 VoxLink 移植的代码。
-> 一旦开始包含，相关文件会在此**逐一点名**，并按 LGPL-3.0-only 提供，其修改部分同样以 LGPL-3.0-only 发布。
+改写过程中参考了 [KAMUCL](https://github.com/kamubaba-i/KAMUCL) 的 JS 实现
+（`src/main/core/voxlink/`；该项目中对应部分同样按 LGPL-3.0-only 声明）。
+
+毛球其余全部代码仍为 [MIT](LICENSE)。
+
+> **据实说明**：KAMUCL 在其 `LICENSE` 中写明"上游代码的历史许可尚未理清"
+> （*upstream code whose historical permission remains unresolved*）。
+> 毛球沿用同样的处理办法——按 LGPL-3.0-only 提供、在此逐一点名，不作超出此范围的主张。
 
 ## 三、开发时使用（不进入安装包）
 

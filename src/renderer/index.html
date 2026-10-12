@@ -398,6 +398,19 @@
               <span class="mode-card__name">樱花内网穿透</span>
               <span class="mode-card__desc">自己配一条隧道，不用管理员权限；好友手动连你的地址</span>
             </button>
+
+            <button class="mode-card" type="button" data-online-mode="voxlink">
+              <span class="mode-card__icon" aria-hidden="true">
+                <!-- VoxLink＝两台机器中间一颗星（公共服务器在中间牵线） -->
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2.4" y="9" width="6" height="6" rx="2" />
+                  <rect x="15.6" y="9" width="6" height="6" rx="2" />
+                  <path d="M11.4 11.2l1.2-1.2 1.2 1.2M12.6 10v4M11.4 12.8l1.2 1.2 1.2-1.2" />
+                </svg>
+              </span>
+              <span class="mode-card__name">VoxLink 房间码</span>
+              <span class="mode-card__desc">借 VoxLink 的公共服务器牵线，6 位房间码直接开房间</span>
+            </button>
           </div>
 
           <!-- ——— 房间码联机的内容 ——— -->
@@ -475,6 +488,68 @@
               连接方式（直连还是走了中转）、延迟多少。
             </p>
           </section>
+          </div>
+
+          <!-- ——— VoxLink 房间码：第三种联机方式 ———
+               ⚠️ 现在还只说"房间"这一步：房间码是真的、服务器认得，
+                  **但数据怎么在两个人之间走还没做，所以还不能真的联机玩**。
+                  界面上必须把这句话写在最显眼的地方，不许含糊。 -->
+          <div class="online-mode" data-online-pane="voxlink" hidden>
+            <div class="notice" id="voxlink-notice">
+              这是 VoxLink 的房间：<b>房间码是真的，服务器认得</b>。
+              但"把游戏连起来"那一步还没做完，所以<b>现在还不能真的联机玩</b>——
+              这一步只是把地基打好。
+            </div>
+
+            <div class="online-grid" id="voxlink-start">
+              <section class="panel">
+                <h3 class="panel__title">建 VoxLink 房间</h3>
+                <p class="panel__desc">
+                  先在游戏里进一个世界、点「对局域网开放」，再回来点这个按钮——
+                  毛球要先把端口找到，才知道该把哪个地址给好友。
+                </p>
+                <div class="join-row">
+                  <input
+                    class="input input--edit"
+                    type="text"
+                    id="voxlink-name"
+                    maxlength="32"
+                    placeholder="房间名（默认：我的世界联机）"
+                  />
+                </div>
+                <button class="btn btn--primary btn--block" type="button" id="voxlink-create">
+                  创建 VoxLink 房间
+                </button>
+              </section>
+
+              <section class="panel">
+                <h3 class="panel__title">进好友的 VoxLink 房间</h3>
+                <p class="panel__desc">
+                  房间码是 <b>6 位</b>，字母和数字都有，<b>不含 I、O、0、1</b>（怕念错）。
+                </p>
+                <div class="join-row">
+                  <input
+                    class="input input--edit"
+                    type="text"
+                    id="voxlink-code-input"
+                    placeholder="6 位房间码"
+                    maxlength="6"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                  <button class="btn btn--ghost" type="button" id="voxlink-join">加入</button>
+                </div>
+              </section>
+            </div>
+
+            <section class="panel panel--full" id="voxlink-status-panel" hidden>
+              <h3 class="panel__title">VoxLink 房间状态</h3>
+              <p class="panel__desc" id="voxlink-status-text"></p>
+              <div class="join-row">
+                <button class="btn btn--primary" type="button" id="voxlink-copy">复制房间码</button>
+                <button class="btn btn--ghost" type="button" id="voxlink-leave">离开房间</button>
+              </div>
+            </section>
           </div>
 
           <!-- ——— 樱花内网穿透（M15）：另一种联机方式，点上面那张卡片才看得到 ——— -->
