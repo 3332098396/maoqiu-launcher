@@ -2968,6 +2968,8 @@ button.acc__tab:hover {
 .skin-page {
   display: flex;
   flex-direction: column;
+  /* 这一屏要**正好占满窗口**，不许上下滚（用户 2026-10-13 点名）。
+     下面 .skin-cols 靠 flex 吃掉剩下的高度，多出来的地方由皮肤列表内部自己滚。 */
 }
 
 .skin-head {
@@ -3045,6 +3047,9 @@ button.acc__tab:hover {
   grid-template-columns: minmax(0, 1fr) 300px;
   gap: 12px;
   align-items: stretch;
+  /* 吃掉"标题 + 顶上那条提示"剩下的高度，整页就正好一屏、不滚了 */
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .skin-cols:has(#cape-panel:not([hidden])) {
@@ -3105,10 +3110,11 @@ button.acc__tab:hover {
   gap: 8px;
   overflow-y: auto;
   flex: 1 1 auto;
-  /* 【为什么是 320 不是 360】这一栏多高，另外两栏就跟着多高（三栏等高），
-     整页也跟着变高。M25 在它下面加了一行（离线进游戏 + 胳膊粗细，23px），
-     这里减 40px 抵消掉 —— 整页高度和加之前一样。列表本身照旧能滚。 */
-  max-height: 320px;
+  /* 高度交给 flex：这一栏有多高、列表就占多高，多出来的自己滚。
+     max-height 只是别让它在大屏上长得没边；min-height 是窗口拉到很扁时留一口气
+     （真扁到装不下，整页还是会滚——那时候滚是对的）。 */
+  max-height: 360px;
+  min-height: 120px;
 }
 
 .skin-item {

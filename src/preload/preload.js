@@ -13,6 +13,15 @@ contextBridge.exposeInMainWorld('api', {
   /** 问一句"我是哪个版本的"——答案由主进程从 package.json 读出（别在界面上写死） */
   getAppVersion: () => ipcRenderer.invoke('app:version'),
 
+  /**
+   * 这个毛球能不能卸载（M26）：装在系统里的才行，开发模式直接跑的不算。
+   * 设置页「关于」那一栏靠它决定按钮是能点还是灰着。
+   */
+  canUninstall: () => ipcRenderer.invoke('app:canUninstall'),
+
+  /** 真的去卸载。**调用方必须先二次确认**——它会拉起卸载程序并退掉毛球 */
+  uninstallApp: () => ipcRenderer.invoke('app:uninstall'),
+
   // ——— 窗口按钮（M17.4：标题栏是自己画的，最小化/最大化/关闭也得自己来）———
 
   minimizeWindow: () => ipcRenderer.invoke('win:minimize'),

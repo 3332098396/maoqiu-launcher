@@ -864,6 +864,7 @@
             <span class="menu__item" data-settings-tab="clean">清理</span>
             <span class="menu__item" data-settings-tab="ai">AI 助手</span>
             <span class="menu__item" data-settings-tab="look">个性化</span>
+            <span class="menu__item" data-settings-tab="about">关于</span>
           </nav>
           <div class="side__note">还想加什么，跟作者说</div>
         </aside>
@@ -1332,6 +1333,30 @@
               </p>
               <div class="chips" id="look-motion"></div>
               <p class="panel__desc" id="look-motion-hint"></p>
+            </section>
+          </div>
+
+          <!-- ——— 关于（M26：卸载按钮放这儿）——— -->
+          <div class="settings-tab" data-settings-tab="about" hidden>
+            <section class="panel">
+              <h3 class="panel__title">毛球</h3>
+              <p class="panel__desc">
+                一个 Windows 上的 Minecraft Java 版启动器。版本 <b id="about-version">—</b><br />
+                <b>毛球跟 Mojang、微软没有任何关系</b>，不是官方产品，也没获得过 Mojang 的认可。
+                Minecraft 是 Mojang Studios 的商标。
+              </p>
+            </section>
+
+            <section class="panel">
+              <h3 class="panel__title">卸载</h3>
+              <p class="panel__desc">
+                卸载只删<b>毛球自己这个程序</b>。<b>你的存档、Mod、皮肤、设置全都留着</b>
+                （它们不在程序目录里），以后重装回来还是老样子。
+              </p>
+              <div class="modal__actions modal__actions--end">
+                <button class="btn btn--danger" type="button" id="about-uninstall">卸载毛球</button>
+              </div>
+              <p class="panel__desc" id="about-uninstall-hint"></p>
             </section>
           </div>
         </div>

@@ -27,6 +27,7 @@ const yggdrasil = require('./yggdrasil')
 const microsoft = require('./microsoft')
 const skins = require('./skins')
 const offlineSkin = require('./offlineSkin')
+const uninstall = require('./uninstall')
 const javaUtil = require('./java')
 const launch = require('./launch')
 const diagnose = require('./diagnose')
@@ -280,6 +281,22 @@ ipcMain.handle('win:isMaximized', (event) =>
 // 直接按路径读死，开发跑和装完跑结果一样。
 const APP_VERSION = require(path.join(__dirname, '..', '..', 'package.json')).version
 ipcMain.handle('app:version', () => APP_VERSION)
+
+/** 设置页那个「卸载毛球」（M26）：这个毛球是不是装出来的（开发模式跑的不算） */
+ipcMain.handle('app:canUninstall', () => ({ ok: true, available: uninstall.available() }))
+
+/**
+ * 真的去卸载。**先把卸载程序拉起来，再退毛球**——
+ * 顺序反了的话，毛球一退，卸载程序还没来得及起就被带走了。
+ */
+ipcMain.handle('app:uninstall', async () => {
+  const result = uninstall.run()
+  if (result.ok) {
+    // 给卸载程序一点时间起来（它会自己接管：关掉毛球、删文件、清注册表）
+    setTimeout(() => app.quit(), 800)
+  }
+  return result
+})
 
 /** 当前正在跑的安装任务（同时只允许一个） */
 let currentInstall = null

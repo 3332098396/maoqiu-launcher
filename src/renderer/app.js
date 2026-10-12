@@ -3589,7 +3589,55 @@ function showSettingsTab(name) {
   if (name === 'look') renderLookTab()
   if (name === 'account') renderMicrosoftClientId()
   if (name === 'ai') renderAiSettingsTab()
+  if (name === 'about') renderAboutTab()
 }
+
+// ——— 关于（M26）：版本号 + 卸载 ———
+
+const aboutVersionEl = document.getElementById('about-version')
+const aboutUninstallEl = document.getElementById('about-uninstall')
+const aboutUninstallHintEl = document.getElementById('about-uninstall-hint')
+
+async function renderAboutTab() {
+  try {
+    aboutVersionEl.textContent = await window.api.getAppVersion()
+  } catch {
+    aboutVersionEl.textContent = '读不出来'
+  }
+
+  // 【为什么还要问一句"能不能卸载"】开发模式跑的那个毛球根本不是"装"出来的，
+  // 它旁边没有卸载程序。这时候按钮灰着并说清楚，别让用户点了没反应。
+  let available = false
+  try {
+    available = (await window.api.canUninstall()).available === true
+  } catch {
+    available = false
+  }
+
+  aboutUninstallEl.disabled = !available
+  aboutUninstallHintEl.textContent = available
+    ? ''
+    : '现在这个毛球不是"装"出来的（开发模式直接跑的），没有卸载程序可调。'
+}
+
+aboutUninstallEl.addEventListener('click', async () => {
+  const yes = window.confirm(
+    '卸载毛球？\n\n' +
+      '只删毛球这个程序本身。你的存档、Mod、皮肤、设置都留着，重装回来还是老样子。\n\n' +
+      '（卸载程序会自己弹出来，跟着它走就行。）'
+  )
+  if (!yes) return
+
+  aboutUninstallEl.disabled = true
+  aboutUninstallHintEl.textContent = '正在打开卸载程序…'
+  const result = await window.api.uninstallApp()
+  if (!result.ok) {
+    aboutUninstallEl.disabled = false
+    aboutUninstallHintEl.textContent = result.error
+    return
+  }
+  aboutUninstallHintEl.textContent = '卸载程序已经拉起来了，毛球这就退出。'
+})
 
 // ——— AI 设置那一栏（M22）———
 
