@@ -35,6 +35,7 @@
 | `src/main/voxlink/punchProfiles.js` | `network/PunchProfile.java` — 五套发包模板与各场景参数（数值零改动） | **LGPL-3.0-only** |
 | `src/main/voxlink/punchPolicy.js` | `network/` 下 PunchParams / PunchTuner / PortPredictor / NatClass / PunchStrategySelector / PunchFailureClassifier — 失败分类、自适应调参、端口预测 | **LGPL-3.0-only** |
 | `src/main/voxlink/punch.js` | `network/UdpHolePuncher.java` — 打洞主循环、控制包格式、发包限速 | **LGPL-3.0-only** |
+| `src/main/voxlink/session.js` | `SignalingWsTransport.java` / `RoomManager.java` — 房间内的信令收发（`/signal/send`、`/signal/poll`、`/room/heartbeat`）与去重、降频、散伙判定。毛球只走上游**自带的** HTTP 轮询退化分支，不用 WebSocket（见文件头说明） | **LGPL-3.0-only** |
 
 改写过程中参考了 [KAMUCL](https://github.com/kamubaba-i/KAMUCL) 的 JS 实现
 （`src/main/core/voxlink/`；该项目中对应部分同样按 LGPL-3.0-only 声明）。
