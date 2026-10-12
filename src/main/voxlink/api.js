@@ -51,7 +51,7 @@ const CLIENT_PROTOCOL_VERSION = 7
  * ⚠️ 这张单子**必须跟实现同步**：写了却做不到，对面会按你说的做，然后超时失败。
  * 现在毛球只做到第 1 层，所以先把**已经真的会**的写上，做到哪一步再补哪一项。
  */
-const CAPABILITIES = ['relay', 'ice_restart', 'continuous_retry']
+const CAPABILITIES = ['relay', 'ice_restart', 'continuous_retry', 'punchAuthV1']
 
 /** 毛球自己的版本号。读 package.json，别写死（写死了改版本它不动）。 */
 const APP_VERSION = require(path.join(__dirname, '..', '..', '..', 'package.json')).version

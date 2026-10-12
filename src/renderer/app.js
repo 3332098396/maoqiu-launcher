@@ -4376,10 +4376,24 @@ const voxlinkLeaveEl = document.getElementById('voxlink-leave')
 const voxlinkCopyEl = document.getElementById('voxlink-copy')
 
 const VOXLINK_DEFAULT_NOTICE =
-  '这是 VoxLink 的房间：房间码是真的，服务器认得。' +
-  '但"把游戏连起来"那一步还没做完，所以现在还不能真的联机玩——这一步只是把地基打好。'
+  '这是 VoxLink 的房间：房间码是真的，服务器认得，两个启动器会自己互相连上。' +
+  '但"把游戏数据接到这条路上"还没做完，所以现在还不能真的进同一个世界玩。'
 
 let voxlinkState = { ok: true, state: 'idle', code: '', isHost: false, room: null, serverUrl: '' }
+
+/** 打洞的实时进展（由主进程推过来，见 onVoxlinkConn） */
+let voxlinkConn = null        // { phase, status, address, detail }
+let voxlinkNat = null         // { local, remote, localClass, remoteClass, profile }
+let voxlinkStages = {}        // key → { key, status, detail }
+
+/** 连接状态说人话：三档，界面和提示都靠它 */
+function voxlinkConnText() {
+  if (!voxlinkConn?.phase) return ''
+  const mapping = { success: '已经连上了', failed: '没连上', trying: '正在连' }
+  const head = mapping[voxlinkConn.status] ?? '正在连'
+  const detail = voxlinkConn.detail ? `（${voxlinkConn.detail}）` : ''
+  return `连接状态：${head}${detail}`
+}
 
 function setVoxlinkNotice(text, kind = 'info') {
   if (!voxlinkNoticeEl) return
@@ -4403,6 +4417,10 @@ function renderVoxlink() {
   const lines = []
   lines.push(voxlinkState.isHost ? '你是房主。' : '你在好友的房间里。')
   lines.push(`房间码：${voxlinkState.code}`)
+  // 打通没有，是这一页最要紧的一句话，所以放在房间码下面。
+  const connText = voxlinkConnText()
+  if (connText) lines.push(connText)
+  if (voxlinkConn?.address) lines.push(`对方地址：${voxlinkConn.address}`)
   // 房间名要先过服务器审核。审核没放行时，服务器回的不是名字，而是一个
   // 占位符「name_pending_review」—— 那是给程序看的记号，原样显示给用户就是个谜语。
   const namePending = room.nameApproved === false || room.name === 'name_pending_review'
@@ -4413,11 +4431,19 @@ function renderVoxlink() {
   } else if (room.name) {
     lines.push(`房间名：${room.name}`)
   }
+  // 两边的网络类型和正在用的打法（打不通的时候，这几句话就是唯一的线索）
+  if (voxlinkNat?.local) {
+    lines.push(`你的网络：${voxlinkNat.local}${voxlinkNat.remote ? ` · 对方：${voxlinkNat.remote}` : ''}`)
+  }
+  // 细分步骤（探网络 / 打洞 / 就绪）—— 卡在哪一步，一眼能看出来
+  const stageList = Object.values(voxlinkStages).filter((s) => s?.detail)
+  if (stageList.length) lines.push(`进度：${stageList.map((s) => s.detail).join(' → ')}`)
+
   lines.push(`服务器：${voxlinkState.serverUrl}`)
   if (voxlinkState.state === 'hosting') {
     lines.push('把这个 6 位房间码发给好友。')
   }
-  lines.push('（提醒：现在还连不上游戏，这一步只是房间建出来了。）')
+  lines.push('（提醒：现在两个启动器能互相连上，但游戏数据还没接到这条路上——还不能进同一个世界。）')
   voxlinkStatusTextEl.textContent = lines.join('\n')
 }
 
@@ -4425,6 +4451,9 @@ async function refreshVoxlink() {
   try {
     const status = await window.api.voxlinkStatus()
     voxlinkState = status
+    // 主进程手里存着最后一条连接状态，刷新时接着显示（不然一刷新就退回"不知道"）。
+    if (status.connection) voxlinkConn = status.connection
+    if (status.state === 'idle') { voxlinkConn = null; voxlinkNat = null; voxlinkStages = {} }
     renderVoxlink()
   } catch (error) {
     setVoxlinkNotice(`读不到 VoxLink 状态：${error.message}`, 'error')
@@ -4505,6 +4534,23 @@ voxlinkCopyEl?.addEventListener('click', async () => {
 
 // 主进程推过来的阶段提示（"正在找游戏的端口…"）
 window.api.onVoxlinkStage((text) => setVoxlinkNotice(text))
+
+// 打洞的进展：主进程推什么，这一页就显示什么（细节都在这四种事件里）
+window.api.onVoxlinkConn(({ event, data }) => {
+  if (event === 'conn:state') {
+    voxlinkConn = data
+    // 打通/打不通是大事，顺手顶一条提示出来，别让它埋在几行小字里。
+    if (data?.status === 'success') setVoxlinkNotice('两台电脑已经直接连上了。', 'ok')
+    else if (data?.status === 'failed') setVoxlinkNotice(`没连上：${data.detail || '对方一直没有回音'}`, 'error')
+  } else if (event === 'stage') {
+    if (data?.key) voxlinkStages[data.key] = data
+  } else if (event === 'nat:state') {
+    voxlinkNat = data
+  } else if (event === 'channel:closed') {
+    setVoxlinkNotice(`房间已经结束：${data?.message || '连接断开'}`, 'error')
+  }
+  if (voxlinkState.state !== 'idle') renderVoxlink()
+})
 
 refreshVoxlink()
 

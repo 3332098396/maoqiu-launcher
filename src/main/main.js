@@ -1564,9 +1564,9 @@ function registerIpcHandlers() {
 
   // ———————————————— 联机：VoxLink（房间这一层）————————————————
   //
-  // 这是 VoxLink 的第一步：只做到"房间"。房间码是真的、服务器认得，
-  // 但**还不能联机玩**——数据怎么在两个人之间走，是下一步的事。
-  // 所以界面上别把它说成"能玩了"，免得用户白高兴一场。
+  // 房间码是真的、服务器认得；进房之后两个启动器会自己打洞、互相连上（V2c）。
+  // 但**游戏数据还没接到这条路上**（那是 V4 的活）——所以现在即使显示"连上了"，
+  // 两个人也还进不了同一个世界。界面上必须一直说清这一点，别把它说成"能玩了"。
 
   /** VoxLink 现在什么情况（没进房间就是 state:'idle'） */
   ipcMain.handle('voxlink:status', () => {
@@ -1576,6 +1576,24 @@ function registerIpcHandlers() {
       return { ok: false, error: String(error?.message ?? error), state: 'idle' }
     }
   })
+
+  /**
+   * 打洞的进展主动推给界面（界面不轮询，也不用反复问"通了没"）。
+   *
+   * 三种：`conn:state` 一句人话的主线状态（正在重试 / 连上了 / 打不通）、
+   * `stage` 细分步骤（探网络 / 打洞 / 就绪）、`nat:state` 两边的网络类型。
+   * 注意这是**对象**，跟上面那种纯文字的 `voxlink:stage` 不是一条道，别混着用。
+   */
+  const pushVoxlinkEvent = (name, data) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send('voxlink:conn', { event: name, data })
+    }
+  }
+  voxlink.on('conn:state', (data) => pushVoxlinkEvent('conn:state', data))
+  voxlink.on('stage', (data) => pushVoxlinkEvent('stage', data))
+  voxlink.on('nat:state', (data) => pushVoxlinkEvent('nat:state', data))
+  // 房间没了 / 被踢了 —— 界面得说清楚，不然会一直显示"在房间里"。
+  voxlink.on('channel:closed', (data) => pushVoxlinkEvent('channel:closed', data))
 
   /** VoxLink 服务器活着吗（打开页面时探一下，别让用户对着死服务器白点） */
   ipcMain.handle('voxlink:ping', async () => voxlink.serverStatus())

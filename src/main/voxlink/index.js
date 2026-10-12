@@ -14,7 +14,9 @@
 // 【现在还没做的（后面几步补）】
 //   ⚠️ 建完房之后，"房间里的人怎么互相看见"这件事**还没接**。
 //      所以现在建的房间，只能证明"码是真的、服务器认得"，**还不能联机玩**。
-//      第 2 步（打洞 + 可靠传输）会把这块补上。
+//      现在补上了：房间一建好就把信令通道和打洞引擎开起来（见下面的 _openChannel）。
+//   ⚠️ 但**游戏数据还没接到这条路上**（那是 V4 的活），所以即使显示"连上了"，
+//      两个人也还进不了同一个世界。
 //   ⚠️ 我们的"能力自报"（CAPABILITIES）也只写了做得到的那几项，做到哪补到哪。
 //      这不是偷懒：报了自己做不到的本事，对方会照着你说的来，然后卡住。
 //
@@ -27,9 +29,12 @@
 // 本文件按 VoxLink（LGPL-3.0）的流程改写，来源与许可见 THIRD_PARTY_NOTICES.md
 
 const { randomUUID } = require('node:crypto')
+const { EventEmitter } = require('node:events')
 const { ApiClient, APIError, DEFAULT_SERVER_URL, CLIENT_TAG, CLIENT_PROTOCOL_VERSION, CAPABILITIES, validateRoomCode } = require('./api')
 const { DEFAULT_ROOM_NAME, normalizeRoomName, natLabel } = require('./room')
 const { probeHostPort } = require('./ports')
+const { VoxLinkSession } = require('./session')
+const { ConnEngine } = require('./engine')
 const settingsStore = require('./settings')
 
 /** 房间最多几个人（服务端定的，照抄）。 */
@@ -57,8 +62,9 @@ function delay(ms, signal) {
   })
 }
 
-class VoxLink {
+class VoxLink extends EventEmitter {
   constructor(options = {}) {
+    super()
     this.api = options.api ?? new ApiClient()
     this.settings = options.settings ?? settingsStore.load()
 
@@ -74,6 +80,15 @@ class VoxLink {
     this.token = ''
     this.isHost = false
     this.room = null
+
+    /** 我在服务器那边的编号（进房时服务器给的）。打洞的防伪章要拿它算，不存就打不了。 */
+    this.clientID = ''
+    /** 进房时用的密码，重连时要原样再用一次（**只在内存里，不落盘**）。 */
+    this.password = ''
+
+    /** 房间里那条常驻通道 + 打洞引擎，进房后才存在，退房就没了。 */
+    this.session = null
+    this.engine = null
   }
 
   /** 当前用的是哪台服务器。 */
@@ -89,7 +104,9 @@ class VoxLink {
       isHost: this.isHost,
       room: this.room,
       serverUrl: this.baseURL(),
-      allowRelay: this.settings.allowRelay !== false
+      allowRelay: this.settings.allowRelay !== false,
+      // 打通没有——界面刚打开时也得说得出这句话，不能只靠推送。
+      connection: this.engine?.lastConnection ?? null
     }
   }
 
@@ -130,6 +147,90 @@ class VoxLink {
     this.room = room
     this.state = isHost ? 'hosting' : 'in_room'
     this.operationController = new AbortController()
+    // 房间真的到手了，通道和打洞就从这儿开工 —— 建房、进房都走这一条路。
+    this._openChannel()
+  }
+
+  /**
+   * 把房间里的两件事开起来：**喊话通道**（跟服务器收发信号）和**打洞引擎**。
+   *
+   * 顺序有讲究：先建通道，再建引擎，最后把引擎接到通道上 ——
+   * 引擎想说话得先有条通道，通道收到话得有人接着。
+   */
+  _openChannel() {
+    const netLog = (level, message) => console.log(`[voxlink] ${level}: ${message}`)
+
+    this.session = new VoxLinkSession({
+      api: this.api,
+      baseURL: () => this.baseURL(),
+      // 通道自己的话（"信令暂时不可用"之类）也顶给界面，别憋在肚子里。
+      emit: (event, data) => this.emit(event, data),
+      netLog
+    }, { code: this.code, token: this.token, isHost: this.isHost })
+
+    this.engine = new ConnEngine({
+      netLog,
+      emit: (event, data) => this.emit(event, data),
+      // 打不通时引擎会喊这个：**重新进一次房**（不是自己造个定时器直发）。
+      rejoin: () => this.rejoin()
+    })
+
+    // 房主这边"自己的编号"就用 'host'（上游也是这么个记号），
+    // 客人必须用服务器发的那个真编号 —— 防伪章是拿"房间码 + 自己的编号"算的，
+    // 两边算出来对不上，对面就会当我们是冒牌货。
+    this.engine.clientID = this.isHost ? 'host' : this.clientID
+    this.engine.setState(this.code, this.token, this.isHost, this.room, this.session)
+
+    // 通道收到的话，原样喂给引擎（引擎自己判断该不该管）。
+    // ⚠️ 客人看到的房主信号，`from` 是字面量 'host'，不是房主的编号 —— 上游就长这样。
+    this.session.on('engineSignal', (signal) => {
+      this.engine?.onSignal(signal.type, signal.from ?? '', signal.data ?? {})
+    })
+    // 通道说"这个房间没了 / 你被踢了"：引擎别打了，同时告诉界面。
+    this.session.on('closed', (message) => {
+      this.engine?.teardown()
+      this.emit('channel:closed', { message })
+    })
+
+    void this.session.run()
+  }
+
+  /** 退房（或换房间）时收摊：先把打洞停了、通道关了，再谈别的。 */
+  _closeChannel() {
+    this.engine?.teardown()
+    this.session?.stop()
+    this.engine = null
+    this.session = null
+    this.clientID = ''
+    this.password = ''
+  }
+
+  /**
+   * 重新进一次房。
+   *
+   * 引擎打不通时会喊这个。**为什么是"重新进房"而不是"再发一句"**：
+   * 让服务器**再注入一次** join_request 是上游定死的路子（官方文档 §7.5）——
+   * 客户端**绝不自己造一个 1.5 秒的定时器**去直发，那不是上游的编排。
+   */
+  async rejoin() {
+    if (this.state === 'idle' || !this.code) throw new Error('已经退出房间，不再重连')
+    const code = this.code
+    const result = await this.requestJoin(code, this.password)
+    if (this.state === 'idle' || this.code !== code) throw new Error('已经退出房间，不再重连')
+
+    this.token = result.clientToken
+    if (result.clientId) this.clientID = result.clientId
+    if (result.room) this.room = { ...result.room, code, isHost: false }
+
+    // 重新进房会换一张通行证，通道和引擎手里那张旧的必须跟着换，
+    // 否则下一个请求会被服务器判成无效票。
+    if (this.session) this.session.token = this.token
+    if (this.engine) {
+      this.engine.token = this.token
+      this.engine.room = this.room
+      this.engine.clientID = this.isHost ? 'host' : this.clientID
+    }
+    return result
   }
 
   /**
@@ -195,6 +296,7 @@ class VoxLink {
         clientTag: CLIENT_TAG,
         isHost: true
       }
+      this.clientID = result.clientId ?? ''
       await this.accept(epoch, result.code, result.hostToken, true, room)
       return result
     } finally {
@@ -240,6 +342,10 @@ class VoxLink {
       if (!validateRoomCode(code)) throw new APIError('INVALID_PARAMS', '请输入有效的六位房间码')
 
       const result = await this.requestJoin(code, req.password, this.operationController.signal, req.onStage)
+      // 服务器给的编号：打洞时要用它算防伪章，**必须存下来**。
+      this.clientID = result.clientId ?? ''
+      // 密码留在内存里，重连时要原样再用一次（不写盘）。
+      this.password = req.password ?? ''
       result.room = { ...result.room, code, isHost: false }
       await this.accept(epoch, code, result.clientToken, false, result.room)
       return result
@@ -253,6 +359,9 @@ class VoxLink {
     this.operation++
     this.operationController.abort()
     this.pending = false
+    // 先把打洞停了、通道关了，再谈跟服务器道别 —— 顺序反了会在关的过程中
+    // 又冒出几条"重连"的请求，白忙一场。
+    this._closeChannel()
 
     const credentials = { code: this.code, token: this.token, isHost: this.isHost }
     const wasInRoom = this.state !== 'idle'

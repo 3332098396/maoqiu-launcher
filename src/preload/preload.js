@@ -506,6 +506,15 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('voxlink:stage', (_event, text) => callback(text))
   },
 
+  /**
+   * VoxLink 的连接进展（对象，不是一句话）：
+   * event 是 'conn:state'（主状态）/ 'stage'（细分步骤）/ 'nat:state'（两边的网络类型）/
+   * 'channel:closed'（房间没了或被踢了）。
+   */
+  onVoxlinkConn: (callback) => {
+    ipcRenderer.on('voxlink:conn', (_event, payload) => callback(payload))
+  },
+
   /** 整合包的进度与阶段提示 */
   onPackStage: (callback) => {
     ipcRenderer.on('pack:stage', (_event, text) => callback(text))
