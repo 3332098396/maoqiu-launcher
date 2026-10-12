@@ -815,21 +815,27 @@
                 <span>没登录时每次打开随机穿一张</span>
               </label>
 
-              <!-- 离线皮肤进游戏（M25）：没登录时也能在游戏里穿自己挑的那张 -->
-              <label class="check check--spaced">
-                <input type="checkbox" id="skin-offline-ingame" />
-                <span>离线进游戏也穿这张</span>
-              </label>
-              <!-- 粗胳膊还是细胳膊：皮肤图上根本看不出来，只能问用户 -->
-              <div class="skin-variant" id="skin-variant">
-                <span class="skin-variant__label">胳膊粗细</span>
-                <button class="chip chip--on" type="button" data-skin-variant="classic">粗（Steve）</button>
-                <button class="chip" type="button" data-skin-variant="slim">细（Alex）</button>
+              <!-- 离线皮肤进游戏（M25）：没登录时也能在游戏里穿自己挑的那张。
+                   【为什么挤成一行】三栏是等高的，这一栏高多少、另外两栏也跟着多高；
+                   多占几十像素就能把整页顶出屏幕（实测就是这么顶出去的）。 -->
+              <div class="skin-offline">
+                <label
+                  class="check"
+                  title="开着时：没登账号也把现在这张皮肤穿进游戏。只有你自己看得到——别人看到的还是默认小人；也不代表能进正版服务器。"
+                >
+                  <input type="checkbox" id="skin-offline-ingame" />
+                  <span>离线进游戏也穿这张</span>
+                </label>
+                <span
+                  class="skin-variant"
+                  id="skin-variant"
+                  title="自己传的皮肤是粗胳膊（Steve）还是细胳膊（Alex）—— 皮肤图上分不出来，只能问你。官方 Steve / Alex 毛球自己认得。"
+                >
+                  <span class="skin-variant__label">胳膊</span>
+                  <button class="chip" type="button" data-skin-variant="classic">粗</button>
+                  <button class="chip" type="button" data-skin-variant="slim">细</button>
+                </span>
               </div>
-              <p class="panel__desc skin-list__tip">
-                上面这个开关开着时，没登账号也<b>能在游戏里穿上你选的这张</b>（只你自己看得到，
-                别人看到的还是默认小人）。<b>「胳膊粗细」</b>只影响自己传的皮肤——官方 Steve 和 Alex 毛球自己认得。
-              </p>
               <p class="panel__desc skin-list__tip">
                 想找更多皮肤？到<a class="linkbtn" id="skin-site-2" href="#">皮肤站</a>挑一张下下来，
                 再用右上角的「上传皮肤…」装进来。

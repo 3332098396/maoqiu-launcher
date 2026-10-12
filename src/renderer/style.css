@@ -2988,18 +2988,31 @@ button.acc__tab:hover {
   margin-top: 10px;
 }
 
-/* 「胳膊粗细」那一排（M25）：一行标签 + 两个小按钮 */
-.skin-variant {
+/* 离线皮肤进游戏（M25）：开关 + 胳膊粗细，挤在一行里。
+   【为什么非要挤】三栏等高，这一栏撑高多少，另外两栏跟着高多少 —— 多占地方会把整页顶出屏幕。 */
+.skin-offline {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 10px;
   flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.skin-variant {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .skin-variant__label {
   font-size: 12px;
   color: var(--text-dim);
+}
+
+/* 这两个小按钮比别处的 chip 矮一点，免得把那一行顶高 */
+.skin-variant .chip {
+  padding: 3px 10px;
+  font-size: 12px;
 }
 
 .skin-list__tip .linkbtn {
@@ -3101,7 +3114,10 @@ button.acc__tab:hover {
   gap: 8px;
   overflow-y: auto;
   flex: 1 1 auto;
-  max-height: 360px;
+  /* 【为什么是 320 不是 360】这一栏多高，另外两栏就跟着多高（三栏等高），
+     整页也跟着变高。M25 在它下面加了一行（离线进游戏 + 胳膊粗细，23px），
+     这里减 40px 抵消掉 —— 整页高度和加之前一样。列表本身照旧能滚。 */
+  max-height: 320px;
 }
 
 .skin-item {
