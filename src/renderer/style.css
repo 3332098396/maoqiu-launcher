@@ -3988,6 +3988,13 @@ body[data-theme='amber'] {
   overflow: hidden;
 }
 
+/* 【别删这一行】上面 .notices 自己写了 display:flex，会**盖过** hidden 属性
+   （跟 .online-grid / .panel 一个道理，见排查小抄）。
+   2026-10-13 实测踩到：缺这一条 → 通知面板一开机就挂在那儿，点外面也关不掉。 */
+.notices[hidden] {
+  display: none;
+}
+
 .notices__head {
   display: flex;
   align-items: center;
