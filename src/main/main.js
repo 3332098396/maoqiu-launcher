@@ -2141,7 +2141,7 @@ function registerIpcHandlers() {
   })
 
   /**
-   * 检查已装的 Mod 有没有新版本（M23，照 KAMUCL 的 modUpdates）。
+   * 检查已装的 Mod 有没有新版本（M23）。
    *
    * 做法：把每个 jar 的 sha1 算出来，一批发给 Modrinth——**只发哈希，不发文件**。
    * 同 sha1 原样回来的就是最新的；回来是别的，说明有新版。
@@ -2235,7 +2235,7 @@ function registerIpcHandlers() {
   })
 
   /**
-   * 装之前先看看"这个 Mod 需要哪些前置、还缺几个"（M23，照 KAMUCL 的 modCompatibility）。
+   * 装之前先看看"这个 Mod 需要哪些前置、还缺几个"（M23）。
    *
    * 【为什么要事前说】缺前置的 Mod 装上去，游戏启动时才会崩，
    * 而报错里往往只写"某某类找不到"——用户根本猜不到是缺了个东西。

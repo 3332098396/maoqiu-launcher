@@ -78,7 +78,7 @@ function tryPassword(buffer, entries, password) {
 const JUNK_NAMES = ['__macosx', '.ds_store', 'thumbs.db', 'desktop.ini']
 
 /**
- * 解压时**根本不写进硬盘**的条目（M23，对齐 KAMUCL 那份跳过清单）。
+ * 解压时**根本不写进硬盘**的条目（M23）。
  *
  * 【为什么要专门挡这几类】整合包是**别人做的**，里面什么都有可能。
  * 下面这几类要么对用户毫无用处、要么会让写入直接失败：

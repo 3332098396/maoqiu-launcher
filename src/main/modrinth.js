@@ -268,7 +268,7 @@ function loaderFor(type) {
 }
 
 /**
- * 批量问"这些文件有没有新版本"（M23，照 KAMUCL 的 modUpdates）。
+ * 批量问"这些文件有没有新版本"（M23）。
  *
  * 接口是 `POST /version_files/update`：把本地文件的 sha1 一批发过去，
  * 它回一张表——**同 sha1 原样回来 = 已经是最新的**，回来的是别的 id = 有新的。

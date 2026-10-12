@@ -103,7 +103,7 @@ const DEFAULTS = {
     /** 界面主题名（对应 style.css 里的 body[data-theme=...]，默认霓虹紫青）*/
     theme: 'neon',
     /**
-     * 减少动态效果（M23，照 KAMUCL 的"减少动效/跟随系统"）。
+     * 减少动态效果（M23）。
      *   'system' 跟随系统（默认）—— Windows「辅助功能 → 显示 → 显示动画」关掉就跟着关
      *   'on'     一直减少 —— 界面里的淡入、滑动、小人转动全部停掉
      *   'off'    不减少   —— 系统设了减少也不理它
@@ -112,7 +112,7 @@ const DEFAULTS = {
      */
     reduceMotion: 'system',
     /**
-     * 启动卡上轮播用的图（M23，照 KAMUCL 的 launchImages）。
+     * 启动卡上轮播用的图（M23）。
      * 空 = 就用内置那张风景图（等于不轮播）。
      * 【为什么不内置几张】图片要么自己拍、要么买授权，不能随手从网上抓；
      * 所以这条路交给用户：把自己的截图/壁纸挑进来，首页那张大卡就会轮着换。
@@ -165,7 +165,7 @@ const DEFAULTS = {
     /** 给游戏多少内存（MB）。0 = 自动（本机内存的 1/4，上限 8 GB） */
     memoryMB: 0,
     /**
-     * 游戏启动好之后，自动把毛球关掉（M23，照 KAMUCL 的 closeAfterLaunch）。
+     * 游戏启动好之后，自动把毛球关掉（M23）。
      * 默认关——留着窗口才能看日志和四格状态，需要的用户自己勾。
      * 游戏是 detached 起的，关掉启动器不影响它。
      */
@@ -260,7 +260,7 @@ function readConfig() {
 /** 同时下几个文件（1-32，默认 16）。网络不好时调小能稳一点 */
 function downloadConcurrency() {
   const value = Number(readConfig().download?.concurrency)
-  // 默认 16（M23，对齐 KAMUCL 的 downloadLimits）。
+  // 默认 16（M23）。
   // 【为什么从 8 提到 16】Mojang 和 Modrinth 的 CDN 是**按连接**限速的，
   // 不是按总带宽——多开几个连接总速度能翻一倍上下。
   // 但也不能无限加：连接太多小文件会互相抢，而且容易被当成异常流量。

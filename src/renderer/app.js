@@ -1483,7 +1483,7 @@ window.api.onLaunchState((payload) => {
     installEl.hidden = true
     refreshLaunchUi()
 
-    // 设置里勾了"启动后关掉毛球"就自己退场（M23，照 KAMUCL 的 closeAfterLaunch）。
+    // 设置里勾了"启动后关掉毛球"就自己退场（M23）。
     // 【为什么等 1500 毫秒】游戏刚起来那一下还在初始化，日志还在往外吐；
     // 立刻关会把"启动失败"这种消息一起关掉，用户根本来不及看见。
     // 上游也是等 1.5 秒，照它。
@@ -1803,7 +1803,7 @@ async function showSavePicker(button) {
     return
   }
 
-  // 只有一个世界就别问了，直接装进去（M23，照 KAMUCL 的 community.ts:647）。
+  // 只有一个世界就别问了，直接装进去（M23）。
   // 【为什么】数据包只能装在某个世界里，用户只有一个世界的时候，
   // 弹一个"选哪个世界"的框、里面只有一个选项，纯粹是白点一下。
   if (res.saves.length === 1) {
@@ -1873,7 +1873,7 @@ async function installMrProject(button) {
     return
   }
 
-  // ——— 装 Mod 之前先看看缺不缺前置（M23，照 KAMUCL 的 modCompatibility）———
+  // ——— 装 Mod 之前先看看缺不缺前置（M23）———
   //
   // 【为什么值得多问一句】缺前置的 Mod 装上去，游戏启动时才崩，
   // 而崩溃日志里往往只写"找不到某个类"——用户根本猜不到是缺了个东西。
@@ -4694,7 +4694,7 @@ motionQuery.addEventListener('change', () => {
 })
 
 // ——————————————————————————————————————————————
-// 主题对比度自动修正（M23，照 KAMUCL 的 themeContrast.ts）
+// 主题对比度自动修正（M23）
 // ——————————————————————————————————————————————
 
 /**
@@ -4922,7 +4922,7 @@ function applyLook(look) {
 }
 
 // ——————————————————————————————————————————————
-// 启动卡图片轮播（M23，照 KAMUCL 的 launchImages + carouselPlayback）
+// 启动卡图片轮播（M23）
 // ——————————————————————————————————————————————
 
 /** 轮播计时器 */
@@ -8284,7 +8284,7 @@ async function joinServer(one) {
   await startGame({ quickPlay: { address: one.ip } })
 }
 
-// ——— Mod 更新检测（M23，照 KAMUCL 的 modUpdates）———
+// ——— Mod 更新检测（M23）———
 
 /** 这一轮检查出来的更新：文件路径 → 新版本信息 */
 let localUpdates = {}
@@ -8392,7 +8392,7 @@ localVersionEl.addEventListener('change', () => {
 
 localUpdatesBtn.addEventListener('click', checkModUpdates)
 
-// ——— 把公共存档搬进这个版本（M23，照 KAMUCL 的 isolationFiles.ts）———
+// ——— 把公共存档搬进这个版本（M23）———
 //
 // 【为什么要有这个】默认开着版本隔离，于是用户以前在原版启动器里建的、
 // 或者关着隔离时建的世界，在隔离打开之后就"看不见"了。

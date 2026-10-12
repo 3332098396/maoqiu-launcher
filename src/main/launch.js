@@ -286,7 +286,7 @@ function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath
     jvmArgs.push(`-Djava.library.path=${nativesDir}`, '-cp', classpath)
   }
 
-  // ——— 窗口大小：先把 JSON 自带的摘掉，再按设置重新加一遍（M23，照 KAMUCL）———
+  // ——— 窗口大小：先把 JSON 自带的摘掉，再按设置重新加一遍（M23）———
   //
   // 【为什么非摘不可】版本 JSON 里本来就带着 `--width`/`--height`/`--fullscreen`。
   // 大多数版本它们是"跟着 has_custom_resolution 开关走"的模板，替换占位符就行；
@@ -969,7 +969,7 @@ async function launch(versionId, options = {}) {
     quickPlay
   })
 
-  // ——— ⑦.5 启动自愈：缺的文件自己补下（M23，照 KAMUCL 的 launchIntegrity）———
+  // ——— ⑦.5 启动自愈：缺的文件自己补下（M23）———
   //
   // 【为什么要这么做】库文件"不在了"的常见原因不是用户删了，而是：
   //   · 上次装到一半断电/关窗口，留下一个残缺版本

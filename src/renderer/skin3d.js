@@ -1,7 +1,7 @@
 // 毛球 — 3D 皮肤预览（M14.4）
 //
-// 【这是什么】启动页右边那个能拖着转的小人。学 KAMUCL 的做法，但用的是
-// Three.js 而不是它的 skinview3d —— 我们只需要"一个方块人 + 走路动画"，
+// 【这是什么】启动页右边那个能拖着转的小人。用的是
+// Three.js 而不是现成的 skinview3d —— 我们只需要"一个方块人 + 走路动画"，
 // 直接管 Three.js 更可控（理由记在 docs/02）。
 //
 // 【为什么单独一个文件、还要 type="module"】Three.js 是 ESM 模块，
@@ -513,7 +513,7 @@ function mount(container, zoom) {
   // 距离 52 能看到约 38 个单位（刚好占满还有一点边距）。
   // 踩过两次：太远 → 小人小小的发虚；太近 → 头都出画了。
   camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100)
-  // 相机在斜前方，稍微高一点——和 KAMUCL 那个视角差不多
+  // 相机在斜前方，稍微高一点
   applyCamera()
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })

@@ -109,7 +109,7 @@ const OFFICIAL_HEAD_START_MS = 2500
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
- * 缓存多久算"还新鲜"（M23，照 KAMUCL 的 5 分钟）。
+ * 缓存多久算"还新鲜"（M23，5 分钟）。
  * 这么新的缓存就不用再联网刷一遍了——版本清单一天也变不了几次。
  * 【以前没有这一条】每次打开软件都会在后台重下一份，多花一次请求；
  * 而真被卡住的时候，等来的还是旧的那份。现在"新的就用、老的才刷"。
