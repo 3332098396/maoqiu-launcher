@@ -29,6 +29,9 @@
 | `src/main/voxlink/index.js` | `room/ConnectionManager.java` — 房间流程、加入重试节奏 | **LGPL-3.0-only** |
 | `src/main/voxlink/room.js` | `network/NatLabels.java` — 网络类型取值与显示名 | **LGPL-3.0-only** |
 | `src/main/voxlink/ports.js` | 上游的「本机游戏端口探测」行为（对应文件待核实） | **LGPL-3.0-only** |
+| `src/main/voxlink/punchAuth.js` | `network/PunchAuth.java` — 打洞包的 HMAC 防伪章 | **LGPL-3.0-only** |
+| `src/main/voxlink/rudp.js` | `network/ReliableUdpTransport.java` — 可靠 UDP 传输、XOR 校验、RTT 估计 | **LGPL-3.0-only** |
+| `src/main/voxlink/stun.js` | `network/StunProbe.java` — 公网地址探测与 NAT 类型判断（含 RFC 5389 客户端） | **LGPL-3.0-only** |
 
 改写过程中参考了 [KAMUCL](https://github.com/kamubaba-i/KAMUCL) 的 JS 实现
 （`src/main/core/voxlink/`；该项目中对应部分同样按 LGPL-3.0-only 声明）。
