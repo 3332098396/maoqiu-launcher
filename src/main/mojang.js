@@ -90,38 +90,103 @@ function writeCache(tidied) {
 }
 
 /**
+ * 单个源的超时时间（M23）。
+ * 【为什么从 30 秒砍到 8 秒】以前是"官方源先试，30 秒不通再换镜像"——
+ * 官方在国内被卡住的时候，用户要对着转圈等满 30 秒才轮到镜像。
+ * 8 秒是上游用的数：正常网络下这点时间足够回来，被卡住时也不会让人干等。
+ */
+const SOURCE_TIMEOUT_MS = 8000
+
+/**
+ * 官方的"优先窗口"（M23）。
+ * 两个源同时发出去之后，**先给官方 2.5 秒**：它在窗口内回来就用它
+ * （官方永远是最新的那份）；没回来就先用手上已有的那个，不等了。
+ * 【为什么要留这个窗口】镜像偶尔会比官方慢几个小时才同步。
+ * 无脑"谁先到用谁"的话，官方明明通着也会被镜像抢走，列表就可能旧一点。
+ */
+const OFFICIAL_HEAD_START_MS = 2500
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * 缓存多久算"还新鲜"（M23，照 KAMUCL 的 5 分钟）。
+ * 这么新的缓存就不用再联网刷一遍了——版本清单一天也变不了几次。
+ * 【以前没有这一条】每次打开软件都会在后台重下一份，多花一次请求；
+ * 而真被卡住的时候，等来的还是旧的那份。现在"新的就用、老的才刷"。
+ */
+const CACHE_TTL_MS = 5 * 60 * 1000
+
+/**
  * 从网上下载一份版本清单。
- * 先试官方源，官方源不行就换国内镜像。
+ *
+ * 【M23 改成了"两个源同时发"】以前是一个一个试：官方不通要等满超时才轮到镜像。
+ * 现在两边一起发，先回来先用 —— 反正两边给的是同一份清单，
+ * 没必要为了"必须走官方"让用户干等。
+ * 用户设置里选「只用官方」的话就真的只用官方（那是他自己的选择）。
  */
 async function downloadManifest() {
-  const errors = []
   const mirrorUrl = mirror.toMirror(MANIFEST_URL)
   const source = settings.downloadSource()
 
-  // 用户选了"只用官方"或者"优先官方" → 先官方；
-  // 选了"优先镜像" → 先镜像（镜像不行再回官方）
-  const tries =
-    source === 'mirror' && mirrorUrl
-      ? [
-          { name: '国内镜像', url: mirrorUrl },
-          { name: '官方源', url: MANIFEST_URL }
-        ]
-      : [
-          { name: '官方源', url: MANIFEST_URL },
-          ...(mirrorUrl && source !== 'official'
-            ? [{ name: '国内镜像', url: mirrorUrl }]
-            : [])
-        ]
+  const official = { name: '官方源', url: MANIFEST_URL }
+  const mirrored = mirrorUrl ? { name: '国内镜像', url: mirrorUrl } : null
 
-  for (const attempt of tries) {
-    try {
-      return tidy(await fetchJson(attempt.url, { timeout: 30000 }))
-    } catch (error) {
-      errors.push(`${attempt.name}：${error.message}`)
-    }
+  let candidates
+  if (source === 'official' || !mirrored) {
+    candidates = [official]
+  } else if (source === 'mirror') {
+    candidates = [mirrored, official]
+  } else {
+    candidates = [official, mirrored]
   }
 
-  throw new Error(`下载源都没连上。\n${errors.join('\n')}`)
+  const errors = []
+  /** 包一层：成功给数据，失败把原因记下来、返回 null */
+  const attempt = (one) =>
+    fetchJson(one.url, { timeout: SOURCE_TIMEOUT_MS })
+      .then((raw) => ({ name: one.name, raw }))
+      .catch((error) => {
+        errors.push(`${one.name}：${error.message}`)
+        return null
+      })
+
+  const pending = candidates.map(attempt)
+  const first = pending[0]
+
+  // 只有官方一个源（或者用户指定只用官方）——那就老实等它
+  if (pending.length === 1) {
+    const only = await pending[0]
+    if (!only) throw new Error(`下载源没连上。\n${errors.join('\n')}`)
+    return tidy(only.raw)
+  }
+
+  // 给排第一的那个（auto 模式就是官方）一个优先窗口
+  const headStart = await Promise.race([first, sleep(OFFICIAL_HEAD_START_MS).then(() => null)])
+  if (headStart) return tidy(headStart.raw)
+
+  // 窗口内没等到——谁先成谁赢（first 还在跑，赢了也照收）
+  const winner = await new Promise((resolve) => {
+    let pendingCount = pending.length
+    let settled = false
+    for (const one of pending) {
+      one.then((result) => {
+        if (settled) return
+        if (result) {
+          settled = true
+          resolve(result)
+          return
+        }
+        pendingCount--
+        if (pendingCount === 0) {
+          settled = true
+          resolve(null)
+        }
+      })
+    }
+  })
+
+  if (!winner) throw new Error(`下载源都没连上。\n${errors.join('\n')}`)
+  return tidy(winner.raw)
 }
 
 /**
@@ -132,12 +197,16 @@ async function downloadManifest() {
  */
 async function getManifest() {
   const cached = readCache()
-  if (cached) return cached
+  if (cached) {
+    // 顺手告诉界面"这份缓存还算新吗"（M23）：
+    // 刚下过的就别再跑一趟网了，省一次请求也省用户一次等待。
+    return { ...cached, fresh: Date.now() - (cached.updatedAt || 0) < CACHE_TTL_MS }
+  }
 
   // 没有缓存就只能现下
   const fresh = await downloadManifest()
   writeCache(fresh)
-  return { ...fresh, fromCache: false, updatedAt: Date.now() }
+  return { ...fresh, fromCache: false, fresh: true, updatedAt: Date.now() }
 }
 
 /**
@@ -150,4 +219,4 @@ async function refreshManifest() {
   return { ...fresh, fromCache: false, updatedAt: Date.now() }
 }
 
-module.exports = { getManifest, refreshManifest, MANIFEST_URL }
+module.exports = { getManifest, refreshManifest, MANIFEST_URL, CACHE_TTL_MS }

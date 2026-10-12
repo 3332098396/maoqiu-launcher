@@ -230,8 +230,8 @@ async function loadManifest() {
   renderVersions()
   setStatus(describeCount())
 
-  // 有缓存就先显示着，后台悄悄去更新
-  if (result.fromCache) await refreshManifest()
+  // 有缓存就先显示着，后台悄悄去更新（M23：刚下过的就别刷了，省一趟网）
+  if (result.fromCache && result.fresh !== true) await refreshManifest()
 }
 
 /** 强制从网上更新一份 */
@@ -327,6 +327,35 @@ function formatEta(ms) {
   return `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`
 }
 
+/**
+ * 把一次下载进度拼成一行人话（M23）。
+ * 【为什么单独拎出来】装版本、下 Mod、装整合包三处的进度面板长得差不多，
+ * 分散在三个地方各写一遍的话，改一处就会漏两处（"剩余时间"以前就只有装版本那处有）。
+ */
+function progressLine(stats) {
+  const parts = [`${stats.percent}%`]
+  if (stats.total > 1) parts.push(`${stats.done}/${stats.total} 个`)
+  if (stats.totalBytes) parts.push(`${formatSize(stats.receivedBytes)}/${formatSize(stats.totalBytes)}`)
+  if (stats.speed) parts.push(formatSpeed(stats.speed))
+  if (stats.etaMs) parts.push(`剩 ${formatEta(stats.etaMs)}`)
+  if (stats.failed > 0) parts.push(`失败 ${stats.failed}`)
+
+  const current = currentFileLine(stats)
+  if (current) parts.push(current)
+
+  return parts.join(' · ')
+}
+
+/**
+ * "正在下载 xxx.jar" 这一句。
+ * 并发 8 个的话文件太多，只报**最先开始的**那个，后面带一句"等 N 个"。
+ */
+function currentFileLine(stats) {
+  const files = stats.currentFiles || []
+  if (files.length === 0) return ''
+  return files.length === 1 ? `正在下载 ${files[0]}` : `正在下载 ${files[0]} 等 ${files.length} 个`
+}
+
 /** 读一下本机装了哪些版本 */
 async function loadInstalled() {
   try {
@@ -388,11 +417,7 @@ window.api.onInstallStage((text) => {
 })
 window.api.onInstallProgress((stats) => {
   setFill(stats.percent)
-  setDetail(
-    `${stats.percent}% · ${stats.done}/${stats.total} 个 · ${formatSize(stats.receivedBytes)}/${formatSize(stats.totalBytes)}` +
-      ` · ${formatSpeed(stats.speed)} · 剩 ${formatEta(stats.etaMs)}` +
-      (stats.failed > 0 ? ` · 失败 ${stats.failed}` : '')
-  )
+  setDetail(progressLine(stats))
   if (loaderInstalling) {
     verLoaderHintEl.textContent =
       `正在下载加载器… ${stats.percent}% · ` +
@@ -1413,6 +1438,17 @@ window.api.onLaunchState((payload) => {
   if (payload.state === 'running') {
     launching = true
     refreshLaunchUi()
+
+    // 设置里勾了"启动后关掉毛球"就自己退场（M23，照 KAMUCL 的 closeAfterLaunch）。
+    // 【为什么等 1500 毫秒】游戏刚起来那一下还在初始化，日志还在往外吐；
+    // 立刻关会把"启动失败"这种消息一起关掉，用户根本来不及看见。
+    // 上游也是等 1.5 秒，照它。
+    if (settingsInfo?.closeAfterLaunch === true) {
+      setNotice('游戏已经启动了，毛球这就退到一边。', 'ok')
+      setTimeout(() => window.api.closeWindow(), 1500)
+      return
+    }
+
     setNotice('游戏已经启动了。这个窗口可以最小化，不影响游戏。', 'ok')
   } else if (payload.state === 'exited') {
     launching = false
@@ -1915,10 +1951,7 @@ mrVersionEl.addEventListener('click', (event) => {
 window.api.onContentProgress((stats) => {
   setStage('正在下载…')
   setFill(stats.percent)
-  setDetail(
-    `${stats.percent}% · ${formatSize(stats.receivedBytes)}/${formatSize(stats.totalBytes)}` +
-      ` · ${formatSpeed(stats.speed)}`
-  )
+  setDetail(progressLine(stats))
 })
 
 // 打开刚下好的那个文件夹
@@ -2387,14 +2420,12 @@ window.api.onPackStage((text) => {
 
 window.api.onPackProgress((stats) => {
   if (stats.percent === undefined) return
-  const line =
-    `正在下载… ${stats.percent}% · ${stats.done}/${stats.total} 个` +
-    (stats.failed > 0 ? ` · 失败 ${stats.failed}` : '')
+  const line = progressLine(stats)
   if (packInstalling) packProgressEl.textContent = line
   if (mrBusy) {
     setStage('正在装整合包…（里面有几千个文件，慢一点是正常的）')
     setFill(stats.percent)
-    setDetail(line.replace('正在下载… ', ''))
+    setDetail(line)
   }
 })
 
@@ -2820,6 +2851,7 @@ const setHeightEl = document.getElementById('set-height')
 const setWindowHintEl = document.getElementById('set-window-hint')
 const setIsolationEl = document.getElementById('set-isolation')
 const setIsolationHintEl = document.getElementById('set-isolation-hint')
+const setCloseAfterLaunchEl = document.getElementById('set-close-after-launch')
 const settingsNoticeEl = document.getElementById('settings-notice')
 
 /** 设置页拿到的信息：本机内存、屏幕大小、当前设置 */
@@ -2948,6 +2980,8 @@ async function loadSettingsPage() {
 
   setIsolationEl.checked = settingsInfo.isolation
   renderIsolationHint()
+
+  setCloseAfterLaunchEl.checked = settingsInfo.closeAfterLaunch === true
 
   // ——— 下载源 ———
   const source = settingsInfo.downloadSource || 'auto'
@@ -3401,6 +3435,13 @@ setIsolationEl.addEventListener('change', () => {
   saveSetting({ isolation: setIsolationEl.checked }, () => {
     settingsInfo.isolation = setIsolationEl.checked
     renderIsolationHint()
+  })
+})
+
+// ——— 启动后自动关闭毛球（M23）———
+setCloseAfterLaunchEl.addEventListener('change', () => {
+  saveSetting({ closeAfterLaunch: setCloseAfterLaunchEl.checked }, () => {
+    if (settingsInfo) settingsInfo.closeAfterLaunch = setCloseAfterLaunchEl.checked
   })
 })
 
@@ -4604,11 +4645,227 @@ function toFileUrl(localPath) {
   const forward = String(localPath || '').replace(/\\/g, '/')
   return encodeURI(forward.startsWith('/') ? `file://${forward}` : `file:///${forward}`)
 }
+const lookHeroEl = document.getElementById('look-hero')
+const lookHeroPickEl = document.getElementById('look-hero-pick')
+const lookHeroClearEl = document.getElementById('look-hero-clear')
+const lookHeroOnEl = document.getElementById('look-hero-on')
+const lookHeroOrderEl = document.getElementById('look-hero-order')
+
+/** 轮播顺序 */
+const HERO_ORDERS = [
+  { key: 'order', label: '按挑的顺序', hint: '一张接一张，转一圈再从头来' },
+  { key: 'random', label: '随机', hint: '每次随机挑一张，不会连着出同一张' }
+]
+
 const lookPagesEl = document.getElementById('look-pages')
 const lookBgEl = document.getElementById('look-bg')
 const lookBgmEl = document.getElementById('look-bgm')
 const lookHintEl = document.getElementById('look-hint')
 const lookThemesEl = document.getElementById('look-themes')
+const lookMotionEl = document.getElementById('look-motion')
+const lookMotionHintEl = document.getElementById('look-motion-hint')
+
+/**
+ * 动效三档（M23）。值存进 look.reduceMotion，见 settings.js 里的说明。
+ * 【为什么"跟随系统"排第一】它是默认值，也是最省心的那个。
+ */
+const MOTION_CHOICES = [
+  { key: 'system', label: '跟随系统', hint: 'Windows 里关了动画，这里就跟着关' },
+  { key: 'on', label: '减少动效', hint: '永远不动，界面直接到位' },
+  { key: 'off', label: '不动效限制', hint: '不管系统怎么设，动画全开' }
+]
+
+/** 系统有没有要求"减少动态效果" */
+const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+/** 记着当前选的是哪档，系统偏好变了要重新套一遍 */
+let motionChoice = 'system'
+
+/**
+ * 把动效档位套到界面上（就是给 <html> 换个类，真正干活的是 style.css 里那几条规则）。
+ * 顺手把"现在到底有没有在动"写给界面看——用户选了"跟随系统"却看不出效果时，
+ * 这行字能告诉他系统那边说了什么。
+ */
+function applyReduceMotion(choice) {
+  motionChoice = choice || 'system'
+  const html = document.documentElement
+
+  html.classList.remove('motion-system', 'reduce-motion', 'motion-ok')
+
+  if (motionChoice === 'on') {
+    html.classList.add('reduce-motion')
+  } else if (motionChoice === 'off') {
+    html.classList.add('motion-ok')
+  } else {
+    html.classList.add('motion-system')
+  }
+
+  // 3D 小人自己有个走路动画循环，CSS 关不掉它，得单独打个招呼
+  const motionOff = motionChoice === 'on' || (motionChoice === 'system' && motionQuery.matches)
+  if (window.skinViewer && window.skinViewer.setAnimationEnabled) {
+    window.skinViewer.setAnimationEnabled(!motionOff)
+  }
+
+  if (lookMotionHintEl) {
+    if (motionChoice === 'system') {
+      lookMotionHintEl.textContent = motionQuery.matches
+        ? '系统现在要求减少动效，所以界面是静止的。'
+        : '系统现在没要求减少动效，所以动画正常放着。'
+    } else {
+      lookMotionHintEl.textContent = ''
+    }
+  }
+}
+
+// 系统偏好改了（用户在 Windows 设置里关掉了动画）→ 选了"跟随系统"的话要立刻跟上
+motionQuery.addEventListener('change', () => {
+  if (motionChoice === 'system') applyReduceMotion('system')
+})
+
+// ——————————————————————————————————————————————
+// 主题对比度自动修正（M23，照 KAMUCL 的 themeContrast.ts）
+// ——————————————————————————————————————————————
+
+/**
+ * 对比度低于这个值就该改了。
+ *
+ * 【为什么是 3.0 而不是上游的 4.5】4.5 是 WCAG 里"**正文小字**"的及格线。
+ * 拿它来卡，界面上第一个被改掉的就是**主按钮上的白字**——
+ * 白字压在霓虹紫的渐变上算出来 3.3，脚本会把白字改成近黑色，
+ * 而那个按钮的样子是照用户点头过的设计稿做的。等于"为了达标把设计改了"，
+ * 用户第一眼就会发现"按钮怎么变了"。
+ * 所以取 3.0（WCAG 里"大号加粗文字 / 界面控件"的那条线）——
+ * 界面上的字基本都是加粗的大字；真正**糊成一团**的（算出来 2:1 以下的）
+ * 才会被自动修。宁可少修，不能乱修。
+ */
+const MIN_CONTRAST = 3.0
+
+/** 对比度不够时改成哪个色（哪个更清楚用哪个） */
+const LIGHT_TEXT = '#ffffff'
+const DARK_TEXT = '#12151f'
+
+/**
+ * 要检查的"字 / 底"配对。
+ * 【为什么就这几对】不是所有颜色都值得算：页面背景是"半透明面板 + 风景图"，
+ * 底下是什么只有用户自己知道，算不准。这几对的底色都是**实色或者固定搭配**，
+ * 算出来能代表真实观感（上游也只算这种）。
+ */
+const CONTRAST_PAIRS = [
+  ['--on-accent', '--accent'],        // 主按钮上的字
+  ['--pill-text', '--pill-bg'],       // 小胶囊标签
+  ['--rail-on-fg', '--rail-on-bg'],   // 左侧导航选中项
+  ['--fact-v', '--fact-bg'],          // 四格状态卡里的数值
+  ['--fact-k', '--fact-bg'],          // 四格状态卡里的标题
+  ['--ok-text', '--ok-soft'],         // 绿色的"成功"提示
+  ['--warn-text', '--warn-soft'],     // 黄色的"当心"提示
+  ['--danger-strong', '--danger-soft'], // 红色的"出错"提示
+  ['--text', '--card-bg']             // 卡片正文
+]
+
+/** 我们改过哪些变量，换主题时要先还原（不然会一辈子带着上一个主题的修正） */
+let contrastPatched = []
+
+/** 把 "#a06bff" / "rgba(1,2,3,0.5)" 这种读成 {r,g,b,a}。读不懂返回 null */
+function parseColor(text) {
+  const value = String(text || '').trim()
+
+  const hex = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i)
+  if (hex) {
+    const raw = hex[1]
+    const full = raw.length === 3 ? raw.split('').map((c) => c + c).join('') : raw
+    return {
+      r: parseInt(full.slice(0, 2), 16),
+      g: parseInt(full.slice(2, 4), 16),
+      b: parseInt(full.slice(4, 6), 16),
+      a: 1
+    }
+  }
+
+  const rgb = value.match(/^rgba?\(([^)]+)\)$/i)
+  if (rgb) {
+    const parts = rgb[1].split(/[,/\s]+/).filter(Boolean).map(Number)
+    if (parts.length >= 3 && parts.slice(0, 3).every(Number.isFinite)) {
+      return {
+        r: parts[0],
+        g: parts[1],
+        b: parts[2],
+        a: Number.isFinite(parts[3]) ? parts[3] : 1
+      }
+    }
+  }
+
+  return null
+}
+
+/** 相对亮度（WCAG 的公式，注意那个 2.4 的伽马修正——不能用"人眼看着的亮度"） */
+function luminance({ r, g, b }) {
+  const channel = (value) => {
+    const v = value / 255
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+}
+
+/** 两个不透明颜色的对比度（1:1 最差，21:1 最好） */
+function contrastRatio(a, b) {
+  const la = luminance(a)
+  const lb = luminance(b)
+  const light = Math.max(la, lb)
+  const dark = Math.min(la, lb)
+  return (light + 0.05) / (dark + 0.05)
+}
+
+/**
+ * 半透明的颜色盖在底上，看上去是什么色。
+ * 【为什么要这一步】我们面板全是半透明的，直接拿 rgba 算对比度是错的——
+ * 屏幕上看到的是"它和它底下那层混出来的颜色"。
+ */
+function overTop(color, base) {
+  const a = color.a === undefined ? 1 : color.a
+  return {
+    r: color.r * a + base.r * (1 - a),
+    g: color.g * a + base.g * (1 - a),
+    b: color.b * a + base.b * (1 - a),
+    a: 1
+  }
+}
+
+/**
+ * 把当前主题里对比度不够的那几对自动改成"更清楚的那个色"。
+ *
+ * 【为什么要自动改】五套主题是手调的，某套里某个颜色差一点点是常有的事，
+ * 用户看到的却是"这字怎么糊成一团"。与其等他来报，不如算一遍自己修。
+ * 【注意】只改"字"不改"底"——底色是主题的招牌，动它就等于换了个主题。
+ */
+function fixThemeContrast() {
+  const style = getComputedStyle(document.body)
+
+  // 先把上一轮改过的还原，否则换主题时会把旧主题的修正带过来
+  for (const name of contrastPatched) document.body.style.removeProperty(name)
+  contrastPatched = []
+
+  const read = (name) => parseColor(style.getPropertyValue(name))
+
+  // 相当于"最底下那张风景图被压暗后的颜色"，半透明的底都往它上面叠
+  const base = read('--page-tint') || { r: 16, g: 20, b: 34, a: 1 }
+
+  for (const [fgName, bgName] of CONTRAST_PAIRS) {
+    const fg = read(fgName)
+    const bgRaw = read(bgName)
+    if (!fg || !bgRaw) continue
+
+    const bg = overTop(bgRaw, overTop(base, { r: 8, g: 10, b: 20, a: 1 }))
+
+    if (contrastRatio(fg, bg) >= MIN_CONTRAST) continue
+
+    // 白和近黑，哪个在这块底上更清楚就用哪个
+    const white = { r: 255, g: 255, b: 255, a: 1 }
+    const dark = parseColor(DARK_TEXT)
+    const better = contrastRatio(white, bg) >= contrastRatio(dark, bg) ? LIGHT_TEXT : DARK_TEXT
+
+    document.body.style.setProperty(fgName, better)
+    contrastPatched.push(fgName)
+  }
+}
 
 /** 可以藏的页面（「启动」「设置」不给藏——藏了就没地方改回来） */
 const HIDEABLE_PAGES = [
@@ -4680,6 +4937,82 @@ function applyLook(look) {
 
   // ④ 主题配色（M14.1：整个界面的配色都由这个属性决定，见 style.css 开头的主题块）
   document.body.dataset.theme = settingsLook.theme || 'neon'
+
+  // ⑤ 减少动效（M23）
+  applyReduceMotion(settingsLook.reduceMotion || 'system')
+
+  // ⑥ 对比度自动修正（M23）。必须放在主题之后——它要读刚套上的那套颜色
+  fixThemeContrast()
+
+  // ⑦ 启动卡轮播（M23）
+  startHeroCarousel(settingsLook)
+}
+
+// ——————————————————————————————————————————————
+// 启动卡图片轮播（M23，照 KAMUCL 的 launchImages + carouselPlayback）
+// ——————————————————————————————————————————————
+
+/** 轮播计时器 */
+let heroTimer = null
+/** 现在停在第几张 */
+let heroIndex = 0
+/** 当前这批图（用来判断"配置变了没有"） */
+let heroList = []
+
+/**
+ * 每张停多久。上游是 6.5 秒——比"看一眼"长一点，比"等得不耐烦"短一点，
+ * 就照它用了（这个数没什么玄机，纯粹是别人试出来的手感）。
+ */
+const HERO_INTERVAL_MS = 6500
+
+/** 把某一张贴到启动卡上 */
+function showHeroImage(pathOrEmpty) {
+  if (pathOrEmpty) {
+    document.body.style.setProperty('--hero-image', `url("${toFileUrl(pathOrEmpty)}")`)
+  } else {
+    document.body.style.removeProperty('--hero-image')
+  }
+}
+
+/**
+ * 按设置启动/停掉轮播。
+ * 【只有一张图就不轮】不然那个计时器会一直空转，一秒醒一次什么也不干。
+ */
+function startHeroCarousel(look) {
+  if (heroTimer) {
+    clearInterval(heroTimer)
+    heroTimer = null
+  }
+
+  const images = (look.heroImages || []).filter(Boolean)
+  const changed = images.join('|') !== heroList.join('|')
+  heroList = images
+
+  if (changed) heroIndex = 0
+
+  if (images.length === 0) {
+    showHeroImage('') // 回落到内置那张风景图
+    return
+  }
+
+  heroIndex = Math.min(heroIndex, images.length - 1)
+  showHeroImage(images[heroIndex])
+
+  if (look.heroCarousel === false || images.length < 2) return
+
+  heroTimer = setInterval(() => {
+    if (look.heroOrder === 'random') {
+      // 别随机到"跟刚才同一张"——看着像卡住了
+      let next = heroIndex
+      while (next === heroIndex && images.length > 1) {
+        next = Math.floor(Math.random() * images.length)
+      }
+      heroIndex = next
+    } else {
+      heroIndex = (heroIndex + 1) % images.length
+    }
+    showHeroImage(images[heroIndex])
+  }, HERO_INTERVAL_MS)
 }
 
 /** 用户第一次点页面时，把没放成的背景音乐补上（浏览器的自动播放限制） */
@@ -4755,6 +5088,42 @@ function renderLookTab() {
     button.addEventListener('click', () => saveLook({ theme: one.key }))
     lookThemesEl.appendChild(button)
   }
+
+  // 启动卡上的图（M23）
+  const heroListNow = (look.heroImages || []).filter(Boolean)
+  lookHeroEl.value = heroListNow.length === 0
+    ? ''
+    : heroListNow.length === 1
+      ? heroListNow[0]
+      : `${heroListNow.length} 张：${heroListNow.map((one) => one.split(/[\\/]/).pop()).join('、')}`
+  lookHeroOnEl.checked = look.heroCarousel !== false
+  lookHeroOnEl.disabled = heroListNow.length < 2
+
+  lookHeroOrderEl.textContent = ''
+  const orderNow = look.heroOrder || 'order'
+  for (const one of HERO_ORDERS) {
+    const chip = document.createElement('button')
+    chip.type = 'button'
+    chip.className = orderNow === one.key ? 'chip chip--on' : 'chip'
+    chip.textContent = one.label
+    chip.disabled = heroListNow.length < 2
+    chip.addEventListener('click', () => saveLook({ heroOrder: one.key }))
+    lookHeroOrderEl.appendChild(chip)
+  }
+
+  // 动效三档
+  lookMotionEl.textContent = ''
+  const motionNow = look.reduceMotion || 'system'
+  for (const one of MOTION_CHOICES) {
+    const chip = document.createElement('button')
+    chip.type = 'button'
+    chip.className = motionNow === one.key ? 'chip chip--on' : 'chip'
+    chip.textContent = one.label
+    chip.title = one.hint
+    chip.addEventListener('click', () => saveLook({ reduceMotion: one.key }))
+    lookMotionEl.appendChild(chip)
+  }
+  applyReduceMotion(motionNow)
 }
 
 /** 存个性化设置，然后立刻套上去 */
@@ -4773,6 +5142,21 @@ async function saveLook(patch) {
     lookHintEl.textContent = `存不下来：${error.message}`
   }
 }
+
+// ——— 启动卡上的图（M23）———
+lookHeroPickEl.addEventListener('click', async () => {
+  const picked = await window.api.pickLookFile('hero')
+  if (!picked.ok) return
+
+  const chosen = picked.paths && picked.paths.length ? picked.paths : [picked.path]
+  // 和已有的合并、去掉重复的——挑两次同一张不该出现两遍
+  const merged = [...new Set([...(settingsInfo?.look?.heroImages || []), ...chosen])]
+  await saveLook({ heroImages: merged })
+})
+
+lookHeroClearEl.addEventListener('click', () => saveLook({ heroImages: [] }))
+
+lookHeroOnEl.addEventListener('change', () => saveLook({ heroCarousel: lookHeroOnEl.checked }))
 
 document.getElementById('look-bg-pick').addEventListener('click', async () => {
   const picked = await window.api.pickLookFile('background')

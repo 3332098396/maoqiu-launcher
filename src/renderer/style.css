@@ -38,6 +38,37 @@
 }
 
 /* ══════════════════════════════════════════════
+   减少动效（M23，照 KAMUCL 的"减少动效 / 跟随系统"）
+   ══════════════════════════════════════════════
+   html 上挂哪个类由 app.js 按设置改，三档（见 settings.js 的 look.reduceMotion）：
+
+     .motion-system  ← 跟随系统（默认）。下面那段 @media 只在系统要求减少时才生效
+     .reduce-motion  ← 用户明确要减少
+     .motion-ok      ← 用户明确不要减少（连系统那段 @media 也不理会）
+
+   【为什么用 animation:none 而不是把时长改成 0.01s】时长 0.01s 还会走一帧动画，
+   有的设备上会闪一下；直接 none 是彻底不动。
+   【为什么过渡和动画要分开写】transition 和 animation 是两回事：
+   界面的淡入靠 animation，按钮/卡片的高亮靠 transition，少关一个都还会"动"。 */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.motion-system *,
+  html.motion-system *::before,
+  html.motion-system *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ══════════════════════════════════════════════
    主题（M14.1）
    每个主题只改上面那组变量——别的地方一行都不用动。
    加新主题：复制一段、改颜色、在 app.js 的 THEMES 里加一项。
@@ -2657,13 +2688,15 @@ button.acc__tab:hover {
   /* 大启动卡铺风景图（M17.2 先做在霓虹紫青上，M17.x 铺开到全部主题——用户要求统一）
    * 【为什么还要压一层渐变】不压的话白字压在亮风景上看不清；
    * 这层是"上浅下深"——上半截留着看清风景，下半截压暗好放按钮和字。 */
+  /* 图走 --hero-image 这个变量（M23：启动卡轮播要换图）——
+     没设变量就回落到内置那张风景图。 */
   background: linear-gradient(
       180deg,
       rgba(6, 8, 16, 0.3) 0%,
       rgba(6, 8, 16, 0.62) 55%,
       rgba(6, 8, 16, 0.9) 100%
     ),
-    url('../../assets/hero-landscape.jpg') center 42% / cover no-repeat;
+    var(--hero-image, url('../../assets/hero-landscape.jpg')) center 42% / cover no-repeat;
   box-shadow: 0 16px 44px rgba(0, 0, 0, 0.3);
   color: var(--on-accent);
 }

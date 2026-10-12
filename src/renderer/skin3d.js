@@ -335,12 +335,33 @@ function rebuild() {
   scene.add(player)
 }
 
+/**
+ * 要不要放走路动画（M23「减少动效」用）。
+ * 关掉之后小人站着不动——但仍然跟着鼠标转，那是用户自己拖的，不算"动效"。
+ */
+let animationEnabled = true
+
+function setAnimationEnabled(on) {
+  animationEnabled = on !== false
+  if (!animationEnabled) {
+    // 立刻站直，别停在抬着一条腿的姿势上
+    for (const part of PARTS) {
+      if (part.joint) part.joint.rotation.x = 0
+    }
+    if (player) {
+      player.position.y = 0
+      spin = targetSpin
+      player.rotation.y = spin
+    }
+  }
+}
+
 function animate() {
   raf = requestAnimationFrame(animate)
   if (!renderer) return
 
-  walkPhase += 0.045
-  const swing = Math.sin(walkPhase) * 0.5
+  if (animationEnabled) walkPhase += 0.045
+  const swing = animationEnabled ? Math.sin(walkPhase) * 0.5 : 0
 
   // 走路动画：手脚前后摆（转轴在肩膀/胯，见 buildPlayer），身体轻轻上下
   // 右臂和左腿同相、左臂和右腿同相 —— 这就是人走路的样子
@@ -351,9 +372,10 @@ function animate() {
     part.joint.rotation.x = isLimb ? amount : 0
   }
   if (player) {
-    player.position.y = Math.sin(walkPhase * 2) * 0.12
+    player.position.y = animationEnabled ? Math.sin(walkPhase * 2) * 0.12 : 0
     // 平滑地追向鼠标指的角度（0.12 越小越"慢半拍"，看着越自然）
-    spin += (targetSpin - spin) * 0.12
+    // 关掉动效时直接到位，不做这段"慢半拍"的追
+    spin = animationEnabled ? spin + (targetSpin - spin) * 0.12 : targetSpin
     player.rotation.y = spin
   }
 
@@ -640,6 +662,7 @@ window.skinViewer = {
   setSkin,
   useDefaultSkin,
   unmount,
-  makeFallbackSkin
+  makeFallbackSkin,
+  setAnimationEnabled
 }
 

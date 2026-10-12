@@ -17,7 +17,56 @@
 const { fetchJson } = require('./http')
 const modnames = require('./modnames')
 
-const API = 'https://api.modrinth.com/v2'
+/**
+ * 接口地址，两个口子：
+ *   ① 官方 api.modrinth.com —— 权威，但国内时通时不通
+ *   ② mod.mcimirror.top（MCIM 镜像）—— 国内直连，快得多
+ *
+ * 【为什么两个都要】只留官方，国内用户搜个 Mod 要等十几秒甚至直接失败；
+ * 只留镜像，镜像哪天关了就整个「下载」页报废。所以**两个都留着，谁先行谁**。
+ *
+ * 【为什么记住上次成功的那个】官方被墙的时候，每次搜索都先撞一次官方的墙
+ * （要等十几秒超时才轮到镜像），体验很差。所以第一次跑通哪个，
+ * 这一次会话就先走哪个 —— 相当于"撞一次墙就够了"。
+ */
+const API_OFFICIAL = 'https://api.modrinth.com/v2'
+const API_MIRROR = 'https://mod.mcimirror.top/modrinth/v2'
+
+/** 兼容老引用（别处可能 import 了 API） */
+const API = API_OFFICIAL
+
+/** 上次跑到哪个源上了。true = 这次会话先走镜像 */
+let preferMirror = false
+
+/**
+ * 按路径取一次 Modrinth 接口，**两个源依次试**。
+ * @param {string} pathAndQuery 形如 `/search?a=1`（两个源的路径部分是一样的）
+ */
+async function apiGet(pathAndQuery, options = {}) {
+  const sources = preferMirror ? [API_MIRROR, API_OFFICIAL] : [API_OFFICIAL, API_MIRROR]
+  let lastError = null
+
+  for (const base of sources) {
+    try {
+      // 单个源给 15 秒：比官方的 20 秒短，好让"官方卡住"时能及时切镜像
+      const data = await fetchJson(`${base}${pathAndQuery}`, { timeout: 15000, ...options })
+      preferMirror = base === API_MIRROR
+      return data
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  // 两个都不行才报错。说的话要让人知道"是网络，不是你搜的东西不存在"
+  throw new Error(
+    `连不上 Modrinth（官方和国内镜像都试过了）：${lastError?.message || '未知原因'}`
+  )
+}
+
+/** 现在走的是镜像吗（界面/日志想显示时用） */
+function usingMirror() {
+  return preferMirror
+}
 
 /** 能搜的内容类型。值是 Modrinth 用的代号，加一是给人看的名字 */
 const PROJECT_TYPES = {
@@ -87,7 +136,7 @@ async function search({ type, query = '', gameVersion = '', loader = '', limit =
     facets: JSON.stringify(facets)
   })
 
-  const data = await fetchJson(`${API}/search?${params.toString()}`, { timeout: 20000 })
+  const data = await apiGet(`/search?${params.toString()}`)
 
   return {
     total: data.total_hits || 0,
@@ -130,9 +179,8 @@ async function getVersions(projectId, { gameVersion = '', loader = '' } = {}) {
   if (loader) params.set('loaders', JSON.stringify([loader]))
 
   const query = params.toString()
-  const list = await fetchJson(
-    `${API}/project/${encodeURIComponent(projectId)}/version${query ? `?${query}` : ''}`,
-    { timeout: 20000 }
+  const list = await apiGet(
+    `/project/${encodeURIComponent(projectId)}/version${query ? `?${query}` : ''}`
   )
 
   return (Array.isArray(list) ? list : []).map(tidyVersion)
@@ -186,4 +234,4 @@ function loaderFor(type) {
   return LOADER_FOR_TYPE[type] || ''
 }
 
-module.exports = { search, getVersions, pickBest, loaderFor, PROJECT_TYPES, API }
+module.exports = { search, getVersions, pickBest, loaderFor, PROJECT_TYPES, API, usingMirror, apiGet }

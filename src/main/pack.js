@@ -77,6 +77,50 @@ function tryPassword(buffer, entries, password) {
  */
 const JUNK_NAMES = ['__macosx', '.ds_store', 'thumbs.db', 'desktop.ini']
 
+/**
+ * 解压时**根本不写进硬盘**的条目（M23，对齐 KAMUCL 那份跳过清单）。
+ *
+ * 【为什么要专门挡这几类】整合包是**别人做的**，里面什么都有可能。
+ * 下面这几类要么对用户毫无用处、要么会让写入直接失败：
+ *   · `__MACOSX/`、`.DS_Store`、`Thumbs.db`、`desktop.ini` —— 苹果/Windows 产生的垃圾
+ *   · 顶层的 `logs/` `crash-reports/` —— 打包者的日志和崩溃报告，几百 MB 白占地方
+ *   · Windows 保留名（con / nul / com1…）—— 写下去轻则失败，重则生成一个
+ *     你在资源管理器里看不见也删不掉的文件
+ *   · 单文件超过 512 MB —— 正常的游戏文件不会有这么大，多半是包里混进了别的东西
+ *
+ * 【注意】判断的是**相对路径的每一段**，不是只看顶层——`mods/__MACOSX/` 这种
+ * 夹在中间的也得挡掉（打包工具会把资源目录整个带上）。
+ */
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i
+
+/** 单个文件超过这个大小就不解压 */
+const MAX_ENTRY_BYTES = 512 * 1024 * 1024
+
+function unsafeEntry(name, size) {
+  const clean = String(name || '').replace(/\\/g, '/').replace(/^\/+/, '')
+  if (!clean) return true
+
+  const segments = clean.split('/')
+
+  // ① 苹果塞进来的元数据目录
+  if (segments.some((one) => one.toLowerCase() === '__macosx')) return true
+
+  // ② 系统垃圾文件
+  if (JUNK_NAMES.includes(segments[segments.length - 1].toLowerCase())) return true
+
+  // ③ 打包者的日志 / 崩溃报告
+  const first = segments[0].toLowerCase()
+  if (first === 'logs' || first === 'crash-reports') return true
+
+  // ④ Windows 保留名
+  if (segments.some((one) => WINDOWS_RESERVED.test(one))) return true
+
+  // ⑤ 巨无霸单文件
+  if (Number(size) > MAX_ENTRY_BYTES) return true
+
+  return false
+}
+
 function topLevelNames(entries) {
   const names = new Set()
   for (const entry of entries) {
@@ -472,6 +516,8 @@ async function installModrinthPack(filePath, data, { onStage, onProgress, onTask
     if (!prefix || name.endsWith('/')) continue
 
     const rel = name.slice(prefix.length)
+    if (unsafeEntry(rel, entry.size)) continue
+
     const target = path.resolve(packRoot, rel)
     if (!target.startsWith(packRoot)) continue
 
@@ -529,9 +575,14 @@ async function installPlainPack(filePath, layout, targetVersionId, { onStage, on
   )
 
   let written = 0
+  let refused = 0
   for (const entry of pending) {
     const rel = wrapper ? entry.name.slice(wrapper.length) : entry.name.replace(/^\//, '')
     if (!rel) continue
+    if (unsafeEntry(rel, entry.size)) {
+      refused++
+      continue
+    }
     const target = path.resolve(root, rel)
     if (!target.startsWith(root)) continue
 
@@ -545,7 +596,7 @@ async function installPlainPack(filePath, layout, targetVersionId, { onStage, on
   }
 
   if (onStage) onStage('解压完成')
-  return { ok: true, written, dest }
+  return { ok: true, written, refused, dest }
 }
 
 /**
@@ -653,6 +704,7 @@ async function installGameDirPack(buffer, entries, { onStage, onProgress, versio
 
   let written = 0
   let skipped = 0
+  let refused = 0
 
   for (const entry of pending) {
     let rel = entry.name.slice(wrapper.length)
@@ -660,6 +712,12 @@ async function installGameDirPack(buffer, entries, { onStage, onProgress, versio
     // PCL 自己的东西（启动器本体、它的配置）——对我们没用
     if (rel === 'PCL.ini' || rel === 'launcher_profiles.json') continue
     if (/^pcl\//i.test(rel) || /plain craft launcher/i.test(rel)) continue
+
+    // 系统垃圾 / 打包者日志 / Windows 保留名 / 超大文件（见 unsafeEntry 的说明）
+    if (unsafeEntry(rel, entry.size)) {
+      refused++
+      continue
+    }
 
     // ——— 改名字：versions\<包里的名字>\… → versions\<用户起的名字>\… ———
     //
@@ -723,7 +781,7 @@ async function installGameDirPack(buffer, entries, { onStage, onProgress, versio
   }
 
   stage('整合包安装完成')
-  return { ok: true, written, skipped, versionId: targetVersion, dest: paths.gameDir(dir), dir: paths.gameDir(dir) }
+  return { ok: true, written, skipped, refused, versionId: targetVersion, dest: paths.gameDir(dir), dir: paths.gameDir(dir) }
 }
 
 /** 找出"外面套的那层"目录（.minecraft/ 或者单个文件夹）；没有就返回空 */

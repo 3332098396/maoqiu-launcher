@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<!-- motion-system：先按"跟随系统"起步（样式表里那个 @media 靠它生效），
+     等配置读出来了由 app.js 改成用户真正选的那档。写在标签上是为了第一帧就不闪 -->
+<html lang="zh-CN" class="motion-system">
   <head>
     <meta charset="UTF-8" />
     <!-- 安全限制（CSP）：只允许加载软件自己的东西。
@@ -963,6 +965,21 @@
           </section>
 
           <section class="panel">
+            <h3 class="panel__title">启动之后</h3>
+            <p class="panel__desc">
+              游戏起来之后毛球要不要自己退到一边。<b>游戏不受影响</b>——它是自己独立跑着的，
+              关掉毛球它照样继续玩（下次开机想联机、看日志，重新打开毛球就行）。
+            </p>
+            <label class="check check--block">
+              <input type="checkbox" id="set-close-after-launch" />
+              <span>
+                <b>游戏一启动好，就自动关掉毛球</b>
+                <em class="check__help">不勾就留着窗口，日志、四格状态都能随手看</em>
+              </span>
+            </label>
+          </section>
+
+          <section class="panel">
             <h3 class="panel__title">下载源</h3>
             <p class="panel__desc">
               游戏文件从哪儿下。国内直连官方服务器很慢，一般交给启动器自己挑就行。
@@ -1285,10 +1302,44 @@
             </section>
 
             <section class="panel">
+              <h3 class="panel__title">启动卡上的图</h3>
+              <p class="panel__desc">
+                首页那张大卡片默认铺的是自带的一张风景。把你自己的截图、壁纸挑进来几张，
+                它就会隔一会儿换一张（一张图的时候不换）。
+              </p>
+
+              <div class="join-row">
+                <input class="input" id="look-hero" type="text" readonly placeholder="没挑图，用自带的那张风景" />
+                <button class="btn btn--ghost btn--sm" type="button" id="look-hero-pick">挑几张…</button>
+                <button class="btn btn--ghost btn--sm" type="button" id="look-hero-clear">清掉</button>
+              </div>
+
+              <label class="check check--block">
+                <input type="checkbox" id="look-hero-on" />
+                <span>
+                  <b>轮播</b>
+                  <em class="check__help">关掉就固定显示第一张</em>
+                </span>
+              </label>
+
+              <div class="chips" id="look-hero-order"></div>
+            </section>
+
+            <section class="panel">
               <!-- M17.x：原来这节叫「顶栏样式」——那时候主题确实只换顶栏颜色，
                    现在连背景、卡片、按钮一起换，叫"顶栏"会让人以为改的只是顶上一条 -->
               <h3 class="panel__title">界面主题</h3>
               <div class="icon-picker" id="look-themes"></div>
+            </section>
+
+            <section class="panel">
+              <h3 class="panel__title">动效</h3>
+              <p class="panel__desc">
+                界面里的淡入淡出、滑动、小人转身这些小动画。看着晕、或者电脑比较老，
+                可以关掉——关掉之后界面会"啪"地一下直接到位，不再慢慢动。
+              </p>
+              <div class="chips" id="look-motion"></div>
+              <p class="panel__desc" id="look-motion-hint"></p>
             </section>
           </div>
         </div>

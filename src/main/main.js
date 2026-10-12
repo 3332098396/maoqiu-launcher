@@ -21,6 +21,7 @@ const mojang = require('./mojang')
 const install = require('./install')
 const paths = require('./paths')
 const settings = require('./settings')
+const windowState = require('./windowState')
 const accounts = require('./accounts')
 const yggdrasil = require('./yggdrasil')
 const microsoft = require('./microsoft')
@@ -156,14 +157,20 @@ function closeSplash() {
 }
 
 function createWindow() {
+  // 窗口位置/大小：上次关在哪儿，这次就开在哪儿（M23）。
+  // 屏幕变小了会自动缩，显示器拔了也不会把窗口开到看不见的地方。
+  const place = windowState.restore()
+
   mainWindow = new BrowserWindow({
     // 左边现在有个导航栏（M14.2），窗口宽一点内容才不挤
-    width: 1180,
+    width: place.width,
     // M17.5：设计稿是大版式（一屏放下大启动卡 + 四格 + 两栏），
     // 740 太挤会把皮肤预览挤到屏幕外，所以默认高一点
-    height: 824,
-    minWidth: 900,
-    minHeight: 600,
+    height: place.height,
+    minWidth: place.minWidth,
+    minHeight: place.minHeight,
+    // 有存过位置才传 x/y；没存过就交给 Electron 居中
+    ...(place.x !== undefined ? { x: place.x, y: place.y } : {}),
     title: '毛球',
     icon: path.join(__dirname, '..', '..', 'assets', 'app-256.png'),
     backgroundColor: '#F2F8FF',
@@ -181,6 +188,20 @@ function createWindow() {
 
   // 去掉 Electron 自带的英文菜单栏（File / Edit / View…），它对这个软件没用
   mainWindow.removeMenu()
+
+  // 记住位置和大小：拖动/缩放攒 500 毫秒写一次，关窗口时再补一次
+  windowState.track(mainWindow)
+
+  // 上次是最大化开的，就还是最大化
+  if (place.maximized) {
+    mainWindow.once('ready-to-show', () => {
+      try {
+        mainWindow.maximize()
+      } catch {
+        // 窗口已经没了就算了
+      }
+    })
+  }
 
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))
 
@@ -1069,16 +1090,20 @@ function registerIpcHandlers() {
   /** 挑背景图 / 背景音乐（弹系统的文件选择框） */
   ipcMain.handle('look:pick', async (_event, kind) => {
     const isImage = kind === 'background'
+    // M23：启动卡轮播要一次挑好几张
+    const multiple = kind === 'hero'
     const result = await dialog.showOpenDialog({
-      title: isImage ? '挑一张背景图' : '挑一首背景音乐',
-      properties: ['openFile'],
-      filters: isImage
-        ? [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }]
-        : [{ name: '音频', extensions: ['mp3', 'ogg', 'wav', 'm4a', 'flac'] }]
+      title: multiple ? '挑几张启动卡上的图（可以多选）' : isImage ? '挑一张背景图' : '挑一首背景音乐',
+      properties: multiple ? ['openFile', 'multiSelections'] : ['openFile'],
+      filters:
+        isImage || multiple
+          ? [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }]
+          : [{ name: '音频', extensions: ['mp3', 'ogg', 'wav', 'm4a', 'flac'] }]
     })
 
     if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true }
-    return { ok: true, path: result.filePaths[0] }
+    // 多选时把整批都给出去，让界面自己合并（单选的调用方只看 path）
+    return { ok: true, path: result.filePaths[0], paths: result.filePaths }
   })
 
   // ——— 整合包（M11）———

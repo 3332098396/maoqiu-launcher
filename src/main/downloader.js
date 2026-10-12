@@ -398,6 +398,18 @@ function createTask(files, options = {}) {
 
   let lastReportAt = 0
 
+  /**
+   * 此刻"正在下"的那几个文件（M23：进度条上要写"正在下载 xxx.jar"）。
+   * 用 saveTo 当 key——同一个文件不会被两个工人同时下，但同名不同目录的会有，
+   * 所以不能拿文件名当 key。
+   */
+  const activeFiles = new Map()
+
+  /** 从路径里取出文件名（进度条上只显示文件名，整条路径太长） */
+  function baseNameOf(filePath) {
+    return String(filePath || '').split(/[\\/]/).pop() || ''
+  }
+
   function stats() {
     const received = Math.min(doneBytes + currentBytes, totalBytes || Number.MAX_SAFE_INTEGER)
     const perSecond = speed.speed()
@@ -425,6 +437,8 @@ function createTask(files, options = {}) {
       // 剩余时间（毫秒）。速度太低时算不出来，返回 0 让界面显示"—"
       etaMs: perSecond > 1024 ? Math.max(0, ((totalBytes - received) / perSecond) * 1000) : 0,
       usingMirror: preferMirror,
+      // 正在下的文件名（按开始先后）。并发高时可能有好几个，界面只显示头一两个
+      currentFiles: [...activeFiles.values()],
       failures: failures.slice()
     }
   }
@@ -488,17 +502,26 @@ function createTask(files, options = {}) {
 
         const startedAt = Date.now()
         const wanted = preferMirror
-        const result = await downloadOneFile(file, {
-          signal: controller.signal,
-          preferMirror,
-          sourcePreference,
-          throttle,
-          onBytes: (n) => {
-            currentBytes += n
-            speed.add(n)
-            report()
-          }
-        })
+        activeFiles.set(file.saveTo, baseNameOf(file.saveTo))
+        report(true)
+
+        let result
+        try {
+          result = await downloadOneFile(file, {
+            signal: controller.signal,
+            preferMirror,
+            sourcePreference,
+            throttle,
+            onBytes: (n) => {
+              currentBytes += n
+              speed.add(n)
+              report()
+            }
+          })
+        } finally {
+          // 不管下成没下成，都从"正在下"里划掉
+          activeFiles.delete(file.saveTo)
+        }
 
         // 这个文件已经下完，把它计入总量，并从"正在下"里扣掉。
         //

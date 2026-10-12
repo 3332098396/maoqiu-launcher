@@ -69,6 +69,48 @@ function flattenArguments(entries, ctx) {
   return out
 }
 
+/**
+ * 把游戏参数里"管窗口大小的那几条"就地删掉（M23）。
+ *
+ * 要删的三种写法：
+ *   `--width 1280` / `--width=1280`
+ *   `--height 720` / `--height=720`
+ *   `--fullscreen`
+ *
+ * 【为什么要连值一起删】`--width` 和它的数字是**两个**数组项，
+ * 只删掉 `--width` 会剩下一个孤零零的 `1280`——游戏会把它当成
+ * "要打开的世界名"之类的东西，行为很怪（而且完全不报错）。
+ * 所以看到 `--width` 必须顺手把后面那个数字也吞掉。
+ */
+function stripWindowArgs(gameArgs) {
+  const drop = new Set(['--width', '--height'])
+  for (let i = 0; i < gameArgs.length; i++) {
+    const arg = String(gameArgs[i] || '')
+
+    if (arg === '--fullscreen') {
+      gameArgs.splice(i, 1)
+      i--
+      continue
+    }
+
+    // `--width=1280` 这种连在一起的写法
+    if (/^--(width|height)=/.test(arg)) {
+      gameArgs.splice(i, 1)
+      i--
+      continue
+    }
+
+    // `--width` `1280` 这种分成两项的写法
+    if (drop.has(arg)) {
+      gameArgs.splice(i, 1)
+      // 后面紧跟的那个数字也一起删
+      const next = String(gameArgs[i] ?? '')
+      if (/^-?\d+$/.test(next)) gameArgs.splice(i, 1)
+      i--
+    }
+  }
+}
+
 /** 做替换用的函数：把 ${xxx} 换成真值。遇到不认识的占位符记下来（写进日志备查） */
 function makeSubstituter(values, unknown) {
   return (text) =>
@@ -210,6 +252,21 @@ function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath
     jvmArgs.push(`-Djava.library.path=${nativesDir}`, '-cp', classpath)
   }
 
+  // ——— 窗口大小：先把 JSON 自带的摘掉，再按设置重新加一遍（M23，照 KAMUCL）———
+  //
+  // 【为什么非摘不可】版本 JSON 里本来就带着 `--width`/`--height`/`--fullscreen`。
+  // 大多数版本它们是"跟着 has_custom_resolution 开关走"的模板，替换占位符就行；
+  // 但**整合包改过的 JSON、以及一些老版本**里这两个数是写死的，
+  // 于是设置里调的窗口大小根本没生效——游戏照样按 JSON 里那个数开
+  // （用户会觉得"我改了啊，怎么没用"）。
+  // 摘掉再重加，而且放在**最后**——命令行里后出现的参数覆盖前面的。
+  stripWindowArgs(gameArgs)
+  if (window && window.fullscreen) {
+    gameArgs.push('--fullscreen')
+  } else if (window && window.width > 0 && window.height > 0) {
+    gameArgs.push('--width', String(Math.round(window.width)), '--height', String(Math.round(window.height)))
+  }
+
   // ——— 日志配置 ———
   // 版本 JSON 里给了一条 -Dlog4j.configurationFile=…，把配置文件路径填进去。
   // 文件没下到就不加这条参数——游戏会用默认日志设置，不影响能不能玩。
@@ -237,9 +294,32 @@ function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath
     agentArgs.push('-Dauthlibinjector.noLogFile')
   }
 
-  // ——— 内存 ———
-  // 版本 JSON 里不写内存，是启动器自己加的（官方启动器也这么干）
-  const finalJvm = [`-Xmx${memoryMB}M`, ...agentArgs, ...jvmArgs].map(substitute)
+  // ——— 内存和 JVM 调参 ———
+  //
+  // 这几条版本 JSON 里都不写，是启动器自己加的（官方启动器也这么干）。
+  //
+  // · `-Xmx`：最多能用多少内存
+  // · `-Xms`：**一开始就申请多少**。不写的话 Java 从很小一块开始、
+  //   边玩边一点点要，玩到一半突然卡一下就是在申请内存。
+  //   取 min(内存, 1024)：给多了启动慢（要先把那么多内存占住），
+  //   给少了起不到作用——1024 是上游试出来的那个数。
+  // · G1 + 200ms：G1 是现在游戏默认该用的垃圾回收器，
+  //   MaxGCPauseMillis=200 让它"宁可多跑几趟、每次别停太久"——
+  //   直接的效果是玩着不那么顿。这两条官方启动器也在用。
+  // · `-Dfile.encoding=UTF-8`：让游戏的输出固定成 UTF-8。
+  //   不写的话老版本在中文 Windows 上按 GBK 吐字，我们虽然能兜底解出来（见下面
+  //   解日志那段），但定死成 UTF-8 更省事、也少一层猜。
+  const initialHeapMB = Math.min(memoryMB, 1024)
+
+  const finalJvm = [
+    `-Xmx${memoryMB}M`,
+    `-Xms${initialHeapMB}M`,
+    '-XX:+UseG1GC',
+    '-XX:MaxGCPauseMillis=200',
+    '-Dfile.encoding=UTF-8',
+    ...agentArgs,
+    ...jvmArgs
+  ].map(substitute)
   const finalGame = gameArgs.map(substitute)
 
   return {
