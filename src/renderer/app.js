@@ -48,6 +48,9 @@ function showPage(name) {
     renderSkinPage()
   }
 
+  // 内容页（M23）：每次进来都重读一遍版本列表（用户可能刚装了个新版本）
+  if (name === 'content') loadLocalPage()
+
   // 设置页同理：设置可能被别处改过（比如改完内存回到启动页看信息卡）
   if (name === 'settings') loadSettingsPage()
 
@@ -361,7 +364,13 @@ async function loadInstalled() {
   try {
     const info = await window.api.getGameInfo()
     installedVersions.clear()
-    for (const id of info.installed) installedVersions.add(id)
+    // 【踩过的坑】主进程给的是 `{id, dir, isDefault}` 对象，这儿必须取 `one.id`
+    // 再放进 Set。以前直接把整个对象塞进去了，而下面查的是 `has(version.id)`
+    // ——对象和字符串永远不相等，于是**装了版本也一直显示「安装」按钮**，
+    // 从来没出现过「已安装」。2026-10-12 冒烟探针量出来的（已安装标签数 = 0）。
+    for (const one of info.installed) {
+      installedVersions.add(typeof one === 'string' ? one : one.id)
+    }
     renderVersions()
   } catch {
     // 读不到就当没装过，不影响别的功能
@@ -1372,7 +1381,13 @@ document.getElementById('hero-refresh').addEventListener('click', async (event) 
   }
 })
 
-async function startGame() {
+/**
+ * 启动游戏。
+ * @param {{quickPlay?: {address: string}}} options
+ *   quickPlay 是「服务器」那一页点「进服」时传进来的：
+ *   游戏一启动就直接进那台服务器，不用用户再点一遍多人游戏。
+ */
+async function startGame(options = {}) {
   if (!selectedVersion) return
 
   // ——— 账号：三种表单要的东西不一样 ———
@@ -1410,9 +1425,15 @@ async function startGame() {
 
   launching = true
   refreshLaunchUi()
-  setNotice(`正在启动 ${selectedVersion}…第一次启动会慢一点，稍等。`)
+  setNotice(
+    options.quickPlay
+      ? `正在启动 ${selectedVersion}，起来之后直接进 ${options.quickPlay.address}……`
+      : `正在启动 ${selectedVersion}…第一次启动会慢一点，稍等。`
+  )
 
-  const result = await window.api.startLaunch(selectedVersion, selectedDir)
+  const result = await window.api.startLaunch(selectedVersion, selectedDir, {
+    quickPlay: options.quickPlay
+  })
 
   if (!result.ok) {
     launching = false
@@ -4871,6 +4892,7 @@ function fixThemeContrast() {
 const HIDEABLE_PAGES = [
   { key: 'online', label: '联机', hint: '不玩联机就藏起来' },
   { key: 'download', label: '下载', hint: '版本都装好了、也不装 Mod 的话可以藏' },
+  { key: 'content', label: '内容', hint: '不装 Mod、不改存档的话可以藏' },
   { key: 'help', label: '帮助', hint: '常见问题那一页' }
 ]
 
@@ -6693,6 +6715,679 @@ frpStopEl.addEventListener('click', async () => {
   await window.api.frpStop()
   setTimeout(refreshFrp, 500)
 })
+
+// ═══════════════════════════════════════════════════════════
+// 内容页（M23）：已经装了什么（Mod / 资源包 / 光影 / 存档）+ 服务器
+// ═══════════════════════════════════════════════════════════
+
+const localMenuEl = document.getElementById('local-menu')
+const localVersionEl = document.getElementById('local-version')
+const localCountEl = document.getElementById('local-count')
+const localHintEl = document.getElementById('local-hint')
+const localListEl = document.getElementById('local-list')
+const localFolderEl = document.getElementById('local-folder')
+const localAddEl = document.getElementById('local-add')
+
+/** 左侧那五栏 */
+const LOCAL_TABS = [
+  { key: 'mod', label: 'Mod' },
+  { key: 'resourcepack', label: '资源包' },
+  { key: 'shader', label: '光影包' },
+  { key: 'world', label: '存档（世界）' },
+  { key: 'server', label: '服务器' }
+]
+
+/** 现在看的是哪一栏 */
+let localTab = 'mod'
+/** 装了的版本（{id, dir, isDefault}） */
+let localVersions = []
+/** 现在看的是第几个版本 */
+let localPick = 0
+/** 防止点太快重复加载 */
+let localLoading = false
+
+/** 现在看着的那个版本，没有就是 null */
+function localTarget() {
+  return localVersions[localPick] || null
+}
+
+/** 把毫秒时间戳说成人话（"3 天前"这种） */
+function formatWhen(ms) {
+  const value = Number(ms)
+  if (!Number.isFinite(value) || value <= 0) return '不知道什么时候'
+  const days = (Date.now() - value) / 86400000
+  if (days < 1) return '今天'
+  if (days < 2) return '昨天'
+  if (days < 30) return `${Math.floor(days)} 天前`
+  if (days < 365) return `${Math.floor(days / 30)} 个月前`
+  return `${Math.floor(days / 365)} 年前`
+}
+
+/** Mod 加载器的中文名（列表里显示用） */
+function loaderLabel(loader) {
+  return (
+    { fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge' }[loader] || ''
+  )
+}
+
+// ——— 删东西前的二次确认（红线：删用户文件必须二次确认）———
+//
+// 【为什么文案要一项一项传进来】删一个 Mod 和删一个存档，后果差得远：
+// 前者下回来就有，后者是几百小时。同一个框说同一句话会误导人。
+
+const localDelModalEl = document.getElementById('local-del-modal')
+let localDelResolve = null
+
+function askLocalDelete({ title, what, safe, warn, okLabel }) {
+  document.getElementById('local-del-title').textContent = title
+  document.getElementById('local-del-what').textContent = what || ''
+
+  const safeEl = document.getElementById('local-del-safe')
+  safeEl.textContent = safe || ''
+  safeEl.hidden = !safe
+
+  const warnEl = document.getElementById('local-del-warn')
+  warnEl.textContent = warn || ''
+  warnEl.hidden = !warn
+
+  document.getElementById('local-del-ok').textContent = okLabel || '删掉'
+  localDelModalEl.hidden = false
+
+  return new Promise((resolve) => {
+    localDelResolve = resolve
+  })
+}
+
+function closeLocalDelete(answer) {
+  localDelModalEl.hidden = true
+  const resolve = localDelResolve
+  localDelResolve = null
+  if (resolve) resolve(answer)
+}
+
+document.getElementById('local-del-cancel').addEventListener('click', () => closeLocalDelete(false))
+document.getElementById('local-del-ok').addEventListener('click', () => closeLocalDelete(true))
+localDelModalEl.addEventListener('click', (event) => {
+  if (event.target === localDelModalEl) closeLocalDelete(false)
+})
+
+// ——— 骨架 ———
+
+function makeLocalRow() {
+  const row = document.createElement('div')
+  row.className = 'local-row'
+
+  const icon = document.createElement('div')
+  icon.className = 'local-row__icon'
+
+  const main = document.createElement('div')
+  main.className = 'local-row__main'
+  const name = document.createElement('div')
+  name.className = 'local-row__name'
+  const sub = document.createElement('div')
+  sub.className = 'local-row__sub'
+  main.appendChild(name)
+  main.appendChild(sub)
+
+  const acts = document.createElement('div')
+  acts.className = 'local-row__acts'
+
+  row.appendChild(icon)
+  row.appendChild(main)
+  row.appendChild(acts)
+
+  return { row, icon, name, sub, acts }
+}
+
+/** 一个朴素的小按钮 */
+function localButton(label, className, onClick) {
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.className = className || 'btn btn--ghost btn--sm'
+  button.textContent = label
+  button.addEventListener('click', onClick)
+  return button
+}
+
+/** 把版本列表画进下拉框 */
+function paintLocalVersions() {
+  localVersionEl.textContent = ''
+
+  if (localVersions.length === 0) {
+    const option = document.createElement('option')
+    option.textContent = '一个版本都还没装'
+    localVersionEl.appendChild(option)
+    localVersionEl.disabled = true
+    return
+  }
+
+  localVersionEl.disabled = false
+  localVersions.forEach((one, index) => {
+    const option = document.createElement('option')
+    option.value = String(index)
+    option.textContent = one.isDefault ? one.id : `${one.id}（${dirTail(one.dir)}）`
+    localVersionEl.appendChild(option)
+  })
+  localVersionEl.value = String(localPick)
+}
+
+/** 进这一页 / 点刷新时都走它 */
+async function loadLocalPage(force = false) {
+  if (localLoading) return
+  localLoading = true
+  try {
+    if (force || localVersions.length === 0) {
+      const info = await window.api.getGameInfo()
+      localVersions = (info.installed || []).map((one) =>
+        typeof one === 'string' ? { id: one, dir: info.gameDir, isDefault: true } : one
+      )
+
+      // 默认看"启动页当前选中的那个版本"——用户来这儿多半就是想看它
+      const wanted = localVersions.findIndex((one) => one.id === selectedVersion)
+      if (wanted >= 0) localPick = wanted
+      localPick = Math.min(localPick, Math.max(0, localVersions.length - 1))
+
+      paintLocalVersions()
+    }
+
+    await renderLocalList()
+  } catch (error) {
+    localHintEl.textContent = `读不出来：${error.message}`
+  } finally {
+    localLoading = false
+  }
+}
+
+/** 按当前那一栏画列表 */
+async function renderLocalList() {
+  const target = localTarget()
+
+  localAddEl.hidden = localTab !== 'server'
+  localListEl.textContent = ''
+
+  if (localTab === 'server') {
+    await renderServerList(target)
+    return
+  }
+
+  if (!target) {
+    localCountEl.textContent = '—'
+    localFolderEl.textContent = '—'
+    localHintEl.textContent =
+      '还没装任何版本。先去「下载」页装一个，装好之后这里就能看到它带了哪些内容。'
+    return
+  }
+
+  if (localTab === 'world') {
+    await renderWorldList(target)
+    return
+  }
+
+  await renderFileList(target)
+}
+
+// ——— Mod / 资源包 / 光影 ———
+
+async function renderFileList(target) {
+  const result = await window.api.listLocal({
+    versionId: target.id,
+    type: localTab,
+    dir: target.dir
+  })
+
+  if (!result.ok) {
+    localHintEl.textContent = result.error
+    return
+  }
+
+  localFolderEl.textContent = result.folder || '—'
+  const files = result.files || []
+  localCountEl.textContent = files.length === 0 ? '一个都没有' : `一共 ${files.length} 个`
+
+  // Mod 那一栏要先知道"装了哪些 id"，才能判断谁缺前置
+  if (localTab === 'mod') await refreshModIds(target)
+
+  if (files.length === 0) {
+    localHintEl.textContent =
+      localTab === 'mod'
+        ? '这个版本里还没有 Mod。到「下载」页搜一个装进来，或者点上面「装进来…」把你已经有的 jar 放进去。'
+        : '这个版本里还没有这类文件。点「装进来…」可以从别处挑几个放进来。'
+    return
+  }
+
+  if (localTab === 'mod') {
+    const off = files.filter((one) => one.disabled).length
+    const broken = files.filter((one) => one.meta && one.meta.broken).length
+    const bits = [`装了 ${files.length} 个 Mod`]
+    if (off > 0) bits.push(`${off} 个关着`)
+    if (broken > 0) bits.push(`${broken} 个读不动（可能下坏了）`)
+    localHintEl.textContent = bits.join('，') + '。关掉的只是改了文件名，文件还在，随时能开回来。'
+  } else {
+    localHintEl.textContent = '点文件名那一行的按钮可以删掉它。删掉会进系统回收站，后悔了还能捡回来。'
+  }
+
+  for (const file of files) {
+    localListEl.appendChild(makeFileRow(target, file))
+  }
+}
+
+function makeFileRow(target, file) {
+  const { row, icon, name, sub, acts } = makeLocalRow()
+
+  if (file.disabled) row.classList.add('local-row--off')
+
+  const meta = file.meta || null
+
+  // ——— 图标 ———
+  if (meta && meta.icon) {
+    icon.textContent = '' // 加载好之前先空着，别显示"没有图标"
+    window.api
+      .localIcon({ path: file.path, icon: meta.icon })
+      .then((answer) => {
+        if (!answer.ok || !answer.dataUrl) {
+          icon.textContent = 'Mod'
+          return
+        }
+        const img = document.createElement('img')
+        img.src = answer.dataUrl
+        img.alt = ''
+        icon.textContent = ''
+        icon.appendChild(img)
+      })
+      .catch(() => {
+        icon.textContent = 'Mod'
+      })
+  } else {
+    icon.textContent = localTab === 'mod' ? 'Mod' : localTab === 'shader' ? '光影' : '资源'
+  }
+
+  // ——— 名字和副标题 ———
+  const fallbackName = file.name.replace(/\.(jar|zip)$/i, '')
+  name.textContent = (meta && meta.name) || fallbackName
+  if (meta && meta.version) {
+    const version = document.createElement('em')
+    version.textContent = `v${meta.version}`
+    name.appendChild(version)
+  }
+
+  const bits = []
+  if (file.disabled) bits.push('已经关掉')
+  if (meta && meta.broken) bits.push('这个 jar 读不动，可能下坏了')
+  else if (meta && meta.ok) {
+    if (meta.id) bits.push(meta.id)
+    if (meta.loader) bits.push(loaderLabel(meta.loader))
+  }
+  bits.push(formatSize(file.size))
+  bits.push(formatWhen(file.mtime))
+  sub.textContent = bits.join(' · ')
+
+  if (meta && meta.broken) sub.classList.add('local-row__sub--bad')
+
+  // 认得出前置、而且里面有"必须装、但现在没装"的，就明说一句
+  if (localTab === 'mod' && meta && meta.ok && meta.depends && meta.depends.length > 0) {
+    const missing = missingDependencies(meta, target)
+    if (missing.length > 0) {
+      const warn = document.createElement('div')
+      warn.className = 'local-row__sub local-row__sub--bad'
+      warn.textContent = `可能缺前置：${missing.join('、')}`
+      row.querySelector('.local-row__main').appendChild(warn)
+    }
+  }
+
+  // ——— 按钮 ———
+  if (localTab === 'mod') {
+    acts.appendChild(
+      localButton(file.disabled ? '启用' : '关掉', 'btn btn--ghost btn--sm', async () => {
+        const answer = await window.api.toggleLocal({ path: file.path, enabled: file.disabled })
+        if (!answer.ok) {
+          localHintEl.textContent = answer.error
+          return
+        }
+        // 开关会改变"装了哪些 Mod"，那份缓存得作废重算（不然缺前置的提示是旧的）
+        localModIds.delete(`${target.dir}|${target.id}`)
+        await renderLocalList()
+      })
+    )
+  }
+
+  acts.appendChild(
+    localButton('删掉', 'btn btn--danger btn--sm', async () => {
+      const ok = await askLocalDelete({
+        title: `要删掉「${(meta && meta.name) || fallbackName}」吗？`,
+        what: file.name,
+        safe: '删掉会先丢进系统回收站，后悔了还能从那儿捡回来。',
+        warn: '不过它在游戏里马上就不起作用了。'
+      })
+      if (!ok) return
+
+      const answer = await window.api.trashLocal({ path: file.path })
+      localHintEl.textContent = answer.ok ? '删掉了（在回收站里）。' : answer.error
+      localModIds.delete(`${target.dir}|${target.id}`)
+      await renderLocalList()
+    })
+  )
+
+  return row
+}
+
+/**
+ * 这个 Mod 要求的前置，哪些没装。
+ * 【为什么要过滤 fabric-api 的子模块】Fabric 那一套里，很多 Mod 写的依赖是
+ * `fabric-rendering-v1` 这种**子模块名**，而用户装的其实是一个总的 fabric-api。
+ * 直接比名字会天天误报"缺前置"，比不报还烦人。
+ */
+function missingDependencies(meta, target) {
+  const installed = localModIds.get(`${target.dir}|${target.id}`) || new Set()
+  const missing = []
+
+  for (const dep of meta.depends || []) {
+    if (!dep.mandatory) continue
+    if (installed.has(dep.id)) continue
+    // fabric-api 的子模块：装了 fabric-api 就算齐了
+    if (dep.id.startsWith('fabric-') && installed.has('fabric-api')) continue
+    missing.push(dep.id)
+  }
+
+  return missing
+}
+
+/**
+ * 已经装了哪些 Mod 的 id（按"目录|版本"缓存）。
+ * 【为什么要缓存】上面每画一行都要查一次"前置齐没齐"，
+ * 不缓存的话一个 40 个 Mod 的版本要重读 40 遍 40 个 jar——慢到没法用。
+ */
+const localModIds = new Map()
+
+async function refreshModIds(target) {
+  const key = `${target.dir}|${target.id}`
+  if (localModIds.has(key)) return localModIds.get(key)
+
+  const ids = new Set()
+  try {
+    const result = await window.api.listLocal({
+      versionId: target.id,
+      type: 'mod',
+      dir: target.dir
+    })
+    for (const file of result.files || []) {
+      if (file.disabled) continue
+      if (file.meta && file.meta.ok && file.meta.id) ids.add(String(file.meta.id).toLowerCase())
+    }
+  } catch {
+    // 读不到就当没有——顶多少报一个提示，不能因此让整页画不出来
+  }
+
+  localModIds.set(key, ids)
+  return ids
+}
+
+// ——— 存档（世界） ———
+
+async function renderWorldList(target) {
+  const result = await window.api.listWorlds({ versionId: target.id, dir: target.dir })
+
+  if (!result.ok) {
+    localHintEl.textContent = result.error
+    return
+  }
+
+  const worlds = result.worlds || []
+  localFolderEl.textContent = '版本自己的 saves 和公共 saves 都会列出来'
+  localCountEl.textContent = worlds.length === 0 ? '一个世界都没有' : `一共 ${worlds.length} 个世界`
+
+  if (worlds.length === 0) {
+    localHintEl.textContent =
+      '还没找到存档。游戏里创建一个世界就会出现在这儿；别人的存档也能用上面的「装进来…」导进来。'
+    return
+  }
+
+  localHintEl.textContent =
+    '「打开」会用资源管理器打开那个世界所在的文件夹。删掉的会进系统回收站。'
+
+  for (const one of worlds) {
+    const { row, icon, name, sub, acts } = makeLocalRow()
+
+    icon.textContent = '世界'
+    name.textContent = one.name
+
+    const bits = [one.where, one.sizeFailed ? '大小算不出来' : formatSize(one.size), `上次玩：${formatWhen(one.mtime)}`]
+    sub.textContent = bits.join(' · ')
+
+    acts.appendChild(
+      localButton('打开', 'btn btn--ghost btn--sm', () => {
+        window.api.openWorldFolder({ path: one.path })
+      })
+    )
+
+    acts.appendChild(
+      localButton('删掉', 'btn btn--danger btn--sm', async () => {
+        const ok = await askLocalDelete({
+          title: `要删掉世界「${one.name}」吗？`,
+          what: one.path,
+          safe: '会先丢进系统回收站，后悔了还能捡回来。',
+          warn: '这是你玩出来的世界（建筑、进度都在里面），删之前再想一下。'
+        })
+        if (!ok) return
+
+        const answer = await window.api.trashLocal({ path: one.path })
+        localHintEl.textContent = answer.ok ? '删掉了（在回收站里）。' : answer.error
+        await renderLocalList()
+      })
+    )
+
+    localListEl.appendChild(row)
+  }
+}
+
+// ——— 服务器 ———
+
+let serverPinging = false
+
+async function renderServerList(target) {
+  if (!target) {
+    localCountEl.textContent = '—'
+    localFolderEl.textContent = '—'
+    localHintEl.textContent = '先装一个版本，服务器列表是跟着游戏目录走的。'
+    return
+  }
+
+  const result = await window.api.listServers({ dir: target.dir })
+  if (!result.ok) {
+    localHintEl.textContent = result.error
+    return
+  }
+
+  const list = result.servers || []
+  localFolderEl.textContent = result.file || '—'
+  localCountEl.textContent = list.length === 0 ? '列表是空的' : `一共 ${list.length} 台`
+
+  localHintEl.textContent =
+    list.length === 0
+      ? '游戏里「多人游戏」那张列表就是这个文件。在这儿加一台，游戏里也能看见。'
+      : '「进服」会用上面选的这个版本启动游戏，起来之后直接进那台服务器（1.20 以后的版本才支持）。'
+
+  if (list.length === 0) return
+
+  list.forEach((one, index) => {
+    const { row, icon, name, sub, acts } = makeLocalRow()
+
+    const dot = document.createElement('span')
+    dot.className = 'local-dot'
+    icon.appendChild(dot)
+
+    name.textContent = one.name
+    sub.textContent = `${one.ip} · 还没测`
+
+    acts.appendChild(
+      localButton('进服', 'btn btn--primary btn--sm', () => joinServer(one))
+    )
+    acts.appendChild(
+      localButton('测一下', 'btn btn--ghost btn--sm', () => pingOneRow(sub, dot, one.ip))
+    )
+    acts.appendChild(
+      localButton('删掉', 'btn btn--danger btn--sm', async () => {
+        const ok = await askLocalDelete({
+          title: `要把「${one.name}」从列表里划掉吗？`,
+          what: `${one.ip}`,
+          safe: '这只是列表里的一条记录，不会动你电脑上别的东西。'
+        })
+        if (!ok) return
+
+        const answer = await window.api.removeServer({ dir: target.dir, index })
+        if (!answer.ok) localHintEl.textContent = answer.error
+        await renderLocalList()
+      })
+    )
+
+    localListEl.appendChild(row)
+
+    // 一进这一页就自己测一遍（一台一台来，别一起轰出去）
+    setTimeout(() => pingOneRow(sub, dot, one.ip), index * 400)
+  })
+}
+
+async function pingOneRow(subEl, dotEl, ip) {
+  subEl.textContent = `${ip} · 正在问……`
+  dotEl.className = 'local-dot'
+
+  let result
+  try {
+    result = await window.api.pingServer({ ip, timeout: 6000 })
+  } catch (error) {
+    result = { ok: false, error: error.message }
+  }
+
+  if (result && result.online) {
+    dotEl.className = 'local-dot local-dot--on'
+    subEl.classList.remove('local-row__sub--bad')
+    subEl.textContent = `${ip} · ${result.online_players}/${result.max_players} 人在线 · ${result.latency}ms · ${result.version}`
+    return
+  }
+
+  dotEl.className = 'local-dot local-dot--off'
+  subEl.classList.add('local-row__sub--bad')
+  subEl.textContent = `${ip} · 没连上（${(result && result.error) || '不知道什么原因'}）`
+}
+
+/** 一键进服：用这一页选的那个版本启动，起来直接进这台服务器 */
+async function joinServer(one) {
+  const target = localTarget()
+  if (!target) return
+
+  // 把"当前版本"换成这一页选的这个——用户看得见启动页也跟着变了，
+  // 不会出现"我以为要开 A 版本，结果开了 B"
+  selectedVersion = target.id
+  selectedDir = target.dir
+
+  setNotice(`准备用 ${target.id} 进 ${one.name}…`)
+  showPage('launch')
+  await startGame({ quickPlay: { address: one.ip } })
+}
+
+// ——— 这一页的交互 ———
+
+localMenuEl.addEventListener('click', (event) => {
+  const item = event.target.closest('.menu__item')
+  if (!item || !item.dataset.localTab) return
+
+  localTab = item.dataset.localTab
+  for (const one of localMenuEl.querySelectorAll('.menu__item')) {
+    one.classList.toggle('menu__item--on', one === item)
+  }
+  renderLocalList()
+})
+
+localVersionEl.addEventListener('change', () => {
+  localPick = Number(localVersionEl.value) || 0
+  renderLocalList()
+})
+
+document.getElementById('local-refresh').addEventListener('click', () => loadLocalPage(true))
+
+document.getElementById('local-open').addEventListener('click', async () => {
+  const target = localTarget()
+  if (!target) return
+
+  if (localTab === 'server') {
+    const result = await window.api.listServers({ dir: target.dir })
+    if (result.ok && result.file) window.api.openWorldFolder({ path: dirnameOf(result.file) })
+    return
+  }
+
+  const answer = await window.api.openLocalFolder({
+    versionId: target.id,
+    type: localTab === 'world' ? 'mod' : localTab,
+    dir: target.dir
+  })
+  if (!answer.ok) localHintEl.textContent = answer.error
+})
+
+document.getElementById('local-import').addEventListener('click', async () => {
+  const target = localTarget()
+  if (!target) return
+
+  if (localTab === 'world') {
+    const answer = await window.api.importWorld({ versionId: target.id, dir: target.dir })
+    if (answer.canceled) return
+    localHintEl.textContent = answer.ok
+      ? `导进来了：${answer.name}`
+      : answer.error
+    await renderLocalList()
+    return
+  }
+
+  if (localTab === 'server') {
+    localHintEl.textContent = '服务器直接在下面那两格里填名字和地址就行。'
+    return
+  }
+
+  const answer = await window.api.importLocal({
+    versionId: target.id,
+    type: localTab,
+    dir: target.dir
+  })
+  if (answer.canceled) return
+  if (!answer.ok) {
+    localHintEl.textContent = answer.error
+    return
+  }
+
+  const bits = []
+  if (answer.added.length) bits.push(`放进去了 ${answer.added.length} 个`)
+  if (answer.skipped.length) {
+    bits.push(
+      `跳过 ${answer.skipped.length} 个（${answer.skipped.map((one) => one.why).join('；')}）`
+    )
+  }
+  localHintEl.textContent = bits.join('，') || '什么都没放进去'
+  await renderLocalList()
+})
+
+document.getElementById('srv-add').addEventListener('click', async () => {
+  const target = localTarget()
+  if (!target) return
+
+  const name = document.getElementById('srv-name').value.trim()
+  const ip = document.getElementById('srv-ip').value.trim()
+
+  const answer = await window.api.addServer({ dir: target.dir, server: { name, ip } })
+  if (!answer.ok) {
+    localHintEl.textContent = answer.error
+    return
+  }
+
+  document.getElementById('srv-name').value = ''
+  document.getElementById('srv-ip').value = ''
+  localHintEl.textContent = `加好了：${name}`
+  await renderLocalList()
+})
+
+/** 从一条完整路径里取出文件夹（渲染层不许用 path 模块，所以自己切） */
+function dirnameOf(filePath) {
+  const text = String(filePath || '')
+  const at = Math.max(text.lastIndexOf('\\'), text.lastIndexOf('/'))
+  return at > 0 ? text.slice(0, at) : text
+}
 
 // ——————————————————————————————————————————————
 // 真正的最后一步：把启动页显示出来

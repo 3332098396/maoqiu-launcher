@@ -139,7 +139,8 @@ contextBridge.exposeInMainWorld('api', {
    * 起来了返回 { ok:true, java, memoryMB }，之后靠下面两个事件推消息。
    * @returns {Promise<{ok: boolean, error?: string, java?: object, memoryMB?: number}>}
    */
-  startLaunch: (versionId, dir) => ipcRenderer.invoke('launch:start', versionId, dir),
+  /** 启动游戏。options.quickPlay = { address } 时，游戏起来直接进那台服务器（M23） */
+  startLaunch: (versionId, dir, options) => ipcRenderer.invoke('launch:start', versionId, dir, options),
 
   /** 游戏输出的日志（一批几行地推过来） */
   onLaunchLog: (callback) => {
@@ -301,6 +302,52 @@ contextBridge.exposeInMainWorld('api', {
   onContentProgress: (callback) => {
     ipcRenderer.on('content:progress', (_event, stats) => callback(stats))
   },
+
+  // ——— 本地内容管理（M23）：已经装了的 Mod / 资源包 / 光影 / 存档 ———
+
+  /** 列出这个版本已经装了的某类内容 */
+  listLocal: (options) => ipcRenderer.invoke('local:list', options),
+
+  /** 把 Mod jar 里的图标抠出来（返回 data URL，可能没有） */
+  localIcon: (options) => ipcRenderer.invoke('local:icon', options),
+
+  /** 开关一个 Mod（改 .disabled 后缀，不删文件） */
+  toggleLocal: (options) => ipcRenderer.invoke('local:toggle', options),
+
+  /** 删掉一个文件或者一个存档 —— 走系统回收站，捡得回来 */
+  trashLocal: (options) => ipcRenderer.invoke('local:trash', options),
+
+  /** 从外面挑文件复制进来 */
+  importLocal: (options) => ipcRenderer.invoke('local:import', options),
+
+  /** 打开某类内容的文件夹 */
+  openLocalFolder: (options) => ipcRenderer.invoke('local:openFolder', options),
+
+  /** 存档（世界）列表，带大小 */
+  listWorlds: (options) => ipcRenderer.invoke('worlds:list', options),
+
+  /** 导入一个存档文件夹 */
+  importWorld: (options) => ipcRenderer.invoke('worlds:import', options),
+
+  /** 打开存档文件夹 */
+  openWorldFolder: (options) => ipcRenderer.invoke('worlds:openFolder', options),
+
+  // ——— 服务器列表（M23）：写的其实是游戏目录下的 servers.dat ———
+
+  /** 读服务器列表 */
+  listServers: (options) => ipcRenderer.invoke('servers:list', options),
+
+  /** 加一台 */
+  addServer: (options) => ipcRenderer.invoke('servers:add', options),
+
+  /** 改一条 */
+  updateServer: (options) => ipcRenderer.invoke('servers:update', options),
+
+  /** 删一条（删的是列表记录） */
+  removeServer: (options) => ipcRenderer.invoke('servers:remove', options),
+
+  /** 问一台服务器在不在线、几个人、延迟多少 */
+  pingServer: (options) => ipcRenderer.invoke('servers:ping', options),
 
   // ——— Java 运行时管理（M20）———
 

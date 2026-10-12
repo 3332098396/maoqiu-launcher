@@ -148,11 +148,22 @@ function effectiveGameDir(versionId, dir) {
  *            nativesDir: string, assetsIndex: string,
  *            missing: string[], unknown: string[]}}
  */
-function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath, gameDir, window, rootId, dir, authlib }) {
+function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath, gameDir, window, rootId, dir, authlib, quickPlay }) {
   const ctx = install.buildContext()
   // 告诉规则判断："我们支持自定义分辨率"——版本 JSON 里那两条
   // --width/--height 参数就是靠这个开关才生效的
   ctx.features = { has_custom_resolution: true }
+
+  // ——— quickPlay（M23）：一键进服务器 ———
+  //
+  // 版本 JSON 里 `--quickPlayMultiplayer` 那两条参数是**带条件**的：
+  // 只有游戏知道"这次要直接进多人游戏"才会加上去。
+  // 所以要进服就得把对应的特性开关打开，只填占位符是不够的——
+  // 那样参数根本不会被拼进命令行（第一版就卡在这儿）。
+  const quickPlayAddress = quickPlay && quickPlay.address ? String(quickPlay.address) : ''
+  if (quickPlayAddress) {
+    ctx.features.is_quick_play_multiplayer = true
+  }
 
   const runDir = gameDir || paths.gameDir(dir)
   const nativesDir = paths.versionNativesDir(versionId, dir)
@@ -231,11 +242,12 @@ function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath
     resolution_width: String(window?.width || 854),
     resolution_height: String(window?.height || 480),
 
-    // 下面这些对应的"特性开关"我们不开，但占位符先备着，
-    // 免得被替换成空白
+    // quickPlay（M23）：1.20 起游戏支持"点一下直接进某个世界/服务器"。
+    // 服务器列表页那个「进服」用的就是这个。不传就是空串，
+    // 对应的特性开关也不开，游戏正常显示主菜单。
     quickPlayPath: '',
     quickPlaySingleplayer: '',
-    quickPlayMultiplayer: '',
+    quickPlayMultiplayer: quickPlay && quickPlay.address ? String(quickPlay.address) : '',
     quickPlayRealms: ''
   }
   const substitute = makeSubstituter(values, unknown)
@@ -698,7 +710,7 @@ function explainExit(code, recentLines) {
  *                    pid?: number, java?: object, memoryMB?: number, logFile?: string}>}
  */
 async function launch(versionId, options = {}) {
-  const { onLog, onState, dir } = options
+  const { onLog, onState, dir, quickPlay } = options
   const state = (payload) => {
     try {
       if (onState) onState(payload)
@@ -891,7 +903,8 @@ async function launch(versionId, options = {}) {
     window: windowSize,
     rootId,
     dir,
-    authlib
+    authlib,
+    quickPlay
   })
 
   if (command.missing.length > 0) {

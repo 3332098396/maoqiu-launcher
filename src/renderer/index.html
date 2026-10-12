@@ -156,6 +156,18 @@
           <span class="rail__label">皮肤</span>
         </button>
 
+        <button class="rail__btn" type="button" data-page="content">
+          <span class="rail__icon">
+            <!-- 内容＝一个方箱子（上面一道提手），"已经装了些什么"都用这个符号 -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3.6 8.2h16.8v9.4a2.2 2.2 0 0 1-2.2 2.2H5.8a2.2 2.2 0 0 1-2.2-2.2Z" />
+              <path d="M3.6 8.2 5.9 4.2h12.2l2.3 4" />
+              <path d="M9.6 8.2V6.4h4.8v1.8" />
+            </svg>
+          </span>
+          <span class="rail__label">内容</span>
+        </button>
+
         <button class="rail__btn" type="button" data-page="settings">
           <span class="rail__icon">
             <!-- 设置＝波浪边齿轮（10 个鼓包，每个鼓包正好是个半圆）+ 粗圆环，照设计稿描的 -->
@@ -1345,6 +1357,44 @@
         </div>
       </section>
 
+      <!-- ═══════════ 内容页（M23）：已经装了什么 + 收藏的服务器 ═══════════ -->
+      <section class="page" data-page="content" hidden>
+        <aside class="side">
+          <nav class="menu" id="local-menu">
+            <span class="menu__item menu__item--on" data-local-tab="mod">Mod</span>
+            <span class="menu__item" data-local-tab="resourcepack">资源包</span>
+            <span class="menu__item" data-local-tab="shader">光影包</span>
+            <span class="menu__item" data-local-tab="world">存档（世界）</span>
+            <span class="menu__item" data-local-tab="server">服务器</span>
+          </nav>
+          <div class="side__note" id="local-folder">—</div>
+        </aside>
+
+        <div class="content content--flush">
+          <div class="verbar">
+            <label class="local-pick">
+              <span>给哪个版本看</span>
+              <select class="input" id="local-version"></select>
+            </label>
+            <span class="local-count" id="local-count">—</span>
+            <button class="btn btn--ghost" type="button" id="local-import">装进来…</button>
+            <button class="btn btn--ghost" type="button" id="local-open">打开文件夹</button>
+            <button class="btn btn--ghost" type="button" id="local-refresh">刷新</button>
+          </div>
+
+          <p class="panel__desc" id="local-hint"></p>
+
+          <!-- 加服务器的那一条（只在「服务器」那一栏出现） -->
+          <div class="local-add" id="local-add" hidden>
+            <input class="input" id="srv-name" type="text" placeholder="给它起个名字，比如 朋友的家" />
+            <input class="input" id="srv-ip" type="text" placeholder="地址，比如 play.example.com 或 1.2.3.4:25566" />
+            <button class="btn btn--primary btn--sm" type="button" id="srv-add">加进列表</button>
+          </div>
+
+          <div id="local-list" class="local-list"></div>
+        </div>
+      </section>
+
       <!-- ═══════════ 帮助页（M13）═══════════ -->
       <section class="page" data-page="help" hidden>
         <aside class="side">
@@ -1934,6 +1984,25 @@
           <button class="btn btn--ghost" type="button" id="cancel-back">继续安装</button>
           <button class="btn btn--danger" type="button" id="cancel-drop">不保留，全删掉</button>
           <button class="btn btn--primary" type="button" id="cancel-keep">保留已下好的</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 内容页删东西的二次确认（M23）。
+         【为什么单独一个、不复用上面那个删除版本的】上面那个的文案是写死的
+         （"删了就不能恢复"那种），而这里删的东西不一样：Mod 删了能重新下，
+         存档删了是真没了。文案要跟着变，复用一个框会说出误导人的话。 -->
+    <div class="modal modal--top" id="local-del-modal" hidden>
+      <div class="modal__box modal__box--form">
+        <div class="modal__head">
+          <span class="modal__title" id="local-del-title">要删掉它吗？</span>
+        </div>
+        <p class="delbox" id="local-del-what"></p>
+        <p class="delbox delbox--safe" id="local-del-safe"></p>
+        <p class="delbox delbox--warn" id="local-del-warn"></p>
+        <div class="modal__actions modal__actions--end">
+          <button class="btn btn--ghost" type="button" id="local-del-cancel">算了</button>
+          <button class="btn btn--danger" type="button" id="local-del-ok">删掉</button>
         </div>
       </div>
     </div>

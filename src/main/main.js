@@ -36,6 +36,8 @@ const cleanup = require('./cleanup')
 const backup = require('./backup')
 const modrinth = require('./modrinth')
 const content = require('./content')
+const localfiles = require('./localfiles')
+const servers = require('./servers')
 const downloader = require('./downloader')
 const pack = require('./pack')
 const online = require('./online')
@@ -631,7 +633,7 @@ function registerIpcHandlers() {
    * 检查不通过会马上返回 { ok:false, error }（中文）；
    * 起来了就返回 { ok:true }，之后日志和退出消息通过 launch:log / launch:state 推给界面。
    */
-  ipcMain.handle('launch:start', async (event, versionId, dir) => {
+  ipcMain.handle('launch:start', async (event, versionId, dir, options) => {
     if (launch.isRunning()) return { ok: false, error: '游戏已经在运行了' }
 
     const where = known(dir)
@@ -639,8 +641,10 @@ function registerIpcHandlers() {
       if (!event.sender.isDestroyed()) event.sender.send(channel, payload)
     }
 
+    // options.quickPlay：点了「进服」时带上服务器地址，游戏启动后直接进去
     const result = await launch.launch(versionId, {
       dir: where,
+      quickPlay: options?.quickPlay,
       onLog: (lines) => send('launch:log', lines),
       onState: (payload) => send('launch:state', payload)
     })
@@ -1831,6 +1835,178 @@ function registerIpcHandlers() {
       return { ok: true, saves: content.listSaves(versionId || '', known(dir)) }
     } catch (error) {
       return { ok: false, error: error.message }
+    }
+  })
+
+  // ——————————————————————————————————————————————
+  // 本地内容管理（M23）：已装的 Mod / 资源包 / 光影 / 存档
+  // ——————————————————————————————————————————————
+
+  /** 列出这个版本已经装了的某类内容 */
+  ipcMain.handle('local:list', (_event, options) => {
+    try {
+      const { versionId, type } = options || {}
+      const dir = known(options?.dir)
+      return {
+        ok: true,
+        files: localfiles.listFiles(versionId || '', type, dir),
+        folder: localfiles.folderOf(versionId || '', type, dir)
+      }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /**
+   * 把 Mod jar 里那张图标抠出来给界面。
+   * 【为什么走数据 URL 而不是给路径】界面开着 CSP，`file://` 的图会被拦掉；
+   * 而且图标就几 KB，转成 base64 反而省事（不用管路径、不用管清理）。
+   */
+  ipcMain.handle('local:icon', (_event, options) => {
+    try {
+      const { path: filePath, icon } = options || {}
+      if (!filePath || !icon) return { ok: true, dataUrl: null }
+      const buffer = localfiles.readModIcon(filePath, icon)
+      if (!buffer) return { ok: true, dataUrl: null }
+
+      // 按后缀猜 MIME；认不出来的一律当 PNG（Mod 图标九成是 png）
+      const ext = String(icon).toLowerCase().split('.').pop()
+      const mime =
+        ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'gif' ? 'image/gif' : 'image/png'
+      return { ok: true, dataUrl: `data:${mime};base64,${buffer.toString('base64')}` }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 开关一个 Mod（改 .disabled 后缀） */
+  ipcMain.handle('local:toggle', (_event, options) => {
+    return localfiles.setModEnabled(options?.path, options?.enabled !== false)
+  })
+
+  /**
+   * 删掉一个文件或一个存档 —— **走系统回收站**。
+   * 二次确认由界面负责弹，这里再兜一层"进回收站"，手滑了也捡得回来。
+   */
+  ipcMain.handle('local:trash', async (_event, options) => {
+    return localfiles.moveToTrash(shell, options?.path)
+  })
+
+  /** 从外面挑文件复制进来（资源包/光影/Mod 通用） */
+  ipcMain.handle('local:import', async (event, options) => {
+    try {
+      const { versionId, type } = options || {}
+      const dir = known(options?.dir)
+
+      const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+        title: '挑要装进来的文件（可以多选）',
+        properties: ['openFile', 'multiSelections'],
+        filters: [{ name: '压缩包 / Mod', extensions: ['jar', 'zip'] }]
+      })
+      if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true }
+
+      return localfiles.importFiles(versionId || '', type, dir, result.filePaths)
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 打开某类内容的文件夹 */
+  ipcMain.handle('local:openFolder', async (_event, options) => {
+    try {
+      const { versionId, type } = options || {}
+      const dir = localfiles.folderOf(versionId || '', type, known(options?.dir))
+      if (!dir) return { ok: false, error: '不知道这个文件夹在哪儿' }
+      paths.ensureDir(dir)
+      const failed = await shell.openPath(dir)
+      return failed ? { ok: false, error: failed } : { ok: true, dir }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  // ——————————————————————————————————————————————
+  // 服务器列表（M23）：读写的其实是游戏目录下的 servers.dat
+  // ——————————————————————————————————————————————
+
+  ipcMain.handle('servers:list', (_event, options) => {
+    try {
+      const dir = known(options?.dir)
+      return { ok: true, servers: servers.readServers(dir), file: servers.serversFile(dir) }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  ipcMain.handle('servers:add', (_event, options) => {
+    try {
+      return servers.addServer(known(options?.dir), options?.server || {})
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  ipcMain.handle('servers:update', (_event, options) => {
+    try {
+      return servers.updateServer(known(options?.dir), Number(options?.index), options?.patch || {})
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  ipcMain.handle('servers:remove', (_event, options) => {
+    try {
+      return servers.removeServer(known(options?.dir), Number(options?.index))
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /**
+   * 问一台服务器"你还在吗"。只发一个状态查询，什么都不写进去。
+   * 界面那边一次只问一台（并排问十几台会被服务器当成扫描）。
+   */
+  ipcMain.handle('servers:ping', async (_event, options) => {
+    try {
+      return await servers.ping(options?.ip, { timeout: Number(options?.timeout) || 6000 })
+    } catch (error) {
+      return { ok: false, online: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /** 存档（世界）：列表（带大小）/ 导入 / 删除 / 打开文件夹 */
+  ipcMain.handle('worlds:list', (_event, options) => {
+    try {
+      return { ok: true, worlds: localfiles.listWorlds(options?.versionId || '', known(options?.dir)) }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  ipcMain.handle('worlds:import', async (event, options) => {
+    try {
+      const dir = known(options?.dir)
+      const picked = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+        title: '挑一个存档文件夹（里面应该有 level.dat）',
+        properties: ['openDirectory']
+      })
+      if (picked.canceled || picked.filePaths.length === 0) return { ok: false, canceled: true }
+
+      return localfiles.importWorld(options?.versionId || '', dir, picked.filePaths[0], options?.name)
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  ipcMain.handle('worlds:openFolder', async (_event, options) => {
+    try {
+      const target = String(options?.path || '')
+      if (!target) return { ok: false, error: '没给路径' }
+      paths.ensureDir(target)
+      const failed = await shell.openPath(target)
+      return failed ? { ok: false, error: failed } : { ok: true }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
     }
   })
 
