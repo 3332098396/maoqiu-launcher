@@ -2027,6 +2027,167 @@ function registerIpcHandlers() {
     }
   })
 
+  /**
+   * 检查已装的 Mod 有没有新版本（M23，照 KAMUCL 的 modUpdates）。
+   *
+   * 做法：把每个 jar 的 sha1 算出来，一批发给 Modrinth——**只发哈希，不发文件**。
+   * 同 sha1 原样回来的就是最新的；回来是别的，说明有新版。
+   */
+  ipcMain.handle('local:checkUpdates', async (_event, options) => {
+    try {
+      const dir = known(options?.dir)
+      const versionId = options?.versionId || ''
+
+      const files = localfiles
+        .listFiles(versionId, 'mod', dir)
+        .filter((one) => !one.disabled && !(one.meta && one.meta.broken))
+
+      if (files.length === 0) return { ok: true, updates: {}, checked: 0 }
+
+      const hashed = []
+      for (const one of files) {
+        try {
+          hashed.push({ path: one.path, name: one.name, sha1: await downloader.sha1OfFile(one.path) })
+        } catch {
+          // 算不出哈希（文件被占用之类）就跳过这一个
+        }
+      }
+
+      const loader = loaderSlugFor(versionId, dir)
+      const gameVersion = versions.baseGameVersion(versionId, dir)
+
+      const found = await modrinth.checkFileUpdates(hashed, { loader, gameVersion })
+
+      // 组装成界面好用的形状：路径 → 新版本信息
+      const updates = {}
+      for (const one of hashed) {
+        const fresh = found[one.sha1]
+        if (!fresh || !fresh.file) continue
+        updates[one.path] = {
+          name: fresh.name,
+          versionNumber: fresh.versionNumber,
+          versionType: fresh.versionType,
+          published: fresh.published,
+          gameVersions: fresh.gameVersions,
+          file: fresh.file
+        }
+      }
+
+      return { ok: true, updates, checked: hashed.length, loader, gameVersion }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /**
+   * 把一个 Mod 更新到新版本（M23）。
+   * **先下好新的，再把旧的放进回收站**——顺序不能反：
+   * 反过来的话，新的一旦下失败，用户就既没有新的也没有旧的了。
+   */
+  ipcMain.handle('local:updateMod', async (event, options) => {
+    try {
+      const dir = known(options?.dir)
+      const gameVersionId = options?.versionId || ''
+      const oldPath = options?.oldPath || ''
+      const file = options?.file || null
+
+      if (!file || !file.url) return { ok: false, error: '没拿到新版本的文件地址' }
+
+      const installed = await content.installFile({
+        versionId: gameVersionId,
+        type: 'mod',
+        dir,
+        file,
+        onProgress: (stats) => {
+          if (!event.sender.isDestroyed()) event.sender.send('content:progress', stats)
+        }
+      })
+      if (!installed.ok) return installed
+
+      // 新文件和老文件是同一个（同名同内容）→ 什么都不用做
+      if (oldPath && path.resolve(oldPath) === path.resolve(installed.path)) {
+        return { ok: true, path: installed.path, replaced: false }
+      }
+
+      let trashed = false
+      if (oldPath) {
+        const answer = await localfiles.moveToTrash(shell, oldPath)
+        trashed = Boolean(answer.ok)
+      }
+
+      return { ok: true, path: installed.path, replaced: true, trashed }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
+  /**
+   * 装之前先看看"这个 Mod 需要哪些前置、还缺几个"（M23，照 KAMUCL 的 modCompatibility）。
+   *
+   * 【为什么要事前说】缺前置的 Mod 装上去，游戏启动时才会崩，
+   * 而报错里往往只写"某某类找不到"——用户根本猜不到是缺了个东西。
+   */
+  ipcMain.handle('content:checkDeps', async (_event, options) => {
+    try {
+      const dir = known(options?.dir)
+      const versionId = options?.versionId || ''
+      const projectId = options?.projectId || ''
+      const type = options?.type || 'mod'
+
+      if (type !== 'mod' || !projectId) return { ok: true, missing: [], conflicts: [] }
+
+      const list = await modrinth.getVersions(projectId, {
+        gameVersion: versions.baseGameVersion(versionId, dir),
+        loader: loaderSlugFor(versionId, dir)
+      })
+      const best = modrinth.pickBest(list, 'mod')
+      if (!best) return { ok: true, missing: [], conflicts: [] }
+
+      const required = (best.dependencies || []).filter((one) => one.kind === 'required' && one.projectId)
+      const conflicts = (best.dependencies || []).filter((one) => one.kind === 'incompatible' && one.projectId)
+      if (required.length === 0 && conflicts.length === 0) {
+        return { ok: true, missing: [], conflicts: [], version: best.versionNumber }
+      }
+
+      // 已经装了哪些（按 Modrinth 的项目 id 认不出来，只能用本地 Mod 的 id/文件名猜，
+      // 所以这一步只做"提示"，宁可多问一句，也不能漏报）
+      const installedNames = new Set(
+        localfiles
+          .listFiles(versionId, 'mod', dir)
+          .filter((one) => !one.disabled)
+          .map((one) => String(one.name).toLowerCase())
+      )
+
+      const info = await modrinth.getProjects([
+        ...required.map((one) => one.projectId),
+        ...conflicts.map((one) => one.projectId)
+      ])
+
+      const tidy = (one) => {
+        const hit = info[one.projectId] || {}
+        return {
+          projectId: one.projectId,
+          title: hit.nameZh ? `${hit.nameZh}（${hit.title}）` : hit.title || one.projectId,
+          slug: hit.slug || '',
+          icon: hit.icon || '',
+          // 名字里能对上就认为装了（只是个粗略判断，界面会说"看起来"）
+          probablyInstalled: [...installedNames].some(
+            (name) => hit.slug && name.includes(String(hit.slug).toLowerCase())
+          )
+        }
+      }
+
+      return {
+        ok: true,
+        version: best.versionNumber,
+        missing: required.map(tidy).filter((one) => !one.probablyInstalled),
+        conflicts: conflicts.map(tidy)
+      }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
+    }
+  })
+
   /** 存档（世界）：列表（带大小）/ 导入 / 删除 / 打开文件夹 */
   ipcMain.handle('worlds:list', (_event, options) => {
     try {

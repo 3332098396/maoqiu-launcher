@@ -332,6 +332,15 @@ contextBridge.exposeInMainWorld('api', {
   /** 打开存档文件夹 */
   openWorldFolder: (options) => ipcRenderer.invoke('worlds:openFolder', options),
 
+  /** 检查已装的 Mod 有没有新版本（只发哈希，不发文件） */
+  checkModUpdates: (options) => ipcRenderer.invoke('local:checkUpdates', options),
+
+  /** 装之前看看缺不缺前置 */
+  checkDeps: (options) => ipcRenderer.invoke('content:checkDeps', options),
+
+  /** 把一个 Mod 更新到新版本（先下新的，再把旧的放进回收站） */
+  updateLocalMod: (options) => ipcRenderer.invoke('local:updateMod', options),
+
   // ——— 服务器列表（M23）：写的其实是游戏目录下的 servers.dat ———
 
   /** 读服务器列表 */

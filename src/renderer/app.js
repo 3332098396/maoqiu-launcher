@@ -1860,6 +1860,16 @@ async function installMrProject(button) {
     return
   }
 
+  // ——— 装 Mod 之前先看看缺不缺前置（M23，照 KAMUCL 的 modCompatibility）———
+  //
+  // 【为什么值得多问一句】缺前置的 Mod 装上去，游戏启动时才崩，
+  // 而崩溃日志里往往只写"找不到某个类"——用户根本猜不到是缺了个东西。
+  // 在这儿先说清楚，比事后让他来问强得多。
+  if (mrType === 'mod') {
+    const ready = await warnMissingDeps(projectId, title, target)
+    if (!ready) return
+  }
+
   mrBusy = true
   installEl.hidden = false
   installTitleEl.textContent = `正在下载 ${title}`
@@ -6951,6 +6961,7 @@ const localHintEl = document.getElementById('local-hint')
 const localListEl = document.getElementById('local-list')
 const localFolderEl = document.getElementById('local-folder')
 const localAddEl = document.getElementById('local-add')
+const localUpdatesBtn = document.getElementById('local-updates')
 
 /** 左侧那五栏 */
 const LOCAL_TABS = [
@@ -7002,7 +7013,13 @@ function loaderLabel(loader) {
 const localDelModalEl = document.getElementById('local-del-modal')
 let localDelResolve = null
 
-function askLocalDelete({ title, what, safe, warn, okLabel }) {
+/**
+ * 弹一个"要不要继续"的框。
+ * @param {{title, what, safe, warn, okLabel, danger}} options
+ *   danger=false 用来问"缺前置了还要不要装"这种**不是删东西**的问题——
+ *   那时候按钮不该是红色的，红色会让人以为要删东西了。
+ */
+function askLocalConfirm({ title, what, safe, warn, okLabel, danger = true }) {
   document.getElementById('local-del-title').textContent = title
   document.getElementById('local-del-what').textContent = what || ''
 
@@ -7014,12 +7031,20 @@ function askLocalDelete({ title, what, safe, warn, okLabel }) {
   warnEl.textContent = warn || ''
   warnEl.hidden = !warn
 
-  document.getElementById('local-del-ok').textContent = okLabel || '删掉'
+  const okEl = document.getElementById('local-del-ok')
+  okEl.textContent = okLabel || '删掉'
+  okEl.className = danger ? 'btn btn--danger' : 'btn btn--primary'
+
   localDelModalEl.hidden = false
 
   return new Promise((resolve) => {
     localDelResolve = resolve
   })
+}
+
+/** 删东西专用（按钮是红的、文案默认"删掉"） */
+function askLocalDelete(options) {
+  return askLocalConfirm({ ...options, danger: true })
 }
 
 function closeLocalDelete(answer) {
@@ -7127,6 +7152,8 @@ async function renderLocalList() {
   const target = localTarget()
 
   localAddEl.hidden = localTab !== 'server'
+  // 「检查更新」只在 Mod 那一栏出现（更新检测是 Modrinth 特有的，别的类型没有）
+  localUpdatesBtn.hidden = localTab !== 'mod'
   localListEl.textContent = ''
 
   if (localTab === 'server') {
@@ -7185,7 +7212,10 @@ async function renderFileList(target) {
     const bits = [`装了 ${files.length} 个 Mod`]
     if (off > 0) bits.push(`${off} 个关着`)
     if (broken > 0) bits.push(`${broken} 个读不动（可能下坏了）`)
-    localHintEl.textContent = bits.join('，') + '。关掉的只是改了文件名，文件还在，随时能开回来。'
+    localHintEl.textContent =
+      bits.join('，') +
+      '。关掉的只是改了文件名，文件还在，随时能开回来。' +
+      (localUpdateNote ? `\n${localUpdateNote}` : '')
   } else {
     localHintEl.textContent = '点文件名那一行的按钮可以删掉它。删掉会进系统回收站，后悔了还能捡回来。'
   }
@@ -7258,7 +7288,60 @@ function makeFileRow(target, file) {
     }
   }
 
+  // ——— 有新版本就把这件事说在最显眼的地方 ———
+  const fresh = localTab === 'mod' ? localUpdates[file.path] : null
+  if (fresh) {
+    const line = document.createElement('div')
+    line.className = 'local-row__sub local-row__sub--bad'
+    line.textContent = `有新版本：${fresh.versionNumber}（${fresh.versionType === 'release' ? '正式版' : fresh.versionType === 'beta' ? '测试版' : '抢先版'}，${formatWhen(Date.parse(fresh.published))}发的）`
+    row.querySelector('.local-row__main').appendChild(line)
+  }
+
   // ——— 按钮 ———
+  if (fresh) {
+    acts.appendChild(
+      localButton(`更新到 ${fresh.versionNumber}`, 'btn btn--primary btn--sm', async () => {
+        const ok = await askLocalConfirm({
+          title: `把「${(meta && meta.name) || fallbackName}」更新到 ${fresh.versionNumber}？`,
+          what: `${file.name}\n  ↓\n${fresh.file.filename}`,
+          safe: '先把新的下好，再把旧的那个放进系统回收站——下失败了旧的原封不动。',
+          okLabel: '更新',
+          danger: false
+        })
+        if (!ok) return
+
+        installEl.hidden = false
+        installTitleEl.textContent = `正在更新 ${(meta && meta.name) || fallbackName}`
+        setStage('正在下载新版本…')
+        setFill(0)
+
+        const answer = await window.api.updateLocalMod({
+          versionId: target.id,
+          dir: target.dir,
+          oldPath: file.path,
+          file: fresh.file
+        })
+
+        installEl.hidden = true
+        if (!answer.ok) {
+          setNotice(`更新失败：${answer.error}`, 'error')
+          return
+        }
+
+        setNotice(
+          answer.replaced
+            ? `更新好了${answer.trashed ? '，旧的那个已经放进回收站' : ''}。`
+            : '已经是最新的了，没动它。',
+          'ok'
+        )
+        localModIds.delete(`${target.dir}|${target.id}`)
+        localUpdates = {}
+        localUpdateNote = ''
+        await renderLocalList()
+      })
+    )
+  }
+
   if (localTab === 'mod') {
     acts.appendChild(
       localButton(file.disabled ? '启用' : '关掉', 'btn btn--ghost btn--sm', async () => {
@@ -7508,6 +7591,91 @@ async function joinServer(one) {
   await startGame({ quickPlay: { address: one.ip } })
 }
 
+// ——— Mod 更新检测（M23，照 KAMUCL 的 modUpdates）———
+
+/** 这一轮检查出来的更新：文件路径 → 新版本信息 */
+let localUpdates = {}
+/** 上一次检查的结论（画提示用） */
+let localUpdateNote = ''
+
+/**
+ * 装 Mod 之前先看看缺不缺前置。返回 false 表示"用户改主意了，别装"。
+ * 【查不出来就别拦着】网络不通、接口变了都可能查不到——那时候直接放行，
+ * 不能因为"我查不了"就不让人装东西。
+ */
+async function warnMissingDeps(projectId, title, target) {
+  let check
+  try {
+    check = await window.api.checkDeps({
+      projectId,
+      type: 'mod',
+      versionId: target.id,
+      dir: target.dir
+    })
+  } catch {
+    return true
+  }
+
+  if (!check || !check.ok) return true
+
+  const missing = check.missing || []
+  const conflicts = check.conflicts || []
+  if (missing.length === 0 && conflicts.length === 0) return true
+
+  const lines = []
+  if (missing.length > 0) lines.push(`还需要这些前置：${missing.map((one) => one.title).join('、')}`)
+  if (conflicts.length > 0) lines.push(`和这些不兼容：${conflicts.map((one) => one.title).join('、')}`)
+
+  return askLocalConfirm({
+    title: `${title} 还缺前置`,
+    what: lines.join('\n'),
+    safe:
+      missing.length > 0
+        ? '前置就是"另一个 Mod"。没装它的话，这个 Mod 自己起不来。装完这个之后，到「内容」页把缺的那几个也搜来装上就行。'
+        : '',
+    warn:
+      conflicts.length > 0
+        ? '「不兼容」的意思是：它和上面这些一起用会出问题，最好只留一个。'
+        : '',
+    okLabel: '知道了，继续装',
+    danger: false
+  })
+}
+
+async function checkModUpdates() {
+  const target = localTarget()
+  if (!target || localTab !== 'mod') return
+
+  localUpdatesBtn.disabled = true
+  localUpdateNote = '正在算每个 jar 的指纹，然后去 Modrinth 问有没有新版本…'
+  await renderLocalList()
+
+  let result
+  try {
+    result = await window.api.checkModUpdates({ versionId: target.id, dir: target.dir })
+  } catch (error) {
+    result = { ok: false, error: error.message }
+  }
+
+  localUpdatesBtn.disabled = false
+
+  if (!result.ok) {
+    localUpdateNote = `查不了：${result.error}`
+    await renderLocalList()
+    return
+  }
+
+  localUpdates = result.updates || {}
+  const count = Object.keys(localUpdates).length
+  const bits = [`查了 ${result.checked} 个 Mod`]
+  if (count === 0) bits.push('全都是最新的')
+  else bits.push(`${count} 个有新版本`)
+  if (result.gameVersion) bits.push(`按 ${result.gameVersion}${result.loader ? ` · ${result.loader}` : ''} 算的`)
+  localUpdateNote = bits.join('，') + '。'
+
+  await renderLocalList()
+}
+
 // ——— 这一页的交互 ———
 
 localMenuEl.addEventListener('click', (event) => {
@@ -7523,8 +7691,13 @@ localMenuEl.addEventListener('click', (event) => {
 
 localVersionEl.addEventListener('change', () => {
   localPick = Number(localVersionEl.value) || 0
+  // 换了版本，上一轮的更新结果就不作数了（那些是"按这个版本的加载器/游戏版本"算的）
+  localUpdates = {}
+  localUpdateNote = ''
   renderLocalList()
 })
+
+localUpdatesBtn.addEventListener('click', checkModUpdates)
 
 document.getElementById('local-refresh').addEventListener('click', () => loadLocalPage(true))
 

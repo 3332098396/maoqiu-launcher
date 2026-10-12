@@ -14,7 +14,7 @@
 //
 // 当前进度：M9。
 
-const { fetchJson } = require('./http')
+const { fetchJson, postJson } = require('./http')
 const modnames = require('./modnames')
 
 /**
@@ -66,6 +66,30 @@ async function apiGet(pathAndQuery, options = {}) {
 /** 现在走的是镜像吗（界面/日志想显示时用） */
 function usingMirror() {
   return preferMirror
+}
+
+/**
+ * 按路径 **POST** 一次 Modrinth 接口，两个源依次试。
+ * 和 apiGet 一个套路，只是换成 POST（有几个接口只收 POST）。
+ */
+async function apiPost(pathAndQuery, payload, options = {}) {
+  const sources = preferMirror ? [API_MIRROR, API_OFFICIAL] : [API_OFFICIAL, API_MIRROR]
+  let lastError = null
+
+  for (const base of sources) {
+    try {
+      const data = await postJson(`${base}${pathAndQuery}`, payload, {
+        timeout: 20000,
+        ...options
+      })
+      preferMirror = base === API_MIRROR
+      return data
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  throw new Error(`连不上 Modrinth（官方和国内镜像都试过了）：${lastError?.message || '未知原因'}`)
 }
 
 /** 能搜的内容类型。值是 Modrinth 用的代号，加一是给人看的名字 */
@@ -158,6 +182,15 @@ function tidyVersion(version) {
     loaders: version.loaders || [],
     downloads: version.downloads || 0,
     published: version.date_published || '',
+    // 前置 / 冲突（M23）：Modrinth 自己标了"这个文件需要谁"。装之前要拿它提醒用户，
+    // 不然装完一启动游戏就崩，用户根本猜不到是缺了个前置。
+    dependencies: (version.dependencies || []).map((one) => ({
+      projectId: one.project_id || '',
+      versionId: one.version_id || '',
+      filename: one.file_name || '',
+      // required = 必须装；optional = 可选；incompatible = 冲突；embedded = 已经打包在里面
+      kind: one.dependency_type || 'required'
+    })),
     file: file
       ? {
           url: file.url,
@@ -234,4 +267,77 @@ function loaderFor(type) {
   return LOADER_FOR_TYPE[type] || ''
 }
 
-module.exports = { search, getVersions, pickBest, loaderFor, PROJECT_TYPES, API, usingMirror, apiGet }
+/**
+ * 批量问"这些文件有没有新版本"（M23，照 KAMUCL 的 modUpdates）。
+ *
+ * 接口是 `POST /version_files/update`：把本地文件的 sha1 一批发过去，
+ * 它回一张表——**同 sha1 原样回来 = 已经是最新的**，回来的是别的 id = 有新的。
+ * 这个接口不需要密钥，也不会上传我们的任何东西（只发哈希）。
+ *
+ * @param {Array<{sha1: string}>} files 本地文件（必须有 sha1）
+ * @param {{loader?: string, gameVersion?: string}} options
+ * @returns {Promise<Object>} sha1 → 新版本信息（没更新的那个 sha1 不在表里）
+ */
+async function checkFileUpdates(files, { loader = '', gameVersion = '' } = {}) {
+  const hashes = (files || []).map((one) => one.sha1).filter(Boolean)
+  if (hashes.length === 0) return {}
+
+  // 【为什么必须带上加载器和游戏版本】不带给的话，它会拿"整个项目的最新版"来比，
+  // 于是 1.20.1 的 Fabric 包会被推荐更新到 1.21 的 Forge 版——装上去直接起不来。
+  const payload = {
+    hashes,
+    algorithm: 'sha1',
+    loaders: loader ? [loader] : [],
+    game_versions: gameVersion ? [gameVersion] : []
+  }
+
+  const data = await apiPost('/version_files/update', payload)
+  const out = {}
+  for (const [sha1, version] of Object.entries(data || {})) {
+    // 回来的还是原来那个文件 → 就是最新的
+    const files = (version && version.files) || []
+    if (files.some((one) => one.hashes && one.hashes.sha1 === sha1)) continue
+    out[sha1] = tidyVersion(version)
+  }
+  return out
+}
+
+/**
+ * 按项目 id 批量取项目信息（拿标题、图标用）。
+ * 一次最多 100 个 id——查前置的时候要用。
+ */
+async function getProjects(ids) {
+  const list = [...new Set((ids || []).filter(Boolean))].slice(0, 100)
+  if (list.length === 0) return {}
+
+  const params = new URLSearchParams({ ids: JSON.stringify(list) })
+  const data = await apiGet(`/projects?${params.toString()}`)
+
+  const out = {}
+  for (const one of Array.isArray(data) ? data : []) {
+    out[one.id] = {
+      id: one.id,
+      slug: one.slug,
+      title: one.title,
+      nameZh: modnames.chineseName(one.slug),
+      icon: one.icon_url || '',
+      description: one.description || ''
+    }
+  }
+  return out
+}
+
+module.exports = {
+  search,
+  getVersions,
+  pickBest,
+  loaderFor,
+  checkFileUpdates,
+  getProjects,
+  tidyVersion,
+  PROJECT_TYPES,
+  API,
+  usingMirror,
+  apiGet,
+  apiPost
+}
