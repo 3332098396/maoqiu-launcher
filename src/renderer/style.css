@@ -4145,11 +4145,25 @@ body[data-theme='amber'] {
   color: var(--text-muted);
 }
 
+/* 【别删】.panel__desc 自己写了 flex:1 1 auto（在别的面板里它要把剩下的地方撑满），
+   到了这一页就把说明文字下面的整张列表一路顶到窗口最底下，中间空一大块
+   （2026-10-13 用户截图指出：东西全跑到下边去了）。这里让它别长，
+   说明文字紧贴下面的列表，列表从工具栏底下接着排。 */
+[data-page="content"] .panel__desc {
+  flex: 0 0 auto;
+}
+
 /* 加服务器那一行 */
 .local-add {
   display: flex;
   gap: 8px;
   margin-bottom: 10px;
+}
+
+/* hidden 属性要显式写成 display:none，否则会被上面的 display:flex 盖掉
+   （2026-10-13：这一行原来在 Mod / 存档那几栏也一直露着，就是这个原因） */
+.local-add[hidden] {
+  display: none;
 }
 
 .local-add .input:first-child {
