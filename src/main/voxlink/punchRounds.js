@@ -17,7 +17,7 @@
 // 注意：**打洞轮次本身没有上限**（CONTINUOUS_RETRY_MAX_ROUNDS = Integer.MAX_VALUE）——
 // 只有上面那两条"全场零收包"的条件才会让人停手。收到过包就继续磨。
 //
-// §0 纪律：常量照抄（2026-10-12 已对 ConnectionManager.java 逐值核过），不许自造简化。
+// §0 纪律：常量与上游一致（2026-10-12 已对 ConnectionManager.java 逐值核过），不许自造简化。
 
 const { PROFILES } = require('./punchProfiles')
 const { classifyFailure, nextParams, recommendProfile, symmetric } = require('./punchPolicy')

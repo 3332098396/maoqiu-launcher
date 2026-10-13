@@ -5,7 +5,7 @@
 // 当成"某个皮肤站上的皮肤"发给游戏。这样**离线账号**进游戏也能穿上自己的皮肤。
 //
 // 为什么是我们自己编译而不是下现成的：
-//   这段 Java 是从 KAMUCL 那边照搬的（GPL-3.0-or-later，见 THIRD_PARTY_NOTICES.md），
+//   这段 Java 取自 KAMUCL（GPL-3.0-or-later，见 THIRD_PARTY_NOTICES.md），
 //   人家没有单独发这个 jar，只能自己编。
 //
 // 【编译要用 JDK，不是 JRE】需要 `javac`。毛球自己下的那几个 Java 运行时

@@ -20,7 +20,7 @@
 **Mod 生态**（对接 [Modrinth](https://modrinth.com)）
 - 搜 Mod / 资源包 / 光影包 / 整合包 / 数据包，点下载自动放好位置
 - 整合包「整套装」：缺的基础版本和加载器顺手一起装
-- **拖进窗口就能装**：支持 Modrinth 的 `.mrpack`、PCL / HMCL 的普通 zip；
+- **拖进窗口就能装**：支持 Modrinth 的 `.mrpack`、常见启动器导出的普通 zip；
   **带密码的压缩包**也能装（自己实现的 ZipCrypto / AES 解密）
 - 数据包装进指定存档的 `datapacks/`
 

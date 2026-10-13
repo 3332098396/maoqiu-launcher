@@ -127,7 +127,7 @@ function networkErrorText(message) {
   const text = String(message || '')
 
   if (/ENOTFOUND|EAI_AGAIN/.test(text)) {
-    return '找不到这个网站。服务器地址可能拼错了——照抄网站首页地址就行，比如 littleskin.cn'
+    return '找不到这个网站。服务器地址可能拼错了——照着网站首页地址填就行，比如 littleskin.cn'
   }
   if (/ECONNREFUSED/.test(text)) {
     return '这个网站拒绝了连接。地址可能不对，也可能它的登录服务临时关了'

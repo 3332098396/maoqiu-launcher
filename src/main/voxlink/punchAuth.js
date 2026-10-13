@@ -44,7 +44,7 @@ function signPunchFrame(frame, key) {
 /**
  * 验章：对不上就返回 null（调用方据此丢包）。
  * 用 `timingSafeEqual` 而不是 `===` —— 逐字节比会泄漏"猜对了几位"，虽然这里危害不大，
- * 但上游这么写就照抄。
+ * 但上游这么写就照办。
  */
 function verifyPunchFrame(frame, key) {
   if (!key) return frame

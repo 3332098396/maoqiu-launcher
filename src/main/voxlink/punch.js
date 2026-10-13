@@ -16,7 +16,7 @@
 // 包格式：`V L 类型 0 0 | nonce(2 字节)`（5 字节头 + 2 字节随机数），有密钥时尾巴挂 4 字节 HMAC 章。
 // 类型 1 = PUNCH（我敲你），类型 2 = ACK（我收到了）。收到任何一个都算打通，回一个 ACK 就结束。
 //
-// §0 纪律：这里每一个数值、每一处取整、每一条守卫都照抄源码，不许"看着差不多"改。
+// §0 纪律：这里每一个数值、每一处取整、每一条守卫都与源码逐值一致，不许"看着差不多"改。
 // 特别是：`timeoutMs` 是**每次尝试的超时**，不是整场会话的死线。
 
 const dgram = require('node:dgram')
@@ -81,7 +81,7 @@ const shuffle = (values, random) => {
 /**
  * 围绕对方端口要敲哪些端口。
  * 范围小（≤20）就老老实实左右交替扫；范围大就**随机挑** window 个（固定的那 800 个窗口大小）。
- * 源码在随机分支里会把中心端口重复放一次，这里照抄（不是笔误）。
+ * 源码在随机分支里会把中心端口重复放一次，这里照旧保留（不是笔误）。
  */
 function controlPorts(center, range, window, random = Math.random) {
   // UdpHolePuncher.java: sendControlMultiPort. Retain the source's duplicate center

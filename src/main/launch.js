@@ -1048,7 +1048,7 @@ async function launch(versionId, options = {}) {
   // 放在前面的话那些情况下这份临时东西就白准备了、还得逐个去收拾。
   //
   // 【失败不拦着启动】皮肤挂不上顶多是小人还是默认那张，游戏照常能玩——
-  // 跟上面外置登录"配不上就别启动"正好相反，别照抄那段的写法。
+  // 跟上面外置登录"配不上就别启动"正好相反，别套用那段的写法。
   let offlineSkin = null
   let skinArgs = []
   if (account.type === 'offline') {
@@ -1144,7 +1144,7 @@ async function launch(versionId, options = {}) {
       // 【为什么必须 detached】Electron 把它的子进程都放在一个"进程组"里，
       // 主进程一退出，组里的全部被杀。实测过：不加这行，用户关掉启动器，
       // **正在玩的游戏会跟着一起没**。detached 让游戏自己独立成组，
-      // 启动器关了它照样跑（和 PCL 的行为一致）。
+      // 启动器关了它照样跑（和同类软件的行为一致）。
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe']
     })

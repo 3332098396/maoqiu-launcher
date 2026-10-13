@@ -872,7 +872,7 @@ button.acc__tab:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: auto; /* 两个按钮推到底部，和 PCL 一样 */
+  margin-top: auto; /* 两个按钮推到底部，和同类软件一样 */
 }
 
 /* ═══════════════════════════════════════
@@ -3850,7 +3850,7 @@ body[data-theme='amber'] {
   color: var(--accent-strong);
   word-break: break-all;
   margin-bottom: 10px;
-  /* 让用户一眼认出"这是要抄走的东西" */
+  /* 让用户一眼认出"这是要复制走的东西" */
   user-select: all;
 }
 

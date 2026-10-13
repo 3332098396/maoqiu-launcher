@@ -618,7 +618,7 @@ function registerIpcHandlers() {
     return { ok: true, account: secrets.publicAccount(saved.account) }
   })
 
-  /** 存客户端 ID。顺手检查一下格式——抄错一位的话报错很难看懂 */
+  /** 存客户端 ID。顺手检查一下格式——填错一位的话报错很难看懂 */
   ipcMain.handle('microsoft:setClientId', (_event, value) => {
     const clientId = String(value ?? '').trim()
 
@@ -879,7 +879,7 @@ function registerIpcHandlers() {
    *
    * 【为什么要专门给界面看一眼】用户报问题时，第一句通常得说清楚"用的哪个 Java"；
    * 而且换电脑、装新版本之后 Java 可能悄悄换了一个——写出来才看得见。
-   * PCL 的版本设置页里也有这么一行（对照清单里的 ⭐⭐⭐ 项）。
+   * 同类软件的版本设置页里也有这么一行（对照清单里的 ⭐⭐⭐ 项）。
    */
   ipcMain.handle('versions:java', (_event, id, dir) => {
     const where = known(dir)

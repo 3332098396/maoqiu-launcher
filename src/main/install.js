@@ -393,7 +393,7 @@ async function installVersion(versionId, options = {}) {
   }
 
   // 记一下"这次装之前它是不是已经装好了"——取消后要不要删版本文件夹靠它判断：
-  // 本来就装好的版本（比如点"重装"中途取消），绝不能把人家的版本给删了
+  // 本来就装好的版本（比如点"重装"中途取消），绝不能把已经装好的那一份删了
   const wasInstalled = paths.isVersionInstalled(versionId, dir)
 
   try {

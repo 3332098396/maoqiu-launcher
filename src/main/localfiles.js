@@ -453,7 +453,7 @@ function folderOf(versionId, type, dir) {
  *
  * 【为什么要"先复制再删"而不是直接改名】直接 rename 在同一个文件夹里本来是一瞬间的事，
  * 但如果目标文件已经存在（比如手动留下过一个同名的），rename 会**覆盖**掉它。
- * 所以照上游的做法：用 COPYFILE_EXCL 复制（目标已存在就失败），成了再删原来的。
+ * 所以按上游的做法：用 COPYFILE_EXCL 复制（目标已存在就失败），成了再删原来的。
  * 这样最坏的情况是"什么都没发生"，不会是"把一个文件悄悄吃掉了"。
  */
 function setModEnabled(filePath, enabled) {

@@ -37,7 +37,7 @@ const { VoxLinkSession } = require('./session')
 const { ConnEngine } = require('./engine')
 const settingsStore = require('./settings')
 
-/** 房间最多几个人（服务端定的，照抄）。 */
+/** 房间最多几个人（服务端定的，照上游规格）。 */
 const MAX_PLAYERS = 20
 
 /** 加入房间失败时的重试节奏（毫秒）。两次重试 = 一共试 3 回。 */

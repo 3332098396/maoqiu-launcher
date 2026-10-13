@@ -881,7 +881,7 @@ accSignoutEl.addEventListener('click', async () => {
   // 文案跟着账号类型走。这里原来写死了"外置账号"，
   // 结果退正版账号时也说"已退出外置账号"（2026-10-08 用户实际看到并指出）
   setNotice(account.type === 'microsoft' ? '已退出正版账号。' : '已退出外置账号。', 'ok')
-  // 退出了就别再穿人家的皮肤了——立刻换成"没登录时该穿的那张"
+  // 退出了就别再穿那个账号的皮肤了——立刻换成"没登录时该穿的那张"
   refreshSkinAfterAccountChange().catch(() => {})
   refreshLaunchUi()
 })
@@ -1060,7 +1060,7 @@ function refreshLaunchUi() {
   launchBtnEl.disabled = launching || (!noVersions && Boolean(problem))
 
   // 按钮上直接写清楚"要启动的是哪个版本"——不用回头看左边列表
-  // （对照 PCL 整理的 ⭐⭐⭐ 项：PCL 那个大按钮里就写着版本名）
+  // （对照同类软件整理的 ⭐⭐⭐ 项：它们那个大按钮里就写着版本名）
   launchBtnEl.textContent = launching
     ? '游戏运行中…'
     : noVersions
@@ -1127,7 +1127,7 @@ function refreshLaunchUi() {
     currentVersionPanelEl.hidden = true
     if (selectedVersion) {
       const info = selectedItem() || {}
-      // 名字后面缀上"正式版/快照"——光看版本号分不出来（对照 PCL 整理的 ⭐⭐⭐ 项）
+      // 名字后面缀上"正式版/快照"——光看版本号分不出来（对照同类软件整理的 ⭐⭐⭐ 项）
       const typeLabel = VERSION_TYPE_LABELS[info.type] || ''
       curNameEl.textContent =
         (info.name ? `${info.name}（${selectedVersion}）` : selectedVersion) +
@@ -1486,7 +1486,7 @@ window.api.onLaunchState((payload) => {
     // 设置里勾了"启动后关掉毛球"就自己退场（M23）。
     // 【为什么等 1500 毫秒】游戏刚起来那一下还在初始化，日志还在往外吐；
     // 立刻关会把"启动失败"这种消息一起关掉，用户根本来不及看见。
-    // 上游也是等 1.5 秒，照它。
+    // 上游也是等 1.5 秒，跟它走。
     if (settingsInfo?.closeAfterLaunch === true) {
       setNotice('游戏已经启动了，毛球这就退到一边。', 'ok')
       setTimeout(() => window.api.closeWindow(), 1500)
@@ -2214,7 +2214,7 @@ async function openPackDialog(filePath, password) {
   if (info.kind === 'invalid') {
     packTitleEl.textContent = '这不是整合包'
     packWarnEl.textContent =
-      '只支持拖入整合包：Modrinth 的 .mrpack，或者 PCL / HMCL 导出的整合包 .zip。\n' +
+      '只支持拖入整合包：Modrinth 的 .mrpack，或者常见启动器导出的整合包 .zip。\n' +
       '（存档、资源包、光影包这些不是整合包，装不了）'
     return
   }
@@ -2436,7 +2436,7 @@ packInstallEl.addEventListener('click', async () => {
  * "这次装了多少文件"的说明。
  *
  * 【为什么不能直接写 result.files】拖进来的整合包有两种路子：
- * 一种是 Modrinth 包（报"下了几个文件"），一种是 PCL 那种整个目录快照
+ * 一种是 Modrinth 包（报"下了几个文件"），一种是"整个目录快照"那种
  * （报"新写了几个、跳过几个"）。以前不管哪种都拿 files 硬套，
  * 于是重装一个已经装过的包时，界面上写着"装好了（0 个文件）"——
  * 用户看到"0 个文件"只会以为没装上（实测反馈过）。
@@ -4460,8 +4460,8 @@ if (voxlinkCopyAddrEl) {
         voxlinkCopyAddrEl.textContent = '复制地址'
       }, 1500)
     } catch (error) {
-      // 复制不了（剪贴板被别的程序占着之类）——地址就在屏幕上，手抄也行
-      voxlinkCopyAddrEl.textContent = '复制不了，手抄一下吧'
+      // 复制不了（剪贴板被别的程序占着之类）——地址就在屏幕上，手动敲也行
+      voxlinkCopyAddrEl.textContent = '复制不了，手动敲一下吧'
     }
   })
 }
@@ -4546,7 +4546,7 @@ voxlinkCopyEl?.addEventListener('click', async () => {
     voxlinkCopyEl.textContent = '复制好了'
     setTimeout(() => (voxlinkCopyEl.textContent = '复制房间码'), 1500)
   } catch {
-    voxlinkCopyEl.textContent = '复制不了，手动抄一下吧'
+    voxlinkCopyEl.textContent = '复制不了，手动敲一下吧'
     setTimeout(() => (voxlinkCopyEl.textContent = '复制房间码'), 1500)
   }
 })
@@ -4934,7 +4934,7 @@ let heroList = []
 
 /**
  * 每张停多久。上游是 6.5 秒——比"看一眼"长一点，比"等得不耐烦"短一点，
- * 就照它用了（这个数没什么玄机，纯粹是别人试出来的手感）。
+ * 就照它用了（这个数没什么玄机，纯粹是试出来的手感）。
  */
 const HERO_INTERVAL_MS = 6500
 
@@ -5735,7 +5735,7 @@ function loadImageDataUrl(dataUrl) {
 //   ③ 你自己传进皮肤库的那些
 // 【为什么不去皮肤站抓】LittleSkin 的公开 API 手册里只有公告/验证/Yggdrasil 那几个，
 // **没有"浏览皮肤库"这种接口**；皮肤库页面是它内部的 JS 应用在用，
-// 逆那个接口既容易被人家改版搞坏，也不是给别的程序用的。所以不碰。
+// 逆那个接口既容易被对方改版搞坏，也不是给别的程序用的。所以不碰。
 
 /** 这一次开软件随机到的那张（重开软件才会换） */
 let randomPick = null

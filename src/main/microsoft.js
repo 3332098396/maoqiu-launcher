@@ -119,7 +119,7 @@ function microsoftErrorText(error) {
 
   // —— 换令牌那一步：多半是客户端 ID 或那个勾没弄对 ——
   if (body.error === 'invalid_grant' || body.error === 'unauthorized_client') {
-    return '微软不认这个客户端 ID。检查两处：① ID 抄对了吗 ② 注册应用时那个「允许公共客户端流」有没有勾上（见 docs/09）'
+    return '微软不认这个客户端 ID。检查两处：① ID 是不是填错了 ② 注册应用时那个「允许公共客户端流」有没有勾上（见 docs/09）'
   }
   if (body.error === 'invalid_request' && /redirect/i.test(body.error_description || '')) {
     return '重定向地址对不上。注册应用时那串地址要和毛球里用的一字不差（见 docs/09 第 2 步）'

@@ -154,7 +154,7 @@ function redact(text, { accountName } = {}) {
 
   // 【2026-10-13 删掉了"房间码"那条规则】
   // 以前抹的是 8 位大写字母数字（EasyTier 那套的房间码），那套联机已经整个删了。
-  // VoxLink 的房间码是 **6 位**，照抄成 6 位会把 PLAYER / SERVER 这种正常的词也当房间码抹掉
+  // VoxLink 的房间码是 **6 位**，也定成 6 位会把 PLAYER / SERVER 这种正常的词也当房间码抹掉
   // （VoxLink 的字母表恰好把 I/O/0/1 排除了，而这两个词一个都不含）。宁可不抹。
 
   return out

@@ -24,9 +24,9 @@
 //
 // ⚠️ 上游还定义了 `BRIDGE_IDLE_TIMEOUT_MS`（30 秒没动静）和 `watchdogOnce()`，
 // 但**上游整个项目里没有任何地方调用它** —— 是个空摆设，**它不会自动断线**。
-// 我们照抄保留（供以后接上），但别以为它在干活。
+// 我们原样保留（供以后接上），但别以为它在干活。
 //
-// §0 纪律：常量、守卫、顺序全部照抄 bridge.ts，别自己改。
+// §0 纪律：常量、守卫、顺序全部与 bridge.ts 一致，别自己改。
 
 const net = require('node:net')
 
@@ -154,7 +154,7 @@ async function startHostLazyBridge(rc, port, log) {
 
 /**
  * 上游第 46-51 行：**两条管子对倒**（玩家中继那条路用的，V3 才接得上）。
- * V4 用不着它；照抄进来是为了以后接 V3 时这个文件是完整的。
+ * V4 用不着它；保留下来是为了以后接 V3 时这个文件是完整的。
  */
 function pumpRelay(a, b) {
   let stopped = false

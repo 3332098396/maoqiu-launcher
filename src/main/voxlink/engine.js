@@ -17,11 +17,11 @@
 //      `tcpPunch.js`（TCP 同时打开）+ `bridge.js`（把游戏接上去、搬字节）。
 //      所以现在"连通"之后**游戏真的能连进来**了，不再只是"两边互相看得见"。
 //   ② TURN 中继、玩家中继 —— **V3 的活**。所以下面凡是出现 `this._turn` 的地方，
-//      都是**照抄上游的守卫形状**，但那个子系统此刻是空的（`ABSENT_TURN`）——
+//      都是**沿用上游的守卫形状**，但那个子系统此刻是空的（`ABSENT_TURN`）——
 //      **守卫一个没删**，等 V3 接进来把桩换成真的就行。
 //   ③ 因此本文件里 `mode` 永远是 'p2p'、`turnChoices` 永远是空集。
 //
-// §0 纪律：调用顺序、守卫、常量全部照抄 engine.ts，别自己编排。
+// §0 纪律：调用顺序、守卫、常量全部与 engine.ts 一致，别自己编排。
 
 const net = require('node:net')
 const os = require('node:os')
@@ -711,7 +711,7 @@ class ConnEngine extends EventEmitter {
         return
       }
       if (type.startsWith('turn_')) {
-        // TURN 是 V3，这就是那个空替身（守卫形状照抄上游）
+        // TURN 是 V3，这就是那个空替身（守卫形状沿用上游）
         if (type === 'turn_alloc' && this.isHost && !this.winner.has(from)) {
           this.turnChoices.add(from)
           this.stopPeerPunching(from)

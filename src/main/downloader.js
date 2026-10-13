@@ -32,7 +32,7 @@ const { openStream } = require('./http')
 const settings = require('./settings')
 const mirror = require('./mirror')
 
-/** 同时下几个文件。8 是个平衡点：再多人家的服务器可能限速，再少下得慢 */
+/** 同时下几个文件。8 是个平衡点：再多对方服务器可能限速，再少下得慢 */
 const DEFAULT_CONCURRENCY = 16
 
 /**

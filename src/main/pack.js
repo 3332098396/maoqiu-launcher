@@ -6,7 +6,7 @@
 //  ① Modrinth 整合包（.mrpack）：里面有 modrinth.index.json，
 //     列着每个 Mod 的**下载地址和校验码**，还有 overrides/ 文件夹
 //     （作者的配置、按键设置这些）。**完全能装**。
-//  ② PCL / HMCL 导出的整合包（.zip）：文件直接在里面（mods、config…），
+//  ② 常见启动器导出的整合包（.zip）：文件直接在里面（mods、config…），
 //     解压摆放就行。**完全能装**。
 //  ③ CurseForge 整合包（.zip）：里面只写着"第 12345 号 Mod 的第 67890 号文件"，
 //     **没有下载地址**——官方给下载加了强制密钥，且不许把密钥放进公开软件。
@@ -70,7 +70,7 @@ function tryPassword(buffer, entries, password) {
  * 包里的顶层文件夹都有什么（给用户看的，也用来判断"是不是整合包"）。
  *
  * 【踩过的坑】这里原来有一句"过滤掉点开头的名字"（本想滤掉 .DS_Store 这类），
- * 结果把 **`.minecraft`** 也滤掉了——而很多整合包（尤其 PCL 导出的）
+ * 结果把 **`.minecraft`** 也滤掉了——而很多整合包（尤其"整个游戏目录快照"那种）
  * 内容就装在 `.minecraft/` 里！判断"是不是整合包"时看不到它，
  * 就会把好好的整合包判成"不是整合包"（用户实测踩到）。
  * 现在只滤真正没用的那几个系统垃圾文件。
@@ -250,7 +250,7 @@ function inspect(filePath, password) {
   const tops = topLevelNames(archive.entries)
   const lowerTops = tops.map((name) => name.toLowerCase())
 
-  // 整合包（PCL / HMCL 导出的）：看有没有这些标志性文件夹
+  // 整合包（常见启动器导出的）：看有没有这些标志性文件夹
   const modpackMarkers = ['mods', 'versions', '.minecraft']
   if (lowerTops.some((name) => modpackMarkers.includes(name))) {
     const gamedirLike = lowerTops.some((name) =>
@@ -298,7 +298,7 @@ function inspect(filePath, password) {
     summary:
       `这不是一个有效的整合包。\n${whatItIs}\n\n` +
       '本启动器只支持拖入整合包：Modrinth 的 .mrpack，' +
-      '或者 PCL / HMCL 导出的整合包 .zip'
+      '或者常见启动器导出的整合包 .zip'
   }
 }
 
@@ -534,7 +534,7 @@ async function installModrinthPack(filePath, data, { onStage, onProgress, onTask
 }
 
 /**
- * 装一个"文件直接在里面"的整合包（PCL / HMCL 导出的）。
+ * 装一个"文件直接在里面"的整合包（常见启动器导出的）。
  * layout='instance' → 解到选中的那个版本的文件夹
  * layout='gamedir'  → 解到游戏目录（里面带着版本文件的情况）
  */
@@ -542,16 +542,17 @@ async function installPlainPack(filePath, layout, targetVersionId, { onStage, on
   const buffer = fs.readFileSync(filePath)
   const entries = zip.listEntries(buffer)
 
-  // ——— "整个游戏目录快照"的包（PCL 导出的通常是这种）———
+  // ——— "整个游戏目录快照"的包（常见启动器导出的通常是这种）———
   //
   // 【它的结构长这样】（实测一个 1 GB 的真包）：
   //   .minecraft/versions/<版本名>/   ← 版本文件夹：jar、版本 JSON、mods、config…
   //   .minecraft/assets/  libraries/  ← 共享文件
-  //   PCL.ini / launcher_profiles.json / PCL/ / PCL.exe  ← 附带的启动器，没用
+  //   随包附带的启动器自己的文件（它的 .ini 配置、launcher_profiles.json、
+  //   它自己的文件夹和执行文件）← 没用
   //
-  // 巧的是 **PCL 的"版本隔离"布局和我们的一模一样**（版本文件夹里装游戏文件），
-  // 所以照搬就行：versions / assets / libraries 原样放，
-  // 其余的游戏文件归到版本文件夹里，PCL 自己的东西丢掉。
+  // 巧的是**"版本隔离"那种布局和我们的一模一样**（版本文件夹里装游戏文件），
+  // 所以直接沿用就行：versions / assets / libraries 原样放，
+  // 其余的游戏文件归到版本文件夹里，附带的启动器自己的东西丢掉。
   if (layout === 'gamedir') {
     return installGameDirPack(buffer, entries, { onStage, onProgress, versionName, dir, password })
   }
@@ -667,7 +668,7 @@ async function installPack(filePath, options = {}) {
   }
 
   if (info.kind === 'invalid') {
-    return { ok: false, error: '这不是一个有效的整合包，装不了。只支持整合包（.mrpack 或 PCL/HMCL 导出的 .zip）。' }
+    return { ok: false, error: '这不是一个有效的整合包，装不了。只支持整合包（.mrpack 或常见启动器导出的 .zip）。' }
   }
 
   // 剩下的就是"整合包（文件直接在里面）"
@@ -676,7 +677,7 @@ async function installPack(filePath, options = {}) {
 
 /**
  * 装一个"整个游戏目录快照"的整合包（里面是 .minecraft/ 那种）。
- * 见 installPlainPack 里那段说明：我们的布局和 PCL 的一样，照搬即可。
+ * 见 installPlainPack 里那段说明：布局一致，直接沿用即可。
  */
 async function installGameDirPack(buffer, entries, { onStage, onProgress, versionName, dir, password } = {}) {
   const stage = (text) => {
@@ -709,7 +710,7 @@ async function installGameDirPack(buffer, entries, { onStage, onProgress, versio
   for (const entry of pending) {
     let rel = entry.name.slice(wrapper.length)
 
-    // PCL 自己的东西（启动器本体、它的配置）——对我们没用
+    // 附带的启动器自己的东西（本体、它的配置）——对我们没用
     if (rel === 'PCL.ini' || rel === 'launcher_profiles.json') continue
     if (/^pcl\//i.test(rel) || /plain craft launcher/i.test(rel)) continue
 

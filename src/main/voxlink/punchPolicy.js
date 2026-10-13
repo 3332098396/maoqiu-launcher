@@ -10,7 +10,7 @@
 //   ① 这一轮**为什么没成功**（分类）→ ② 下一轮**参数怎么调**（自适应调参）→ ③ 对方的端口**跳到哪儿去了**（端口预测）。
 // 对称 NAT 每次发包都会换一个新端口，所以只能"算"它下一步跳到哪个端口，然后往那一圈猛敲。
 //
-// §0 纪律：常量照抄，公式照抄（含 Math.trunc 的位置）；不许自造简化版扫描。
+// §0 纪律：常量、公式全部与上游一致（含 Math.trunc 的位置）；不许自造简化版扫描。
 
 const { PROFILES } = require('./punchProfiles')
 
@@ -51,7 +51,7 @@ const TUNER = {
   SEND_INTERVAL_DIVISOR: 2 // PunchTuner.java: SEND_INTERVAL_DIVISOR
 }
 
-/** 把模板摊平成"这一轮实际要用的参数"（PunchParams.java: fromProfile 的取值照抄） */
+/** 把模板摊平成"这一轮实际要用的参数"（PunchParams.java: fromProfile 的取值，与上游一致） */
 function fromProfile(p) {
   // PunchParams.java: fromProfile and constructor defaults.
   return {
@@ -78,7 +78,7 @@ function classifyFailure(r) {
   return 'NO_RESPONSE'
 }
 
-/** 下一轮怎么调参：按失败原因走（每个分支的数值都照抄源码） */
+/** 下一轮怎么调参：按失败原因走（每个分支的数值都与源码一致） */
 function nextParams(profile, cycle, maxCycles, failure, result) {
   let p = fromProfile(profile)
   if (failure) {
