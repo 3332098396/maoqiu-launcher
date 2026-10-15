@@ -136,8 +136,6 @@ contextBridge.exposeInMainWorld('api', {
    */
   loginMicrosoft: () => ipcRenderer.invoke('account:loginMicrosoft'),
 
-  /** 存客户端 ID（用户自己注册的那个，步骤见 docs/09） */
-  setMicrosoftClientId: (value) => ipcRenderer.invoke('microsoft:setClientId', value),
 
   /**
    * 取当前账号在你那个皮肤站/正版账号上的皮肤（M16.3）。

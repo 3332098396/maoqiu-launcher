@@ -979,43 +979,7 @@ accModalEl.addEventListener('click', (event) => {
   if (event.target === accModalEl) accModalEl.hidden = true
 })
 accMsLoginEl.addEventListener('click', doMicrosoftLogin)
-accMsGoSetupEl.addEventListener('click', () => {
-  // 直接把人送到该填的地方，别让他自己在设置里找
-  showPage('settings')
-  showSettingsTab('account')
-  msClientIdEl.focus()
-})
 
-// ——— 设置页 · 账号：客户端 ID（M13）———
-
-const msClientIdEl = document.getElementById('ms-client-id')
-const msClientIdSaveEl = document.getElementById('ms-client-id-save')
-const msClientIdHintEl = document.getElementById('ms-client-id-hint')
-
-function renderMicrosoftClientId() {
-  const id = launchInfo?.microsoftClientId || ''
-  // 用户正在改的话别去覆盖他手里的字
-  if (document.activeElement !== msClientIdEl) msClientIdEl.value = id
-
-  msClientIdHintEl.textContent = id
-    ? '已保存。到「启动」页左边点「正版」，就能用微软账号登录了。'
-    : '还没填。注册步骤在项目目录的 docs/09-正版登录申请步骤.md 里'
-  msClientIdHintEl.classList.toggle('acc__hint--ok', Boolean(id))
-}
-
-msClientIdSaveEl.addEventListener('click', async () => {
-  const result = await window.api.setMicrosoftClientId(msClientIdEl.value)
-
-  if (!result.ok) {
-    msClientIdHintEl.textContent = result.error
-    msClientIdHintEl.classList.remove('acc__hint--ok')
-    return
-  }
-
-  if (launchInfo) launchInfo.microsoftClientId = result.clientId
-  renderMicrosoftClientId()
-  if (accTab === 'microsoft') renderMicrosoftPane()
-})
 
 async function doYggdrasilLogin() {
   if (loggingIn) return
@@ -3751,7 +3715,6 @@ function showSettingsTab(name) {
   if (name === 'backup') loadBackupTab()
   if (name === 'clean') loadCleanTab()
   if (name === 'look') renderLookTab()
-  if (name === 'account') renderMicrosoftClientId()
   if (name === 'ai') renderAiSettingsTab()
   if (name === 'about') renderAboutTab()
 }

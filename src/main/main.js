@@ -41,6 +41,10 @@ const content = require('./content')
 const localfiles = require('./localfiles')
 const servers = require('./servers')
 const secrets = require('./secrets')
+// 内置的微软客户端 ID：用户不用自己申请，装上就能登录。
+// 客户端 ID 不是密码（谁都能看到），放进软件是安全的；真正的密码叫 client secret，那个绝不能内置。
+const BUILTIN_CLIENT_ID = '00000000402b5328'
+
 const notices = require('./notices')
 const isolation = require('./isolation')
 const packexport = require('./packexport')
@@ -603,7 +607,7 @@ function registerIpcHandlers() {
       // 格式（类型+UUID）只在 accounts.js 里定义一次，界面别自己拼
       accountKey: accounts.accountKey(accounts.getAccount()),
       // 正版登录配了没有（界面要拿它决定"能不能点登录"）
-      microsoftClientId: config.microsoft?.clientId || '',
+      microsoftClientId: config.microsoft?.clientId || BUILTIN_CLIENT_ID,
       lastVersion: config.launch.lastVersion || '',
       memoryMB: settings.currentMemoryMB(),
       memoryAuto: !(Number(config.launch.memoryMB) > 0),
@@ -644,9 +648,8 @@ function registerIpcHandlers() {
    * 毛球一行密码都不碰；界面那边只负责点一下、然后等结果。
    */
   ipcMain.handle('account:loginMicrosoft', async () => {
-    const config = settings.readConfig()
     const result = await microsoft.login({
-      clientId: config.microsoft?.clientId || '',
+      clientId: BUILTIN_CLIENT_ID,
       parentWindow: mainWindow
     })
     if (!result.ok) return result
@@ -657,27 +660,8 @@ function registerIpcHandlers() {
     return { ok: true, account: secrets.publicAccount(saved.account) }
   })
 
-  /** 存客户端 ID。顺手检查一下格式——填错一位的话报错很难看懂 */
-  ipcMain.handle('microsoft:setClientId', (_event, value) => {
-    const clientId = String(value ?? '').trim()
-
-    if (clientId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)) {
-      return {
-        ok: false,
-        error: '这串 ID 的样子不对。它应该是 8-4-4-4-12 的格式，像 12345678-1234-1234-1234-123456789abc'
-      }
-    }
-
-    try {
-      settings.writeConfig({ microsoft: { clientId } })
-    } catch (error) {
-      return { ok: false, error: `存不下来：${error.message}` }
-    }
-    return { ok: true, clientId }
-  })
-
   ipcMain.handle('account:list', () => ({
-    // 列表也不带令牌（同 getGameInfo 里那条说明）
+    // 列表也不带令牌
     accounts: accounts.listAccounts().map(secrets.publicAccount),
     currentKey: accounts.accountKey(accounts.getAccount())
   }))
