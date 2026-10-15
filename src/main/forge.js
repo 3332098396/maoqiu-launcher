@@ -34,7 +34,27 @@ const downloader = require('./downloader')
 const BMCLAPI = 'https://bmclapi2.bangbang93.com'
 
 /**
+ * 版本号比较：新的在前。
+ * 【为什么不能用字符串比】"47.1.10" 按字符串排会跑到 "47.1.9" 前面去（10 比 9"小"）。
+ */
+function compareNewerFirst(a, b) {
+  const pa = String(a).split(/[^0-9]+/).filter(Boolean).map(Number)
+  const pb = String(b).split(/[^0-9]+/).filter(Boolean).map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] || 0
+    const y = pb[i] || 0
+    if (x !== y) return y - x
+  }
+  return 0
+}
+
+/**
  * 某种加载器支持哪些版本。
+ *
+ * 【顺序】返回的列表一律"新的在前"——装的时候默认取第一个。
+ * 以前 Forge 直接用 BMCLAPI 的原始顺序（它是老的在前），会挑到**最老**的版本；
+ * 2026-10-16 改成按 build 号倒序排（build 是个单调递增的整数，比版本号字符串可靠）。
+ *
  * @returns {Promise<Array<{version: string, installerUrl: string, sha1: string}>>}
  */
 async function listBuilds(loader, gameVersion) {
@@ -45,6 +65,10 @@ async function listBuilds(loader, gameVersion) {
     )
     return (Array.isArray(list) ? list : [])
       .filter((build) => build && build.version)
+      .sort((a, b) => {
+        if (typeof a.build === 'number' && typeof b.build === 'number') return b.build - a.build
+        return compareNewerFirst(a.version, b.version)
+      })
       .map((build) => {
         const file = `forge-${gameVersion}-${build.version}-installer.jar`
         return {
@@ -70,7 +94,7 @@ async function listBuilds(loader, gameVersion) {
         const aBeta = a.version.includes('beta') ? 1 : 0
         const bBeta = b.version.includes('beta') ? 1 : 0
         if (aBeta !== bBeta) return aBeta - bBeta
-        return String(b.version).localeCompare(String(a.version))
+        return compareNewerFirst(a.version, b.version)
       })
       .map((item) => ({
         version: item.version,
@@ -191,19 +215,28 @@ function pointLibrariesToMirror(version) {
  *
  * @returns {Promise<{versionId: string, json: object, loaderVersion: string}>}
  */
-async function prepare(loader, gameVersion, { onStage, onProgress, onTask, dir } = {}) {
+async function prepare(loader, gameVersion, { onStage, onProgress, onTask, dir, wantedVersion } = {}) {
   const stage = (text) => {
     if (onStage) onStage(text)
   }
 
-  stage(`正在查 ${loader === 'forge' ? 'Forge' : 'NeoForge'} 有哪些版本…`)
+  const label = loader === 'forge' ? 'Forge' : 'NeoForge'
+
+  stage(`正在查 ${label} 有哪些版本…`)
   const builds = await listBuilds(loader, gameVersion)
-  const build = pickBuild(builds)
+  // 用户在下载页挑过就用挑的那个，没挑就用最新的（列表已按"新的在前"排好）
+  const build = wantedVersion
+    ? builds.find((one) => String(one.version) === String(wantedVersion))
+    : pickBuild(builds)
   if (!build) {
-    throw new Error(`${loader === 'forge' ? 'Forge' : 'NeoForge'} 没有支持 ${gameVersion} 的版本`)
+    throw new Error(
+      wantedVersion
+        ? `没找到 ${label} 的 ${wantedVersion} 这个版本——回「下载」页重新挑一个`
+        : `${label} 没有支持 ${gameVersion} 的版本`
+    )
   }
 
-  stage(`正在下载 ${loader === 'forge' ? 'Forge' : 'NeoForge'} ${build.version} 的安装器…`)
+  stage(`正在下载 ${label} ${build.version} 的安装器…`)
   const jarPath = await downloadInstaller(build, { onProgress, onTask })
 
   stage('正在拆开安装器…')

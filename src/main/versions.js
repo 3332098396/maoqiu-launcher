@@ -86,6 +86,7 @@ function loaderName(id, dir) {
     if (names.some((n) => n.includes('fabric-loader'))) return 'Fabric'
     if (names.some((n) => n.includes('neoforge'))) return 'NeoForge'
     if (names.some((n) => n.includes('forge'))) return 'Forge'
+    if (names.some((n) => n.includes('optifine'))) return 'OptiFine'
   } catch {
     // 读不出来就当没装加载器
   }

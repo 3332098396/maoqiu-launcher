@@ -65,9 +65,12 @@ contextBridge.exposeInMainWorld('api', {
   /**
    * 装一个版本，装完才 resolve。
    * 过程中会通过 onInstallStage / onInstallProgress 主动推消息给界面。
-   * @returns {Promise<{ok: boolean, stats?, error?}>}
+   * @param {string} versionId 比如 "1.20.1"
+   * @param {{loader: string, loaderVersion?: string, dir?: string}|null} [choice]
+   *   下载页勾了 Mod 加载器时的选择（不勾就传 null / 不传）
+   * @returns {Promise<{ok: boolean, stats?, versionId?: string, loaderLabel?: string, error?}>}
    */
-  startInstall: (versionId) => ipcRenderer.invoke('install:start', versionId),
+  startInstall: (versionId, choice) => ipcRenderer.invoke('install:start', versionId, choice),
 
   /**
    * 取消正在跑的安装。
@@ -414,13 +417,14 @@ contextBridge.exposeInMainWorld('api', {
   // ——— Mod 加载器（M10）———
 
   /**
-   * 给某个游戏版本装 Mod 加载器（先支持 Fabric）。
-   * 进度通过 onInstallStage / onInstallProgress 推过来。
-   * @param {{gameVersion: string, loader?: 'fabric'}} options
-   * @returns {Promise<{ok: boolean, versionId?: string, loaderVersion?: string,
-   *                    already?: boolean, error?: string}>}
+   * 某个游戏版本能装哪些 Mod 加载器（Fabric / Forge / NeoForge / OptiFine）、
+   * 各有哪些版本。下载页「安装」弹窗用。
+   * @param {string} gameVersion 比如 "1.20.1"
+   * @returns {Promise<{ok: boolean, loaders?: Array<{id: string, label: string,
+   *                    versions: Array<{version: string, label?: string, preview?: boolean, recommended?: boolean}>,
+   *                    error: string}>, error?: string}>}
    */
-  installLoader: (options) => ipcRenderer.invoke('loader:install', options),
+  listLoaders: (gameVersion) => ipcRenderer.invoke('loader:list', gameVersion),
 
   // ——— 整合包：拖放安装（M11）———
 

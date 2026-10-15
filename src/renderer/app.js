@@ -166,12 +166,21 @@ function renderVersions() {
       ok.textContent = '已安装'
       action.appendChild(ok)
 
+      // 想给它加个 Mod 加载器（Fabric / Forge / NeoForge / OptiFine）——
+      // 装完多出一个新版本，原来这个不动
+      const add = document.createElement('button')
+      add.className = 'linkbtn'
+      add.type = 'button'
+      add.dataset.addloader = version.id
+      add.textContent = '加装 Mod 加载器'
+      action.appendChild(add)
+
       // 万一文件被删掉或弄坏了，点「重装」能补齐——
       // 已经下好且校验通过的文件会跳过，不会白白重下
       const fix = document.createElement('button')
       fix.className = 'linkbtn'
       fix.type = 'button'
-      fix.dataset.install = version.id
+      fix.dataset.reinstall = version.id
       fix.textContent = '重装'
       action.appendChild(fix)
     } else {
@@ -376,18 +385,20 @@ async function loadInstalled() {
   }
 }
 
-async function startInstall(versionId) {
+async function startInstall(versionId, choice) {
   if (installingVersion) return
   installingVersion = versionId
 
   installEl.hidden = false
-  installTitleEl.textContent = `正在安装 ${versionId}`
+  installTitleEl.textContent = choice?.loader
+    ? `正在安装 ${versionId}（连带加载器）`
+    : `正在安装 ${versionId}`
   setStage('准备中…')
   setFill(0)
   setDetail('—')
   installCancelEl.hidden = false
 
-  const result = await window.api.startInstall(versionId)
+  const result = await window.api.startInstall(versionId, choice || null)
   installingVersion = ''
   // 【装完要收起来，不能只置灰】用户反馈："安装完成之后右下角还是取消安装"——
   // 光禁用的话它还杵在那儿、点又点不动，看着像坏了。
@@ -409,34 +420,251 @@ async function startInstall(versionId) {
 
   setFill(100)
   // 标题也改掉，否则"正在安装 xx"会一直挂在那儿，看着像没结束
-  installTitleEl.textContent = `${versionId} 安装完成`
+  const finalId = result.versionId || versionId
+  installTitleEl.textContent = result.loaderLabel ? `${finalId} 装好了` : `${finalId} 安装完成`
   setStage('')
-  setDetail(`共 ${result.stats.done} 个文件，没有失败`)
+  if (result.loaderLabel) {
+    setDetail(`原版和 ${result.loaderLabel} 都装好了 · 启动页已经帮你选上它`)
+  } else if (result.stats) {
+    setDetail(`共 ${result.stats.done} 个文件，没有失败`)
+  } else {
+    setDetail('装好了')
+  }
 
   // 装完立刻刷新列表，让这一行变成「已安装」
   await loadInstalled()
+
+  // 装出了带加载器的新版本 → 把启动页选中的版本切过去，省得用户自己找
+  if (result.loaderLabel) {
+    await refreshLaunchFacts()
+    const installedNow = findVersion(finalId, '')
+    if (installedNow) {
+      selectedVersion = installedNow.id
+      selectedDir = installedNow.dir
+      refreshLaunchUi()
+    }
+  }
 }
+
+// ——— 装版本时顺手勾 Mod 加载器（下载页「安装」弹的框）———
+//
+// 【为什么从版本设置挪到这儿】2026-10-16 用户拍板：装加载器的自然时机就是
+// "装版本的时候"，顺路一步选完；一眼看到各家有哪些版本可选。
+// 版本设置里原来那三个「装 Fabric / 装 Forge / 装 NeoForge」按钮已删除。
+
+const loaderModalEl = document.getElementById('loader-modal')
+const loaderTitleEl = document.getElementById('loader-title')
+const loaderSubEl = document.getElementById('loader-sub')
+const loaderListEl = document.getElementById('loader-list')
+const loaderHintEl = document.getElementById('loader-hint')
+const loaderGoEl = document.getElementById('loader-go')
+
+/** 弹窗的当前状态；null = 没开着 */
+let loaderPicker = null
+
+function closeLoaderPicker() {
+  loaderModalEl.hidden = true
+  loaderPicker = null
+}
+
+/**
+ * 打开"选加载器"的框。
+ * @param {string} versionId 给哪个版本装
+ * @param {boolean} installed 这个原版已经装过了吗（装过的走"加装"，不改原版）
+ */
+async function openLoaderPicker(versionId, installed) {
+  loaderPicker = { versionId, installed, data: null, picked: null }
+
+  loaderTitleEl.textContent = installed ? `给 ${versionId} 加装加载器` : `安装 ${versionId}`
+  loaderSubEl.textContent = installed
+    ? '挑一个 Mod 加载器装上。原来这个版本不动，装完会多出一个新版本，启动时选新的那个。'
+    : '想顺手加装一个 Mod 加载器吗？点一下选它；不想装就直接开始，纯原版一样能玩。'
+
+  loaderListEl.textContent = ''
+  const waiting = document.createElement('li')
+  waiting.className = 'loaderitem loaderitem--dim'
+  waiting.textContent = '正在查各家加载器都有哪些版本…'
+  loaderListEl.appendChild(waiting)
+
+  loaderHintEl.textContent = ''
+  loaderGoEl.textContent = installed ? '开始安装' : '开始下载'
+  loaderGoEl.disabled = installed // 已装的版本：没挑加载器就没什么可装的
+  loaderModalEl.hidden = false
+
+  const result = await window.api.listLoaders(versionId)
+  // 查的过程中用户可能把框关了、或者点了别的版本——那就别画了
+  if (!loaderPicker || loaderPicker.versionId !== versionId || loaderPicker.installed !== installed) {
+    return
+  }
+
+  if (!result.ok) {
+    loaderListEl.textContent = ''
+    const bad = document.createElement('li')
+    bad.className = 'loaderitem loaderitem--dim'
+    bad.textContent = `加载器清单没查到：${result.error}`
+    loaderListEl.appendChild(bad)
+    return
+  }
+
+  loaderPicker.data = result.loaders || []
+  renderLoaderPicker()
+}
+
+/** 画弹窗里那四行加载器（和它们的版本按钮） */
+function renderLoaderPicker() {
+  const state = loaderPicker
+  if (!state || !state.data) return
+
+  loaderListEl.textContent = ''
+
+  for (const one of state.data) {
+    const item = document.createElement('li')
+    item.className = 'loaderitem'
+    item.dataset.loader = one.id
+
+    const pickedHere = state.picked && state.picked.loader === one.id
+
+    const name = document.createElement('span')
+    name.className = 'loaderitem__name'
+    name.textContent = one.label
+    item.appendChild(name)
+
+    const status = document.createElement('span')
+    status.className = 'loaderitem__state'
+    if (one.error) {
+      status.textContent = '查不到（网络不好？）'
+      item.classList.add('loaderitem--off')
+    } else if (one.versions.length === 0) {
+      status.textContent = '这个游戏版本没有它'
+      item.classList.add('loaderitem--off')
+    } else if (pickedHere) {
+      status.textContent = '✓ 已选'
+    } else {
+      status.textContent = '可以安装'
+    }
+    item.appendChild(status)
+
+    // 选中了才展开版本列表
+    if (pickedHere) {
+      item.classList.add('loaderitem--on')
+
+      const box = document.createElement('div')
+      box.className = 'loadervers'
+      for (const v of one.versions.slice(0, 300)) {
+        const button = document.createElement('button')
+        button.className = 'loaderver'
+        button.type = 'button'
+        button.dataset.loader = one.id
+        button.dataset.version = v.version
+        button.dataset.show = v.label || v.version
+        if (state.picked.version === v.version) button.classList.add('loaderver--on')
+        button.textContent = v.label || v.version
+        if (v.recommended) {
+          const tag = document.createElement('em')
+          tag.textContent = '推荐'
+          button.appendChild(tag)
+        } else if (v.preview) {
+          const tag = document.createElement('em')
+          tag.textContent = '预览'
+          button.appendChild(tag)
+        }
+        box.appendChild(button)
+      }
+      item.appendChild(box)
+    }
+
+    loaderListEl.appendChild(item)
+  }
+
+  // 底下那句人话：介绍一下现在这个选择会装出什么
+  if (state.picked) {
+    const name = (state.data.find((one) => one.id === state.picked.loader) || {}).label || ''
+    const showAs = state.picked.label || state.picked.version
+    loaderHintEl.textContent = state.installed
+      ? `会把 ${name} ${showAs} 装到 ${state.versionId} 上，装完多出一个新版本。`
+      : `会先下 ${state.versionId} 原版，再装上 ${name} ${showAs}，装完多出一个新版本，启动时选它。`
+  } else {
+    loaderHintEl.textContent = state.installed
+      ? '在上面的列表里挑一个加载器吧。'
+      : `不装加载器，直接下 ${state.versionId} 原版。`
+  }
+
+  loaderGoEl.textContent = state.installed ? '开始安装' : '开始下载'
+  loaderGoEl.disabled = state.installed && !state.picked
+}
+
+// 弹窗里点东西
+loaderListEl.addEventListener('click', (event) => {
+  const state = loaderPicker
+  if (!state || !state.data) return
+
+  // 点某个版本号 → 换成它
+  const verButton = event.target.closest('.loaderver')
+  if (verButton && verButton.dataset.loader) {
+    state.picked = {
+      loader: verButton.dataset.loader,
+      version: verButton.dataset.version,
+      label: verButton.dataset.show || verButton.dataset.version
+    }
+    renderLoaderPicker()
+    return
+  }
+
+  // 点整行 → 选中（默认最新的；Fabric 优先它自己标了"稳定"的那个）/ 再点一下取消
+  const item = event.target.closest('.loaderitem')
+  if (!item || !item.dataset.loader || item.classList.contains('loaderitem--off')) return
+
+  if (state.picked && state.picked.loader === item.dataset.loader) {
+    state.picked = null
+  } else {
+    const found = state.data.find((one) => one.id === item.dataset.loader)
+    const versions = found ? found.versions : []
+    const def = versions.find((v) => v.recommended) || versions[0]
+    if (!def) return
+    state.picked = {
+      loader: item.dataset.loader,
+      version: def.version,
+      label: def.label || def.version
+    }
+  }
+  renderLoaderPicker()
+})
+
+loaderGoEl.addEventListener('click', () => {
+  const state = loaderPicker
+  if (!state) return
+  const choice = state.picked
+    ? { loader: state.picked.loader, loaderVersion: state.picked.version }
+    : null
+  const id = state.versionId
+  closeLoaderPicker()
+  startInstall(id, choice)
+})
+
+document.getElementById('loader-cancel').addEventListener('click', closeLoaderPicker)
 
 // 主进程推过来的阶段提示和进度
 window.api.onInstallStage((text) => {
   setStage(text)
-  // 装 Mod 加载器是在「版本设置」弹窗里点的，进度也要写到那儿去
-  if (loaderInstalling) verLoaderHintEl.textContent = text
 })
 window.api.onInstallProgress((stats) => {
   setFill(stats.percent)
   setDetail(progressLine(stats))
-  if (loaderInstalling) {
-    verLoaderHintEl.textContent =
-      `正在下载加载器… ${stats.percent}% · ` +
-      `${formatSize(stats.receivedBytes)}/${formatSize(stats.totalBytes)}`
-  }
 })
 
-// 列表里点「安装」
+// 列表里点「安装」：先弹"要不要顺手加装加载器"的框（2026-10-16 从版本设置挪来的）；
+// 「加装 Mod 加载器」和「重装」各有各的入口
 listEl.addEventListener('click', (event) => {
-  const versionId = event.target.dataset?.install
-  if (versionId) startInstall(versionId)
+  const target = event.target
+  if (target.dataset?.install) {
+    openLoaderPicker(target.dataset.install, false)
+    return
+  }
+  if (target.dataset?.addloader) {
+    openLoaderPicker(target.dataset.addloader, true)
+    return
+  }
+  if (target.dataset?.reinstall) startInstall(target.dataset.reinstall, null)
 })
 
 // 进度面板可以手动收起，不挡着看列表
@@ -2514,13 +2742,6 @@ const verHeightEl = document.getElementById('ver-height')
 const verIsolationOnEl = document.getElementById('ver-isolation-on')
 const verIsolationEl = document.getElementById('ver-isolation')
 const verSettingsHintEl = document.getElementById('ver-settings-hint')
-const verInstallFabricEl = document.getElementById('ver-install-fabric')
-const verInstallForgeEl = document.getElementById('ver-install-forge')
-const verInstallNeoForgeEl = document.getElementById('ver-install-neoforge')
-const verLoaderHintEl = document.getElementById('ver-loader-hint')
-
-/** 正在装 Mod 加载器吗（进度要写到版本设置弹窗里） */
-let loaderInstalling = false
 
 /** 版本设置弹窗里，「这个版本自己的设置」的信息（含全局值作对比） */
 let verSettingsInfo = null
@@ -2778,63 +2999,6 @@ verIsolationOnEl.addEventListener('change', () => {
 verIsolationEl.addEventListener('change', () =>
   saveVersionSetting({ isolation: verIsolationEl.checked })
 )
-
-// ——— 装 Mod 加载器（M10 / M10.2：Fabric、Forge、NeoForge）———
-
-const LOADER_LABELS = { fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge' }
-
-/** 三个按钮走同一条路，只是加载器不一样 */
-async function installLoader(type) {
-  if (!editingVersion || loaderInstalling) return
-  const base = editingVersion
-  const label = LOADER_LABELS[type]
-
-  loaderInstalling = true
-  for (const button of [verInstallFabricEl, verInstallForgeEl, verInstallNeoForgeEl]) {
-    button.disabled = true
-  }
-  verLoaderHintEl.textContent = `正在准备装 ${label}…`
-  // 提示文字在弹窗底部，可能看不到——滚过去让用户看见进度
-  verLoaderHintEl.scrollIntoView({ block: 'nearest' })
-
-  let result
-  try {
-    result = await window.api.installLoader({
-      gameVersion: base,
-      loader: type,
-      dir: editingDir
-    })
-  } catch (error) {
-    result = { ok: false, error: String(error?.message ?? error) }
-  }
-
-  loaderInstalling = false
-  for (const button of [verInstallFabricEl, verInstallForgeEl, verInstallNeoForgeEl]) {
-    button.disabled = false
-  }
-
-  if (!result.ok) {
-    verLoaderHintEl.textContent = `装不上：${result.error}`
-    return
-  }
-
-  verLoaderHintEl.textContent = result.already
-    ? `${result.versionId} 之前就装好啦，不用再来一遍`
-    : `装好啦：${result.versionId}——回启动页选它就能用 Mod 了`
-
-  // 版本列表刷新，并把新装好的那个选上（省得用户自己找）
-  await refreshLaunchFacts()
-  const installedNow = findVersion(result.versionId, editingDir)
-  if (installedNow) {
-    selectedVersion = installedNow.id
-    selectedDir = installedNow.dir
-    refreshLaunchUi()
-  }
-}
-
-verInstallFabricEl.addEventListener('click', () => installLoader('fabric'))
-verInstallForgeEl.addEventListener('click', () => installLoader('forge'))
-verInstallNeoForgeEl.addEventListener('click', () => installLoader('neoforge'))
 
 verSettingsBtnEl.addEventListener('click', openVersionSettings)
 document.getElementById('ver-close').addEventListener('click', closeVersionSettings)

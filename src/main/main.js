@@ -58,6 +58,7 @@ let voxlink = null
 const frp = require('./frp')
 const loaders = require('./loaders')
 const forge = require('./forge')
+const optifine = require('./optifine')
 
 // 软件名。它会决定数据存放目录：%APPDATA%\毛球\
 app.setName('毛球')
@@ -422,8 +423,14 @@ function registerIpcHandlers() {
   /** 本机已装了哪些版本（跨所有认得的游戏目录，每项带着它在哪儿） */
   ipcMain.handle('versions:installed', () => paths.listAllInstalledVersions(settings.knownGameDirs()))
 
-  /** 装一个版本。进度通过 install:progress 主动推给界面 */
-  ipcMain.handle('install:start', async (event, versionId) => {
+  /**
+   * 装一个版本。进度通过 install:progress 主动推给界面。
+   *
+   * choice（可选）是下载页弹窗里勾的东西：{loader, loaderVersion}。
+   * 勾了加载器就"先装原版，再把加载器装上去"一气呵成；
+   * 不勾（或没传）就是老样子，只装原版。
+   */
+  ipcMain.handle('install:start', async (event, versionId, choice) => {
     if (currentInstall) {
       return { ok: false, error: '已经有一个安装任务在跑了，等它完成或取消它' }
     }
@@ -435,37 +442,69 @@ function registerIpcHandlers() {
     currentInstall = true
     installCancelMode = 'keep'
     let task = null
+    const onTask = (t) => {
+      task = t
+      currentInstallTask = t
+    }
+
+    // 取消时选了"全部删掉"：把这次下的清干净（公共文件不伤别的版本，见实现说明）
+    const cancelAndDrop = (which, removeVersionDir) => {
+      const cleanup = install.dropPartialInstall(which, {
+        removeVersionDir,
+        downloaded: task ? task.getDownloaded() : []
+      })
+      return {
+        ok: false,
+        cancelled: true,
+        dropped: true,
+        cleanup,
+        error:
+          `安装已取消，这次下的已经删掉了` +
+          `（清掉 ${cleanup.removedFiles} 个文件` +
+          (cleanup.removedBytes ? `、约 ${Math.round(cleanup.removedBytes / 1024 / 1024)} MB` : '') +
+          `）`
+      }
+    }
 
     try {
-      const result = await install.installVersion(versionId, {
+      // ——— ① 原版（早就装好的话，这一步只会校验、跳过）———
+      const base = await install.installVersion(versionId, {
         onStage: (text) => send('install:stage', text),
         onProgress: (stats) => send('install:progress', stats),
-        onTask: (t) => {
-          task = t
-          currentInstallTask = t
-        }
+        onTask
       })
 
-      // 取消时选了"全部删掉"：把这次下的清干净（公共文件不伤别的版本，见实现说明）
-      if (result.cancelled && installCancelMode === 'drop' && task) {
-        const cleanup = install.dropPartialInstall(versionId, {
-          removeVersionDir: !result.wasInstalled,
-          downloaded: task.getDownloaded()
-        })
-        return {
-          ok: false,
-          cancelled: true,
-          dropped: true,
-          cleanup,
-          error:
-            `安装已取消，这次下的已经删掉了` +
-            `（清掉 ${cleanup.removedFiles} 个文件` +
-            (cleanup.removedBytes ? `、约 ${Math.round(cleanup.removedBytes / 1024 / 1024)} MB` : '') +
-            `）`
-        }
+      if (base.cancelled && installCancelMode === 'drop') {
+        return cancelAndDrop(versionId, !base.wasInstalled)
       }
+      if (!base.ok) return base
 
-      return result
+      // ——— ② 没勾加载器就到这儿 ———
+      if (!choice || !choice.loader) return base
+
+      // ——— ③ 勾了就接着把加载器装上去 ———
+      const loaded = await runLoaderInstall({
+        gameVersion: versionId,
+        loader: choice.loader,
+        loaderVersion: choice.loaderVersion,
+        dir: known(choice.dir),
+        send,
+        onTask
+      })
+
+      if (loaded.cancelled && installCancelMode === 'drop') {
+        return cancelAndDrop(loaded.versionId || versionId, true)
+      }
+      if (!loaded.ok) return loaded
+
+      return {
+        ...base,
+        versionId: loaded.versionId,
+        loaderLabel: loaded.loaderLabel,
+        loaderAlready: loaded.already === true
+      }
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) }
     } finally {
       currentInstall = null
       currentInstallTask = null
@@ -1802,83 +1841,64 @@ function registerIpcHandlers() {
   })
 
   /**
-   * 给某个版本装 Mod 加载器（M10，先支持 Fabric）。
-   * 装完会多出一个新版本（比如 fabric-loader-0.16.5-26.3），原来的版本不动。
-   * 进度复用 install:stage / install:progress 两条通道。
+   * 某个游戏版本能装哪些 Mod 加载器、各有哪些版本。
+   * 下载页点「安装 / 加装」弹的那个框用的。
+   * 四家并行查，谁家接口挂了只影响谁（界面上那一行显示查不到，别的照样选）。
    */
-  ipcMain.handle('loader:install', async (event, options) => {
-    if (currentInstall) return { ok: false, error: '已经有一个安装任务在跑了，等它完成' }
+  ipcMain.handle('loader:list', async (_event, gameVersion) => {
+    const want = String(gameVersion || '')
+    if (!want) return { ok: false, error: '没给游戏版本' }
 
-    const send = (channel, payload) => {
-      if (!event.sender.isDestroyed()) event.sender.send(channel, payload)
-    }
-
-    currentInstall = true
-    try {
-      const { gameVersion, loader } = options
-      const wanted = loader || 'fabric'
-      if (!['fabric', 'forge', 'neoforge'].includes(wanted)) {
-        return { ok: false, error: `不认识的加载器：${wanted}` }
+    const jobs = [
+      {
+        id: 'fabric',
+        label: 'Fabric',
+        run: async () =>
+          (await loaders.listFabricLoaders(want)).map((one) => ({
+            version: one.version,
+            recommended: one.stable
+          }))
+      },
+      {
+        id: 'forge',
+        label: 'Forge',
+        run: async () =>
+          (await forge.listBuilds('forge', want)).map((one) => ({ version: one.version }))
+      },
+      {
+        id: 'neoforge',
+        label: 'NeoForge',
+        run: async () =>
+          (await forge.listBuilds('neoforge', want)).map((one) => ({ version: one.version }))
+      },
+      {
+        id: 'optifine',
+        label: 'OptiFine',
+        run: async () =>
+          (await optifine.listVersions(want)).map((one) => ({
+            version: one.version,
+            label: one.label,
+            preview: one.preview
+          }))
       }
-      const where = known(options.dir)
-      if (!paths.isVersionInstalled(gameVersion, where)) {
-        return { ok: false, error: `先把 ${gameVersion} 装好，才能在它上面装加载器` }
-      }
+    ]
 
-      // Fabric 官方给现成的版本文件；Forge / NeoForge 得自己拆安装器
-      const built =
-        wanted === 'fabric'
-          ? await loaders.buildFabricProfile(gameVersion)
-          : await forge.prepare(wanted, gameVersion, {
-              dir: where,
-              onStage: (text) => send('install:stage', text),
-              onProgress: (stats) => send('install:progress', stats),
-              onTask: (task) => {
-                currentInstallTask = task
-              }
-            })
-
-      if (paths.isVersionInstalled(built.versionId, where)) {
-        return { ok: true, already: true, versionId: built.versionId }
-      }
-
-      const loaderLabel = wanted === 'fabric' ? 'Fabric' : wanted === 'forge' ? 'Forge' : 'NeoForge'
-      send('install:stage', `正在装 ${loaderLabel} ${built.loaderVersion}…`)
-      const result = await install.installVersion(built.versionId, {
-        providedJson: built.json,
-        dir: where,
-        onStage: (text) => send('install:stage', text),
-        onProgress: (stats) => send('install:progress', stats),
-        onTask: (task) => {
-          currentInstallTask = task
+    const found = await Promise.all(
+      jobs.map(async (job) => {
+        try {
+          return { id: job.id, label: job.label, versions: await job.run(), error: '' }
+        } catch (error) {
+          return {
+            id: job.id,
+            label: job.label,
+            versions: [],
+            error: String(error?.message ?? error)
+          }
         }
       })
+    )
 
-      if (!result.ok) return result
-
-      // Forge / NeoForge 还要多一步：给客户端 jar 打补丁
-      // （放在库都下好之后跑——打补丁的工具自己也要用库）
-      if (built.patcher) {
-        try {
-          await forge.runPatchers(built.patcher, {
-            onStage: (text) => send('install:stage', text),
-            onProgress: (stats) => send('install:progress', stats),
-            onTask: (task) => {
-              currentInstallTask = task
-            }
-          })
-        } catch (error) {
-          return { ok: false, error: String(error?.message ?? error) }
-        }
-      }
-
-      return { ok: true, versionId: built.versionId, loaderVersion: built.loaderVersion }
-    } catch (error) {
-      return { ok: false, error: String(error?.message ?? error) }
-    } finally {
-      currentInstall = null
-      currentInstallTask = null
-    }
+    return { ok: true, loaders: found }
   })
 
   /**
@@ -2479,6 +2499,75 @@ function registerIpcHandlers() {
       contentRunning = false
     }
   })
+}
+
+/**
+ * 把 Mod 加载器装到一个已经装好的原版上。
+ * 下载页「安装」（勾了加载器）和「加装加载器」两条路都走它。
+ * 装完会多出一个新版本（比如 fabric-loader-0.16.5-26.3），原来的版本不动。
+ *
+ * 【注意】调用方要先把 currentInstall 那把锁拿住（见 install:start）。
+ *
+ * @returns {Promise<{ok: boolean, versionId?: string, loaderVersion?: string,
+ *                    loaderLabel?: string, already?: boolean, error?: string}>}
+ */
+async function runLoaderInstall({ gameVersion, loader, loaderVersion, dir, send, onTask }) {
+  const where = dir || ''
+  const labels = { fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge', optifine: 'OptiFine' }
+  if (!labels[loader]) return { ok: false, error: `不认识的加载器：${loader}` }
+  if (!paths.isVersionInstalled(gameVersion, where)) {
+    return { ok: false, error: `先把 ${gameVersion} 装好，才能在它上面装加载器` }
+  }
+
+  const stage = (text) => send('install:stage', text)
+  const progress = (stats) => send('install:progress', stats)
+  const options = { dir: where, onStage: stage, onProgress: progress, onTask }
+
+  try {
+    let built
+    if (loader === 'fabric') {
+      built = await loaders.buildFabricProfile(gameVersion, loaderVersion)
+    } else if (loader === 'optifine') {
+      // 【为什么在这里现查一遍】列表给界面时只带了个版本号，
+      // 而下载地址需要 type/patch 两个字段，所以拿版本号回来对上那一条
+      const list = await optifine.listVersions(gameVersion)
+      const entry = loaderVersion
+        ? list.find((one) => one.version === String(loaderVersion))
+        : list[0]
+      if (!entry) {
+        return { ok: false, error: `没找到 OptiFine 的 ${loaderVersion}——回「下载」页重新挑一个` }
+      }
+      built = await optifine.install(gameVersion, entry, options)
+    } else {
+      built = await forge.prepare(loader, gameVersion, { ...options, wantedVersion: loaderVersion })
+    }
+
+    const loaderLabel = `${labels[loader]} ${built.loaderVersion}`
+
+    if (paths.isVersionInstalled(built.versionId, where)) {
+      return { ok: true, already: true, versionId: built.versionId, loaderVersion: built.loaderVersion, loaderLabel }
+    }
+
+    stage(`正在装 ${labels[loader]} ${built.loaderVersion}…`)
+    const result = await install.installVersion(built.versionId, {
+      providedJson: built.json,
+      dir: where,
+      onStage: stage,
+      onProgress: progress,
+      onTask
+    })
+    if (!result.ok) return result
+
+    // Forge / NeoForge 还要多一步：给客户端 jar 打补丁
+    // （放在库都下好之后跑——打补丁的工具自己也要用库）
+    if (built.patcher) {
+      await forge.runPatchers(built.patcher, { onStage: stage, onProgress: progress, onTask })
+    }
+
+    return { ok: true, versionId: built.versionId, loaderVersion: built.loaderVersion, loaderLabel }
+  } catch (error) {
+    return { ok: false, error: String(error?.message ?? error) }
+  }
 }
 
 /** 我们认的加载器名 → Modrinth 用的代号 */

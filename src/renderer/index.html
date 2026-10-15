@@ -1897,26 +1897,6 @@
         </div>
 
         <div class="field">
-          <span class="field__label">Mod 加载器</span>
-          <p class="panel__desc">
-            装 Mod 之前得先有加载器。装完会<b>多出一个新版本</b>（比如
-            fabric-loader-…-26.3，原来的版本不动），启动时选那个新版本就能用 Mod。
-          </p>
-          <div class="setrow">
-            <button class="btn btn--ghost btn--sm" type="button" id="ver-install-fabric">
-              装 Fabric
-            </button>
-            <button class="btn btn--ghost btn--sm" type="button" id="ver-install-forge">
-              装 Forge
-            </button>
-            <button class="btn btn--ghost btn--sm" type="button" id="ver-install-neoforge">
-              装 NeoForge
-            </button>
-          </div>
-          <span class="field__hint" id="ver-loader-hint"></span>
-        </div>
-
-        <div class="field">
           <span class="field__label">快捷打开</span>
           <div class="folders">
             <button class="btn btn--ghost btn--sm" type="button" data-folder="version">
@@ -1960,6 +1940,27 @@
         <div class="modal__actions modal__actions--end">
           <button class="btn btn--ghost" type="button" id="del-cancel">取消</button>
           <button class="btn btn--danger" type="button" id="del-ok">确认删除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 装版本时顺手勾 Mod 加载器（下载页点「安装」弹的框，2026-10-16）
+         【为什么不摆在版本设置里了】装加载器的自然时机就是"装版本的时候"，
+         顺路一步选完；而且这儿能一眼看到各家都有哪些版本可选。
+         不选也能直接开始——纯原版照样玩。 -->
+    <div class="modal modal--top" id="loader-modal" hidden>
+      <div class="modal__box modal__box--form">
+        <div class="modal__head">
+          <span class="modal__title" id="loader-title">安装 1.20.1</span>
+        </div>
+        <p class="panel__desc" id="loader-sub">
+          想顺手加装一个 Mod 加载器吗？点一下选它；不想装就直接开始，纯原版一样能玩。
+        </p>
+        <ul class="loaderlist" id="loader-list"></ul>
+        <p class="delbox" id="loader-hint"></p>
+        <div class="modal__actions modal__actions--end">
+          <button class="btn btn--ghost" type="button" id="loader-cancel">取消</button>
+          <button class="btn btn--primary" type="button" id="loader-go">开始下载</button>
         </div>
       </div>
     </div>
