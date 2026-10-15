@@ -643,11 +643,20 @@ loaderGoEl.addEventListener('click', () => {
 
 document.getElementById('loader-cancel').addEventListener('click', closeLoaderPicker)
 
-// 主进程推过来的阶段提示和进度
+// 主进程推过来的阶段提示和进度。
+//
+// 【为什么要先看 installingVersion】两条 IPC 通道的到达顺序没有保证——
+// 安装已经结束、界面已经写上"安装失败 + 原因"了，主进程最后一条进度推送
+// 可能**晚一步**才到，一到就把失败原因盖回"100% · …"，用户就永远看不到哪儿错了。
+// （2026-10-16 用户真踩到：装 NeoForge 失败，面板上只剩进度行、原因看不见）
+// 只有 startInstall 这一条线用这两条通道（整合包走 pack:stage/pack:progress），
+// 拿它的"正在装谁"当门闸正好。
 window.api.onInstallStage((text) => {
+  if (!installingVersion) return
   setStage(text)
 })
 window.api.onInstallProgress((stats) => {
+  if (!installingVersion) return
   setFill(stats.percent)
   setDetail(progressLine(stats))
 })

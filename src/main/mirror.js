@@ -58,11 +58,19 @@ function toMirror(url) {
     case 'maven.fabricmc.net':
       return `https://${MIRROR_HOST}/maven${suffix}`
 
-    // Forge / NeoForge 的仓库。这两个在国内**直接连不上**（实测请求都发不出去），
-    // 镜像同样在 /maven 下面（实测 0.6 秒）
+    // Forge 的仓库。在国内**直接连不上**（实测请求都发不出去），
+    // 镜像在 /maven 下面（实测 0.6 秒）
     case 'maven.minecraftforge.net':
-    case 'maven.neoforged.net':
       return `https://${MIRROR_HOST}/maven${suffix}`
+
+    // 【NeoForge 要单独一条：官方路径比镜像多一段 releases/】
+    //   官方：https://maven.neoforged.net/releases/net/neoforged/xxx.jar
+    //   镜像：https://bmclapi2.bangbang93.com/maven/net/neoforged/xxx.jar
+    // 照搬会变成 /maven/releases/… → **404**。
+    // 2026-10-16 实测：装 NeoForge 21.0.167 时 12 个库全 404（JarJar、modlauncher、
+    // fancymodloader 这些），去掉 releases 那一段再试全 200。
+    case 'maven.neoforged.net':
+      return `https://${MIRROR_HOST}/maven${suffix.replace(/^\/releases\//, '/')}`
 
     // 不认识的地址不动它——宁可用官方源，也不要伪造一个可能不存在的地址
     default:
