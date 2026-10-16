@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — 写 ZIP 压缩包（备份用）
 //
 // 读 ZIP 的在 zip.js；这个文件负责"写"。

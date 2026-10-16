@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+// Copyright (c) 2026 毛球 (Maoqiu) · https://github.com/3332098396/maoqiu-launcher —— 移植/改编自 VoxLink，本文件按 LGPL-3.0 提供（见 THIRD_PARTY_NOTICES.md）
 //
 // 逐语句移植自 AUGUHDAR/VoxLink 的 `network/ConnectionManager.java`（修订 924845e，LGPL-3.0）里
 // **只管"第几轮、用哪套模板、下一轮隔多久"** 那一部分（轮次驱动）。

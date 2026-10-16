@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+// Copyright (c) 2026 毛球 (Maoqiu) · https://github.com/3332098396/maoqiu-launcher —— 移植/改编自 VoxLink，本文件按 LGPL-3.0 提供（见 THIRD_PARTY_NOTICES.md）
 //
 // 逐语句移植自 KAMUCL 的 `src/main/core/voxlink/tcpPunch.ts`（它自己标注 LGPL-3.0-only，
 // 头部写着 "Adapted from AUGUHDAR/VoxLink TcpHolePuncher / P2PBridge, revision 721c7fae"）。

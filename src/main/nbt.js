@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — 读写 Minecraft 的 NBT 格式（M23）
 //
 // 【NBT 是什么】游戏存东西用的一种"二进制 JSON"：一棵带类型的树。

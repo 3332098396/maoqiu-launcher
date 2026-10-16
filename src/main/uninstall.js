@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — 卸载自己（M26）
 //
 // 【这是个什么东西】设置页那个「卸载毛球」按钮。点了之后不是毛球自己去删文件，

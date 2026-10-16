@@ -5,6 +5,9 @@
   "description": "毛球 — Minecraft Java 版启动器（Windows 本地）",
   "main": "src/main/main.js",
   "private": true,
+  "license": "MIT",
+  "author": "毛球 (Maoqiu) <https://github.com/3332098396/maoqiu-launcher>",
+  "homepage": "https://github.com/3332098396/maoqiu-launcher",
   "scripts": {
     "start": "node scripts/start.js",
     "icons": "node scripts/make-icons.js",
@@ -22,6 +25,7 @@
   "build": {
     "appId": "com.local.mc-launcher",
     "productName": "毛球",
+    "copyright": "Copyright © 2026 毛球 (Maoqiu) — MIT 许可，转载/改编必须保留署名",
     "directories": {
       "output": "release"
     },

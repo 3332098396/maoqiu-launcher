@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — authlib-injector（外置登录进游戏的钥匙）
 //
 // 【它是干什么的】游戏本体里写死了一套"去哪儿验证身份、去哪儿取皮肤"的地址

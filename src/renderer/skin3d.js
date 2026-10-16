@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — 3D 皮肤预览（M14.4）
 //
 // 【这是什么】启动页右边那个能拖着转的小人。用的是

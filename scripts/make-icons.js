@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — 图标生成脚本
 //
 // 【现在是干什么的】把 `build/icon-source.png`（一张方形的源图）**缩成各个尺寸**，

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — 整合包：识别 + 安装（M11）
 //
 // 用户把整合包压缩包**拖进窗口**，我们负责认出它是什么、然后照着装。

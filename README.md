@@ -134,7 +134,24 @@ Mod 生态数据来自 [**Modrinth**](https://modrinth.com)。
 
 完整致谢与许可说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-## 许可
+## 版权与署名
 
-[MIT](LICENSE) —— 从 VoxLink 移植的部分将单独按 LGPL-3.0 提供，见
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+**毛球（Maoqiu）** © 2026 · 作者 **3332098396**（GitHub）·
+项目地址 <https://github.com/3332098396/maoqiu-launcher>
+
+按 [MIT 许可](LICENSE) 发布。**用、改、再发布、打包进你自己的项目、商用，都允许**——
+但 MIT 有一条是硬要求，我们也把它当成底线：
+
+> 源码里**每个文件的开头**都带着这两行（SPDX 许可标识 + 版权署名），照 [KAMUCL](https://github.com/kamubaba-i/KAMUCL)
+> 的写法。**直接把文件复制走的时候，这两行别删**——那就是署名。
+
+- 🔴 **必须保留版权声明和作者署名。** 也就是 `LICENSE` 那份文件（连同上面的版权行）
+  要**原样带着**，不许删掉、不许改成自己的名字，也不许把毛球说成是你写的。
+- **改了之后再发布**：请在明显的地方写一句「**基于毛球（Maoqiu）修改**」并附上原项目链接。
+- 反过来也一样——**我们用了别人的东西，署名一处不删**（见上一节和
+  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)）。
+
+> ⚠️ **注意**：仓库里有**别人的组件**，它们的许可比 MIT 严，**署名和许可条款一个字都不能删**：
+> 从 [VoxLink](https://github.com/AUGUHDAR/VoxLink) 移植的部分按 **LGPL-3.0-only**、
+> 离线皮肤小代理按 **GPL-3.0-or-later**（源码随仓库提供）。
+> 具体到哪个文件、什么许可，全部列在 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

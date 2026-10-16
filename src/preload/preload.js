@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — 安全桥（preload）
 //
 // 界面（网页）默认无权访问系统。这里用 contextBridge 把主进程的能力

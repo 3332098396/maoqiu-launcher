@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — 清理游戏垃圾（对照同类软件的候选清单里的 ⭐⭐ 项）
 //
 // 【清什么】游戏自己产生的、删了完全不影响玩的东西：

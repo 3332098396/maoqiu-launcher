@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — AI 助手（M22）
 //
 // 【这个模块干什么】把用户的问题（可能带着一段游戏日志）发给他自己填的那个大模型，

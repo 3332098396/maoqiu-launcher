@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — 安装一个版本
 //
 // 干的事：拿版本 JSON，算出"要下哪些文件、放到哪"，然后交给下载引擎去下。

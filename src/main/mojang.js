@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — 和 Mojang 官方接口打交道
 //
 // 目前只做一件事：取"版本清单"——那个列出了所有可下载版本的列表。

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — 版本管理（M6.1，M11.4 起支持多个游戏目录）
 //
 // 干四件事：列出已装版本（带自定义名字）、改名/写备注、打开四个文件夹、删版本。

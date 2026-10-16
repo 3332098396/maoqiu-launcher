@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — 记住窗口的位置和大小
 //
 // 【为什么要单独一个文件】这件事和"启动器在干什么"没关系，

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — 本地的 Mod / 资源包 / 光影 / 存档（M23）
 //
 // 【这个文件是干什么的】

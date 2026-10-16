@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — 社区资源的中文名对照表（M9）
 //
 // 【这是什么】Modrinth 是个英文站，搜出来的 Mod / 光影 / 资源包都是英文名。

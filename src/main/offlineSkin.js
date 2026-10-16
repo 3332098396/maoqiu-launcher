@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — 离线皮肤「进游戏」（M25）
 //
 // 【要解决什么】离线账号进游戏，永远是那张 Steve/Alex。哪怕在皮肤页挑了半天、

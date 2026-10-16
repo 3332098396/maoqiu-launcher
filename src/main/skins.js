@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — 把账号上的皮肤取回来（M16.3）
 //
 // 【干什么用的】启动页右边那个 3D 小人，登了真账号之后就该换成**你自己的皮肤**，

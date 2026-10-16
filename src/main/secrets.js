@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// 毛球 (Maoqiu) © 2026 · https://github.com/3332098396/maoqiu-launcher · 转载、改编、打包都请保留本行署名
 // 毛球 — 账号令牌的加密存放（M23）
 //
 // 【为什么要加密】配置文件 `%APPDATA%\毛球\config.json` 以前是**明文**存令牌的。
