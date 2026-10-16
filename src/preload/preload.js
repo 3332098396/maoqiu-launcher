@@ -154,6 +154,13 @@ contextBridge.exposeInMainWorld('api', {
   /** 启动游戏。options.quickPlay = { address } 时，游戏起来直接进那台服务器（M23） */
   startLaunch: (versionId, dir, options) => ipcRenderer.invoke('launch:start', versionId, dir, options),
 
+  /**
+   * 启动前问一句「这个版本没装加载器、Mods 里那些 Mod 不会生效」（M28）。
+   * 会在屏幕上弹一个系统对话框，用户选完才返回 —— 所以**调用方要 await**，
+   * 拿到 proceed:false 就别启动了、拿到 switchTo 就换那个版本启。
+   */
+  launchPrecheck: (versionId, dir) => ipcRenderer.invoke('launch:precheck', versionId, dir),
+
   /** 游戏输出的日志（一批几行地推过来） */
   onLaunchLog: (callback) => {
     ipcRenderer.on('launch:log', (_event, lines) => callback(lines))

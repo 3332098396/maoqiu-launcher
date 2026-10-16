@@ -1636,6 +1636,23 @@ async function startGame(options = {}) {
     renderAccountCard()
   }
 
+  // ——— 启动前问一句：这个版本没装加载器、Mods 里那些 Mod 不会生效（M28）———
+  // 【为什么放在这一层】账号都验完了、正要启动的那一刻，用户最需要一个"为什么"；
+  // 系统对话框会停在这儿等他选，选完才往下走。装过加载器/没装 Mod 的版本直接放行。
+  try {
+    const pre = await window.api.launchPrecheck(selectedVersion, selectedDir)
+    if (pre && pre.ok && pre.proceed === false) return // 用户点了取消
+    if (pre && pre.switchTo) {
+      // 换成"加载器正好对得上"的那个版本再启动（对话框里那行字说的就是它）
+      selectedVersion = pre.switchTo.id
+      selectedDir = pre.switchTo.dir
+      refreshLaunchUi()
+      setNotice(`换成 ${pre.switchTo.id} 启动（它装了 ${pre.switchTo.loader}）。`)
+    }
+  } catch {
+    // 问不出来（读 json 出错之类）就别拦着用户启动，按原样走
+  }
+
   launching = true
   refreshLaunchUi()
   setNotice(

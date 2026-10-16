@@ -41,6 +41,7 @@ const backup = require('./backup')
 const modrinth = require('./modrinth')
 const content = require('./content')
 const localfiles = require('./localfiles')
+const launchHint = require('./launchHint')
 const servers = require('./servers')
 const secrets = require('./secrets')
 // 内置的微软客户端 ID：用户不用自己申请，装上就能登录。
@@ -680,6 +681,63 @@ function registerIpcHandlers() {
   // 【为什么不让界面自己去下】界面不许碰网络（安全红线），而且下载文件要校验、
   // 要超时、要镜像——这些都归主进程管。
   ipcMain.handle('skin:account', () => skins.fetchFor(accounts.getAccount()))
+
+  /**
+   * 启动前的一道提醒（M28）：**这个版本没装 Mod 加载器，但 Mods 里有东西。**
+   *
+   * 【为什么要有】用户把 Mod 装进 `versions\1.21\mods\`，却开的是原版 1.21 ——
+   * 原版不读 mods 文件夹，游戏里什么都没有，用户的观感是"装好了却没用"。
+   * 这一步就是在他最需要一个"为什么"的时刻（点开始游戏之后、真拉起来之前）说一句，
+   * 并且**直接告诉他该启动哪个版本**。
+   *
+   * 【只提示，不拦】用户点了"仍然启动这个版本"就照常启动 ——
+   * 想看原版、想先跑一遍基线的人多的是，拦着只会讨人嫌。
+   *
+   * 返回：
+   *   { ok:true, proceed:false }              用户取消了
+   *   { ok:true, proceed:true }               继续（原样启动）
+   *   { ok:true, proceed:true, switchTo:{…} } 换成 suggestion 那个版本再启动
+   */
+  ipcMain.handle('launch:precheck', async (event, versionId, dir) => {
+    const where = known(dir)
+    const info = launchHint.inspect(versionId, where)
+    if (!info.need || info.skip) return { ok: true, proceed: true }
+
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const wanted = info.wantedLoader
+    const lines = [`这个版本本身是原版，没装 Mod 加载器，Mods 里那 ${info.modCount} 个 Mod 不会生效。`]
+    if (wanted) {
+      lines.push(`其中 ${info.byLoader[info.wantedLoaderKey] || 0} 个是要 ${wanted} 的。`)
+    }
+    if (info.suggestion) {
+      lines.push(`想玩它们，请启动「${info.suggestion.id}」这个版本（它装的是 ${info.suggestion.loader}）——` +
+        `或者给当前版本也装一个${wanted || ' Mod 加载器'}。`)
+    } else {
+      lines.push(`想玩它们，得给这个版本装一个${wanted || ' Mod 加载器'}（在「下载」页点这个版本的「安装」）。`)
+    }
+
+    const buttons = info.suggestion
+      ? [`启动 ${info.suggestion.id}`, '仍然启动这个版本', '取消']
+      : ['仍然启动', '取消']
+
+    const { response, checkboxChecked } = await dialog.showMessageBox(win, {
+      type: 'info',
+      title: '毛球',
+      message: `${versionId} 里的 Mod 不会生效`,
+      detail: lines.join('\n'),
+      buttons,
+      defaultId: 0,
+      cancelId: buttons.length - 1,
+      checkboxLabel: '这个版本以后不再提示',
+      noLink: true
+    })
+
+    if (checkboxChecked) launchHint.skip(settings.versionKey(where, versionId))
+
+    if (response === buttons.length - 1) return { ok: true, proceed: false }
+    if (info.suggestion && response === 0) return { ok: true, proceed: true, switchTo: info.suggestion }
+    return { ok: true, proceed: true }
+  })
 
   /**
    * 启动游戏。
