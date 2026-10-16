@@ -738,7 +738,6 @@ const accWarnEl = document.getElementById('acc-warn')
 const accTabMicrosoftEl = document.getElementById('acc-tab-microsoft')
 const accPaneMicrosoftEl = document.getElementById('acc-pane-microsoft')
 const accMsLoginEl = document.getElementById('acc-ms-login')
-const accMsGoSetupEl = document.getElementById('acc-ms-gosetup')
 const accMsHintEl = document.getElementById('acc-ms-hint')
 const accSignoutEl = document.getElementById('acc-signout')
 const pickListEl = document.getElementById('pick-list')
@@ -913,12 +912,19 @@ function setMsHint(text, kind = '') {
   accMsHintEl.classList.toggle('acc__hint--ok', kind === 'ok')
 }
 
-/** 没填客户端 ID 的时候，直接把"该去哪儿弄"摆出来 */
+/**
+ * 正版登录那一栏的提示。
+ *
+ * 【客户端 ID 现在是内置的（2026-10-16 用户拍板）】正常装出来的毛球**一定**读得到它，
+ * 所以下面那个"读不到"的分支基本碰不到；真碰上了也不是让用户去注册——
+ * 那是安装不完整，把话说明白、给一条能走的路（重装/发日志）就行。
+ * （以前这里写着"照着 docs/09 注册一个，填进设置 → 账号"：docs/09 在仓库里、用户手上没有，
+ *   而且那个设置入口已经删了——照着做只会白折腾。）
+ */
 function renderMicrosoftPane() {
   const hasId = Boolean(launchInfo?.microsoftClientId)
-  accMsGoSetupEl.hidden = hasId
   if (!hasId) {
-    setMsHint('还没填客户端 ID。照着 docs/09 注册一个（免费，十分钟），填进「设置 → 账号」就能用了。', '')
+    setMsHint('没读到内置的登录信息——多半是这次安装不完整，重装一次毛球就好；还不行就把日志发给作者。', '')
   } else if (launchInfo?.account?.type !== 'microsoft') {
     setMsHint('点上面那个按钮，会弹出微软自己的登录页。密码是输在那儿的，毛球碰不到。', '')
   }
@@ -928,8 +934,7 @@ async function doMicrosoftLogin() {
   if (msLoggingIn) return
 
   if (!launchInfo?.microsoftClientId) {
-    setMsHint('还没填客户端 ID。照着 docs/09 注册一个（免费，十分钟），填进「设置 → 账号」就能用了。', 'error')
-    accMsGoSetupEl.hidden = false
+    setMsHint('没读到内置的登录信息——多半是这次安装不完整，重装一次毛球就好；还不行就把日志发给作者。', 'error')
     return
   }
 
@@ -1979,7 +1984,7 @@ async function runMrSearch() {
   if (mrType === 'mod') {
     status += info.loader
       ? ` · 当前版本用的是 ${info.loader}，只显示 ${info.loader} 版的 Mod`
-      : ' · 这个版本还没装 Mod 加载器——到「版本设置」里装一个，Mod 才能用'
+      : ' · 这个版本还没装 Mod 加载器——到「下载」页找到这个版本，点「加装 Mod 加载器」，Mod 才能用'
   } else if (mrType === 'modpack') {
     status += ' · 整合包会装成一个「新版本」，不动你现在装的'
   } else if (mrType === 'datapack') {
@@ -4193,7 +4198,7 @@ function renderDiagnosis(result) {
     t.textContent = '这次的问题毛球没认出来'
     const p = document.createElement('span')
     p.textContent =
-      '日志就在下面。可以把它复制给懂行的朋友看，或者等「问问 AI」做好之后交给大模型看。'
+      '日志就在下面。可以复制给懂行的朋友看，也可以点右上角「问问 AI」让它帮你看。'
     box.appendChild(t)
     box.appendChild(p)
     diagnosisEl.appendChild(box)
@@ -7250,7 +7255,7 @@ const AI_FAQ = [
     key: ['装mod', '装 mod', 'mod怎么', '怎么装mod', '模组'],
     answer:
       '怎么装 Mod：\n\n' +
-      '1. 先给这个版本装一个「Mod 加载器」：版本设置 → 装 Fabric（或 Forge）\n' +
+      '1. 先给这个版本装一个「Mod 加载器」：到「下载」页找到这个版本，点「加装 Mod 加载器」，选 Fabric / Forge / NeoForge\n' +
       '2. 装完会多出一个新版本（名字带 fabric-loader），**启动要用那个新版本**\n' +
       '3. 到「下载」页搜你要的 Mod，点下载——会自动放进这个版本的 mods 文件夹\n' +
       '4. 注意：Mod 要跟游戏版本和加载器对得上，不然进游戏会崩'
@@ -7262,18 +7267,18 @@ const AI_FAQ = [
       '1. 房主：进游戏开一个世界 → 按 Esc → 点「对局域网开放」\n' +
       '2. 房主：回毛球「联机」页 → 创建房间 → 得到一串房间码\n' +
       '3. 好友：在毛球「联机」页输入房间码加入\n' +
-      '4. 好友：进游戏 → 多人游戏 → 列表里就能看到房主的世界\n\n' +
+      '4. 好友：毛球会给你一行地址，进游戏 →「多人游戏 → 加入服务器」，把地址填进去\n\n' +
       '（两边都得用毛球。连不上的话，看联机页底下那行"连接状态"说的是什么）'
   },
   {
     key: ['皮肤', '怎么换皮肤', '外观'],
     answer:
       '怎么换皮肤：\n\n' +
-      '毛球里挑的皮肤是**给毛球那个小人看的**，游戏里显示的皮肤是问账号服务器要的——两回事。\n\n' +
-      '想让游戏里也是你自己的皮肤：\n' +
-      '1. 用一个皮肤站账号（比如 littleskin.cn）：在网站上「角色管理」里传皮肤\n' +
-      '2. 回毛球用「外置登录」登进去，进游戏就是你那张\n\n' +
-      '离线账号进游戏只会穿官方自带的默认皮肤——这是游戏本身的限制，不是毛球的问题。'
+      '在「皮肤」页挑的那张，是给毛球里那个小人看的；游戏里穿哪张，看你的账号是哪种：\n' +
+      '1. 离线账号：把「皮肤」页的「离线进游戏也穿这张」打开，进游戏就穿你挑的这张\n' +
+      '   （只有你自己看得到，别人看到的还是默认小人）\n' +
+      '2. 皮肤站账号（比如 littleskin.cn）：到它网站的「角色管理」里传一张，再用毛球「外置登录」登进去\n' +
+      '3. 正版账号：在「皮肤」页点那张的「传到正版」，游戏里立刻生效'
   },
   {
     key: ['闪退', '打不开', '起不来', '崩'],
