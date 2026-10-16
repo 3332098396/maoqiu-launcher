@@ -2631,18 +2631,10 @@ function loaderSlugFor(versionId, dir) {
  * inheritsFrom 往上找，找到最底下那个原版版本号。
  */
 function resolveGameVersion(versionId, dir) {
-  let current = String(versionId || '')
-
-  for (let depth = 0; depth < 5 && current; depth++) {
-    try {
-      const json = JSON.parse(fs.readFileSync(paths.versionJsonFile(current, dir), 'utf8'))
-      if (!json.inheritsFrom) return current
-      current = String(json.inheritsFrom)
-    } catch {
-      return current
-    }
-  }
-  return current
+  // 【2026-10-16 起只留一份实现】以前这里和 versions.baseGameVersion 是两段一样的代码，
+  // 改一处漏一处。现在统一走 versions 那边——它还多两条兜底（整合包实例没有 inheritsFrom
+  // 时看 `--fml.mcVersion`、PCL 风格的名字开头带版本号）。
+  return versions.baseGameVersion(versionId || '', dir)
 }
 
 /**

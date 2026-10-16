@@ -95,19 +95,68 @@ function loaderName(id, dir) {
   return ''
 }
 
+/** 长得像不像一个游戏版本号：`1.21`、`1.21.1`、`26.3`、`1.7.10`…… */
+function looksLikeGameVersion(text) {
+  return /^(1\.\d|2\d\.)/.test(String(text))
+}
+
+/**
+ * 从版本 json 里挖"这到底是哪个游戏版本"——**给没有 `inheritsFrom` 的实例用**。
+ *
+ * 【为什么需要】整合包/自建的实例（ATM10SKY、"下载缺失文件"这种）json 里
+ * **inheritsFrom 是空的**，id 也不叫版本号，光看 id 认不出来。这时候看两个地方：
+ *   ① `arguments.game` 里的 `--fml.mcVersion 1.21.1`（Forge / NeoForge 都会写）；
+ *      老格式的 `minecraftArguments` 字符串里也可能有。
+ *   ② PCL 风格的实例名**开头就带着版本**（`1.20.1-Fabric 0.15.11`）——
+ *      但**只认 `1.` / `2x.` 开头**，不然"乌托邦探险之旅3.5.1"里那个 3.5.1
+ *      （整合包自己的版本号）会被当成 MC 版本。
+ * 认不出来就返回空串 —— 调用方自己决定兜底（一般就退回版本 id）。
+ *
+ * （这两条兜底是 2026-10-16 方块工程那条会话来消息时给的，他们在真机上撞出来的。）
+ */
+function gameVersionFromJson(json, id) {
+  const args = Array.isArray(json?.arguments?.game) ? json.arguments.game : []
+  for (let i = 0; i < args.length - 1; i++) {
+    if (args[i] === '--fml.mcVersion' && args[i + 1]) return String(args[i + 1])
+  }
+
+  const legacy = String(json?.minecraftArguments || '')
+  const legacyHit = legacy.match(/--fml\.mcVersion\s+(\S+)/)
+  if (legacyHit) return legacyHit[1]
+
+  if (looksLikeGameVersion(id)) {
+    // 名字开头就是版本号（`1.20.1-Fabric 0.15.11`）→ 取开头那一截
+    const hit = String(id).match(/^(1\.\d+(?:\.\d+)?|2\d\.\d+(?:\.\d+)?)/)
+    if (hit) return hit[1]
+  }
+
+  return ''
+}
+
 /** 顺着继承往上找，这个版本底下的"游戏版本"是哪个（社区网站只认它） */
 function baseGameVersion(id, dir) {
   let current = String(id)
 
   for (let depth = 0; depth < 5; depth++) {
+    let json
     try {
-      const json = JSON.parse(fs.readFileSync(paths.versionJsonFile(current, dir), 'utf8'))
-      if (!json.inheritsFrom) return current
-      current = String(json.inheritsFrom)
+      json = JSON.parse(fs.readFileSync(paths.versionJsonFile(current, dir), 'utf8'))
     } catch {
-      return current
+      return current // 读不到（版本没了/半装）就原样返回，别抛
     }
+
+    if (json.inheritsFrom) {
+      current = String(json.inheritsFrom)
+      continue
+    }
+
+    // 走到链条底部了：**本身就是一个纯版本号**（`1.21`、`1.21.1`）最省事
+    // ⚠️ 这里必须是"纯的"——`1.20.1-Fabric 0.15.11` 也以 `1.2` 开头，
+    // 用宽松的 looksLikeGameVersion 会把它整个当成版本号返回（第一版就栽在这儿）。
+    if (/^(1\.\d+(\.\d+)?|2\d\.\d+(\.\d+)?)$/.test(current)) return current
+    return gameVersionFromJson(json, current) || current
   }
+
   return current
 }
 
