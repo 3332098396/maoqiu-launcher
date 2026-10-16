@@ -302,6 +302,12 @@ function streamToFile(url, dest, { signal, onBytes, throttle, offset = 0 }) {
 //      立刻放弃分段、按原来的单连接重来（见 segmentedToFile 里的 noRanges）。
 //   3. **限速时不分段**——限速那套是"一个流自己掐节奏"（见 streamToFile 的注释），
 //      几个流各掐各的会算不准。
+//   4. **没有 sha1 的文件不分段**——整套"半截文件"的安全前提就是"下完要校验哈希才认"
+//      （见文件开头的设计要点 1）。没哈希的文件，万一拼错了没人拦得住：
+//      方块工程 2026-10-17 复核时真复现出一条通路 —— 侧车谎称某段下完、`.part` 其实只有一半，
+//      那段被跳过、后面那段把文件撑到正好 size ⇒ **大小检查也拦不住**，安静地交付一个坏文件。
+//      有 sha1 时这类问题都会被校验挡下（失败→删两份→重下），没 sha1 就连挡的人都没有。
+//      所以：**宁可慢一点走单连接，也不给"没法验"的文件分段**。
 
 /** 小于这个大小就不值得分段（建连接的开销 > 省下的时间） */
 const MIN_SIZE_FOR_SEGMENTED = 8 * 1024 * 1024
@@ -407,10 +413,22 @@ async function segmentedToFile(url, partPath, { signal, onBytes, size, segments 
   const resuming = !!have && fs.existsSync(partPath)
   if (have && !resuming) have = null
   if (have) {
+    // 【还要按 `.part` 的真实长度再钳一次】侧车只证明"打算下到哪"，**不证明文件里真有那么多字节**。
+    // 断电丢写、侧车比数据先落盘都会留下"侧车比文件长"的现场；不钳的话那一段会被整段跳过、
+    // 中间留一个永远不写的洞，而后一段又会把文件撑到正好 size —— **大小检查拦不住**
+    // （方块工程 2026-10-17 复核时复现的就是这条）。
+    let partSize = 0
+    try {
+      partSize = fs.statSync(partPath).size
+    } catch {
+      partSize = 0
+    }
     for (let i = 0; i < bounds.length; i++) {
       const done = Number(have[i] && have[i].done) || 0
-      // 每段不超过它自己的长度
-      bounds[i].done = Math.max(0, Math.min(done, bounds[i].to - bounds[i].from + 1))
+      bounds[i].done = Math.max(
+        0,
+        Math.min(done, bounds[i].to - bounds[i].from + 1, Math.max(0, partSize - bounds[i].from))
+      )
     }
   } else {
     try {
@@ -438,11 +456,22 @@ async function segmentedToFile(url, partPath, { signal, onBytes, size, segments 
   // 进度多久记一次：**1.5 秒或者又下了 4 MB**，哪个先到算哪个。
   // 【为什么要有个"字节数"条件】只看时间的话，网快的时候 1.5 秒能下好几 MB——
   // 一断网那几 MB 就白下了（侧车没有记到）。加上 4 MB 这条，白下的量有个上界。
+  // 【注意"白下"是唯一的代价】前提是**只给有 sha1 的文件分段**（见文件上方第 4 条）：
+  // 这样最坏也只是重下一段，绝不会交付一个没验过的文件。
+  //
+  // 【写侧车之前先把数据刷到盘（fsync）】**顺序反了就会出事**：侧车比数据先落盘，
+  // 断电后就成了"侧车说下完了、文件里其实没有"——那正是上面按 partSize 再钳一次要防的现场。
+  // （方块工程复核时的建议；一次 fsync 的代价换来"侧车永远不会比数据新"。）
   const saveProgress = (force) => {
     const now = Date.now()
     if (!force && now - lastSaved < 1500 && sinceSave < 4 * 1024 * 1024) return
     lastSaved = now
     sinceSave = 0
+    try {
+      fs.fsyncSync(fd)
+    } catch {
+      // 刷不动就算了：下面按 partSize 钳一次还能兜住
+    }
     writeSegmentSidecar(sidecar, { size, bounds: bounds.map((b) => ({ from: b.from, to: b.to, done: b.done })) })
   }
 
@@ -512,8 +541,15 @@ async function segmentedToFile(url, partPath, { signal, onBytes, size, segments 
           opened.stream.on('error', fail)
           opened.stream.on('data', (chunk) => {
             if (settled) return
+            let wrote = 0
             try {
-              fs.writeSync(fd, chunk, 0, chunk.length, bound.done + bound.from)
+              // 【必须看返回值】**POSIX 允许短写**（磁盘满、被信号打断）。
+              // 不看返回值、直接按整块算 `done`，就会记多 —— 又是"侧车比数据多"那个形状。
+              while (wrote < chunk.length) {
+                const n = fs.writeSync(fd, chunk, wrote, chunk.length - wrote, bound.done + bound.from + wrote)
+                if (!(n > 0)) throw new Error('写入短了且没有进展')
+                wrote += n
+              }
             } catch (error) {
               fail(error)
               return
@@ -615,7 +651,8 @@ async function downloadOneFile(file, { signal, preferMirror, onBytes, sourcePref
         // 下完还要校验 sha1 才改名成正式文件。所以半截文件永远不会被
         // 当成"已经下好了"（判断那个走的是 file.saveTo，不是这里）。
         // ——— 这次分段还是单连接（M30）———
-        const wantSegments = throttle ? 1 : segmentCountFor(file.size)
+        // （没 sha1 的不分段：理由见文件上方第 4 条规矩）
+        const wantSegments = throttle || !file.sha1 ? 1 : segmentCountFor(file.size)
         const sidecarPath = segmentSidecar(partPath)
 
         // 【分段留下的半截，这次不分段了就整份清掉】分段是把各段按偏移写进**同一个**
