@@ -284,6 +284,287 @@ function streamToFile(url, dest, { signal, onBytes, throttle, offset = 0 }) {
   )
 }
 
+// ——————————————————————————————————————————————
+// 单个大文件：分段多连接（M30）
+// ——————————————————————————————————————————————
+//
+// 【为什么要这个】整合包、资源文件里常有几百 MB 的单个文件。
+// 一个连接拉一个大文件，速度往往被**单连接的窗口/丢包**卡住——
+// 换成几个连接各拉一段（HTTP Range），总速度能明显上去。
+// 同类启动器（PCL）的多线程下载引擎就是干这个的。
+//
+// 【和"同时下几个文件"不是一回事】那个是**多文件**并发（这里是 16 个文件一起下），
+// 多个小文件本来就能把带宽吃满；**瓶颈只在大文件**上，所以这里只管大文件。
+//
+// 【三条规矩，都是"别把原来的可靠性搞坏"】
+//   1. **小文件不分段**——几百 KB 的文件建连接的时间比下载还长，分了反而更慢。
+//   2. **服务器不认 Range 就整条退回老路**——不是所有源都支持；发现是 200（而不是 206）
+//      立刻放弃分段、按原来的单连接重来（见 segmentedToFile 里的 noRanges）。
+//   3. **限速时不分段**——限速那套是"一个流自己掐节奏"（见 streamToFile 的注释），
+//      几个流各掐各的会算不准。
+
+/** 小于这个大小就不值得分段（建连接的开销 > 省下的时间） */
+const MIN_SIZE_FOR_SEGMENTED = 8 * 1024 * 1024
+
+/** 一个文件最多分几段（再多对方服务器容易掐，收益也递减） */
+const MAX_SEGMENTS = 8
+
+/** 每 32 MB 加一个连接；不足 32 MB 也要 2 个 */
+const SEGMENT_STEP = 32 * 1024 * 1024
+
+/** 全局同时只允许几个"分段中的文件"——16 个文件 × 8 段 = 128 条连接，会被掐 */
+const MAX_SEGMENTED_AT_ONCE = 4
+
+/** 现在有几个文件在分段 */
+let segmentingNow = 0
+/** 排队等分段名额的 */
+const segmentWaiters = []
+
+/** 抢一个"分段名额"（满了就排队），跑完自动让给下一个 */
+function withSegmentSlot(run) {
+  return new Promise((resolve, reject) => {
+    const go = () => {
+      segmentingNow++
+      Promise.resolve()
+        .then(run)
+        .then(resolve, reject)
+        .finally(() => {
+          segmentingNow--
+          const next = segmentWaiters.shift()
+          if (next) next()
+        })
+    }
+    if (segmentingNow < MAX_SEGMENTED_AT_ONCE) go()
+    else segmentWaiters.push(go)
+  })
+}
+
+/** 这个文件该分几段（1 = 不分段） */
+function segmentCountFor(size) {
+  if (!size || size < MIN_SIZE_FOR_SEGMENTED) return 1
+  return Math.min(MAX_SEGMENTS, Math.max(2, Math.ceil(size / SEGMENT_STEP)))
+}
+
+/** 侧车文件名：记每一段下到哪儿了（`.part` 本身是稀疏文件，光看大小看不出进度） */
+function segmentSidecar(partPath) {
+  return `${partPath}.seg`
+}
+
+/** 写侧车文件——先写临时文件再改名（断电不会写出个半截 JSON 让下次读崩） */
+function writeSegmentSidecar(sidecar, data) {
+  try {
+    const tmp = `${sidecar}.tmp`
+    fs.writeFileSync(tmp, JSON.stringify(data), 'utf8')
+    fs.renameSync(tmp, sidecar)
+  } catch {
+    // 写不进去就算了：下次续传时读不到侧车，会从头来一遍（不会出错，只是白下）
+  }
+}
+
+/** 把 content-range: bytes 100-199/1234 解出来 */
+function parseContentRange(header) {
+  const m = /^bytes\s+(\d+)-(\d+)\/(\d+|\*)$/i.exec(String(header || '').trim())
+  if (!m) return null
+  return { start: Number(m[1]), end: Number(m[2]), total: m[3] === '*' ? 0 : Number(m[3]) }
+}
+
+/**
+ * 分段把一个文件写进 partPath（就是那个 `.part`）。
+ *
+ * @param {string} url
+ * @param {string} partPath
+ * @param {{signal: AbortSignal, onBytes: Function, size: number, segments: number, throttle?: object}} options
+ * @returns {Promise<{bytes: number}>}
+ *   失败时抛的错里可能带 `noRanges = true`（服务器不支持 Range → 调用方该退回单连接）
+ */
+async function segmentedToFile(url, partPath, { signal, onBytes, size, segments }) {
+  const sidecar = segmentSidecar(partPath)
+
+  // ——— 算出每一段的区间 ———
+  const bounds = []
+  const per = Math.ceil(size / segments)
+  for (let i = 0; i < segments; i++) {
+    const from = i * per
+    if (from >= size) break
+    bounds.push({ from, to: Math.min(size, from + per) - 1, done: 0 })
+  }
+
+  // ——— 有侧车就接着上次的进度；对不上就整份重来 ———
+  let have = null
+  if (fs.existsSync(sidecar)) {
+    try {
+      const saved = JSON.parse(fs.readFileSync(sidecar, 'utf8'))
+      if (saved && saved.size === size && Array.isArray(saved.bounds) && saved.bounds.length === bounds.length) {
+        have = saved.bounds
+      }
+    } catch {
+      // 读不出来当没有
+    }
+  }
+  // 【侧车在、`.part` 却不在 → 侧车是孤儿】按它接着下会拼出一个中间全是洞的文件
+  // （大小检查能拦下，但白折腾一轮）。两份同生共死（见 downloadOneFile 里那段），
+  // 真碰上就当没这回事，从头来。
+  const resuming = !!have && fs.existsSync(partPath)
+  if (have && !resuming) have = null
+  if (have) {
+    for (let i = 0; i < bounds.length; i++) {
+      const done = Number(have[i] && have[i].done) || 0
+      // 每段不超过它自己的长度
+      bounds[i].done = Math.max(0, Math.min(done, bounds[i].to - bounds[i].from + 1))
+    }
+  } else {
+    try {
+      fs.unlinkSync(partPath)
+    } catch {
+      /* 本来就不在 */
+    }
+    writeSegmentSidecar(sidecar, { size, bounds: bounds.map((b) => ({ from: b.from, to: b.to, done: 0 })) })
+  }
+
+  // 接着下的那部分也算"这个文件收了多少"，续传时进度条才不会往回跳
+  const already = bounds.reduce((sum, b) => sum + b.done, 0)
+  if (already > 0 && onBytes) onBytes(already, true)
+
+  // 【别用 'a'（追加）打开】**追加模式下按偏移写是无效的**——Node 明确说过
+  // "Linux 上以追加模式打开时定位写不生效"，Windows 上一样会把每一段都写到文件末尾，
+  // 结果几段互相盖、拼出一个大小对不上、内容全错的文件。
+  // （第一版就是这么写的，探针当场抓出来：哈希对不上。）
+  // 续传用 'r+'（不能截断已有的进度），从头下用 'w+'（建新文件）。
+  const fd = fs.openSync(partPath, resuming ? 'r+' : 'w+')
+  let bytes = already
+  let lastSaved = 0
+  let sinceSave = 0
+
+  // 进度多久记一次：**1.5 秒或者又下了 4 MB**，哪个先到算哪个。
+  // 【为什么要有个"字节数"条件】只看时间的话，网快的时候 1.5 秒能下好几 MB——
+  // 一断网那几 MB 就白下了（侧车没有记到）。加上 4 MB 这条，白下的量有个上界。
+  const saveProgress = (force) => {
+    const now = Date.now()
+    if (!force && now - lastSaved < 1500 && sinceSave < 4 * 1024 * 1024) return
+    lastSaved = now
+    sinceSave = 0
+    writeSegmentSidecar(sidecar, { size, bounds: bounds.map((b) => ({ from: b.from, to: b.to, done: b.done })) })
+  }
+
+  // 正在跑的几条流：**一条段挂了就把别的全掐了**——
+  // 不然"服务器不认 Range"的时候，其它几条还在闷头下整份内容，
+  // 白耗带宽不说，退回单连接那一步还得跟它们抢带宽。
+  const inflight = new Set()
+  const stopAll = () => {
+    for (const s of inflight) {
+      try {
+        s.destroy()
+      } catch {
+        /* 已经死了就算了 */
+      }
+    }
+    inflight.clear()
+  }
+
+  /** 拉一段（含重试）。抛出的错里带 noRanges 就说明这个源不吃 Range */
+  const pull = async (bound) => {
+    let attempt = 0
+    for (;;) {
+      if (signal.aborted) throw new Error('已取消')
+      const from = bound.from + bound.done
+      if (from > bound.to) return
+
+      let opened
+      try {
+        opened = await openStream(url, {
+          signal,
+          timeout: REQUEST_TIMEOUT,
+          headers: { Range: `bytes=${from}-${bound.to}` }
+        })
+      } catch (error) {
+        if (signal.aborted) throw error
+        if (attempt++ >= MAX_ATTEMPTS) throw error
+        await delay(RETRY_DELAYS[Math.min(attempt - 1, RETRY_DELAYS.length - 1)])
+        continue
+      }
+
+      // 服务器把整份发过来了（200）→ 它不认 Range。别硬拼，退回单连接。
+      if (opened.statusCode !== 206) {
+        opened.stream.destroy()
+        const noRange = new Error('这个源不支持分段下载（回了整份内容）')
+        noRange.noRanges = true
+        throw noRange
+      }
+      const range = parseContentRange(opened.headers && opened.headers['content-range'])
+      if (!range || range.start !== from || (range.total && range.total !== size)) {
+        opened.stream.destroy()
+        const odd = new Error('这个源给的 Range 回应对不上，别拿它拼文件')
+        odd.noRanges = true
+        throw odd
+      }
+
+      try {
+        inflight.add(opened.stream)
+        await new Promise((resolve, reject) => {
+          let settled = false
+          const fail = (error) => {
+            if (settled) return
+            settled = true
+            inflight.delete(opened.stream)
+            opened.stream.destroy()
+            reject(error)
+          }
+          opened.stream.on('error', fail)
+          opened.stream.on('data', (chunk) => {
+            if (settled) return
+            try {
+              fs.writeSync(fd, chunk, 0, chunk.length, bound.done + bound.from)
+            } catch (error) {
+              fail(error)
+              return
+            }
+            bound.done += chunk.length
+            bytes += chunk.length
+            sinceSave += chunk.length
+            if (onBytes) onBytes(chunk.length)
+            saveProgress(false)
+          })
+          opened.stream.on('end', () => {
+            if (settled) return
+            settled = true
+            inflight.delete(opened.stream)
+            resolve()
+          })
+          opened.stream.on('aborted', () => fail(new Error('连接被掐断了')))
+        })
+      } catch (error) {
+        if (signal.aborted) throw error
+        if (attempt++ >= MAX_ATTEMPTS) throw error
+        await delay(RETRY_DELAYS[Math.min(attempt - 1, RETRY_DELAYS.length - 1)])
+        continue
+      }
+
+      // 这一段够了就收工；不够（连接提前断）就接着拉剩下那截
+      if (bound.done > bound.to - bound.from) return
+    }
+  }
+
+  try {
+    await Promise.all(bounds.map((b) => pull(b)))
+    // 每段都写满了才算数（末尾那段正好写到最后一个字节，文件大小就是 size）
+    if (fs.fstatSync(fd).size !== size) {
+      throw new Error(`分段下完了但文件大小不对（${fs.fstatSync(fd).size} 应该是 ${size}）`)
+    }
+    saveProgress(true)
+  } catch (error) {
+    stopAll()
+    throw error
+  } finally {
+    try {
+      fs.closeSync(fd)
+    } catch {
+      /* 关不上就算了 */
+    }
+  }
+
+  return { bytes }
+}
+
 /**
  * 下载一个文件，把内容写进 saveTo。
  *
@@ -333,38 +614,92 @@ async function downloadOneFile(file, { signal, preferMirror, onBytes, sourcePref
         // 【为什么半截文件是安全的】我们**只认 `.part` 这个名字**，
         // 下完还要校验 sha1 才改名成正式文件。所以半截文件永远不会被
         // 当成"已经下好了"（判断那个走的是 file.saveTo，不是这里）。
-        let offset = 0
-        try {
-          const partInfo = fs.statSync(partPath)
+        // ——— 这次分段还是单连接（M30）———
+        const wantSegments = throttle ? 1 : segmentCountFor(file.size)
+        const sidecarPath = segmentSidecar(partPath)
 
-          // 已经不比目标小了 → 这份半截没用（可能服务器换过文件），重来
-          if (partInfo.size > 0 && (!file.size || partInfo.size < file.size)) {
-            // 太老的半截别要了：用户可能早就换了版本、或者干脆不下了。
-            // 【为什么要有这条】半截文件是**跨会话**留着的，没人管就会一直堆着——
-            // 断过几次网之后，游戏目录里躺着好几个 GB 的 .part，
-            // 而且用户完全不知道它们是什么。超过 7 天的一律扔掉。
-            if (Date.now() - partInfo.mtimeMs > STALE_PART_MS) {
-              fs.unlinkSync(partPath)
-            } else {
-              offset = partInfo.size
-            }
-          } else if (partInfo.size > 0) {
+        // 【分段留下的半截，这次不分段了就整份清掉】分段是把各段按偏移写进**同一个**
+        // `.part`（稀疏文件），光看它的大小会以为"下了很多"，其实中间全是洞。
+        // 拿那个大小去单连接续传（`Range: bytes=<洞的位置>`）只会拼出一个坏文件。
+        // 侧车（`.seg`）就是用来分辨这种情况的：**有侧车但这次不分段 → 两份一起删**。
+        if (wantSegments === 1 && fs.existsSync(sidecarPath)) {
+          try {
             fs.unlinkSync(partPath)
+          } catch {
+            /* 本来就不在 */
           }
-        } catch {
-          // 没有半截文件，从头下
+          try {
+            fs.unlinkSync(sidecarPath)
+          } catch {
+            /* 本来就不在 */
+          }
+        }
+
+        let offset = 0
+        // 【分段时不看 `.part` 的大小】**分段自己**按侧车记的进度续传（见 segmentedToFile）；
+        // 它写的是稀疏文件，那个大小不能当成"下到哪儿了"。
+        if (wantSegments === 1) {
+          try {
+            const partInfo = fs.statSync(partPath)
+
+            // 已经不比目标小了 → 这份半截没用（可能服务器换过文件），重来
+            if (partInfo.size > 0 && (!file.size || partInfo.size < file.size)) {
+              // 太老的半截别要了：用户可能早就换了版本、或者干脆不下了。
+              // 【为什么要有这条】半截文件是**跨会话**留着的，没人管就会一直堆着——
+              // 断过几次网之后，游戏目录里躺着好几个 GB 的 .part，
+              // 而且用户完全不知道它们是什么。超过 7 天的一律扔掉。
+              if (Date.now() - partInfo.mtimeMs > STALE_PART_MS) {
+                fs.unlinkSync(partPath)
+              } else {
+                offset = partInfo.size
+              }
+            } else if (partInfo.size > 0) {
+              fs.unlinkSync(partPath)
+            }
+          } catch {
+            // 没有半截文件，从头下
+          }
         }
 
         let bytes = 0
-        await streamToFile(candidate.url, partPath, {
-          signal,
-          throttle,
-          offset,
-          onBytes: (n, isResume) => {
-            bytes += n
-            onBytes(n, isResume)
+        const report = (n, isResume) => {
+          bytes += n
+          onBytes(n, isResume)
+        }
+
+        if (wantSegments > 1) {
+          try {
+            const done = await withSegmentSlot(() =>
+              segmentedToFile(candidate.url, partPath, {
+                signal,
+                onBytes: report,
+                size: file.size,
+                segments: wantSegments
+              })
+            )
+            bytes = done.bytes
+          } catch (error) {
+            // 这个源不吃 Range（回了整份内容）→ **不消耗重试**，就地退回单连接重来一遍
+            if (error && error.noRanges && !signal.aborted) {
+              try {
+                fs.unlinkSync(partPath)
+              } catch {
+                /* 本来就不在 */
+              }
+              try {
+                fs.unlinkSync(sidecarPath)
+              } catch {
+                /* 本来就不在 */
+              }
+              bytes = 0
+              await streamToFile(candidate.url, partPath, { signal, throttle, offset: 0, onBytes: report })
+            } else {
+              throw error
+            }
           }
-        })
+        } else {
+          await streamToFile(candidate.url, partPath, { signal, throttle, offset, onBytes: report })
+        }
 
         // —— 校验 ——
         if (file.sha1) {
@@ -379,6 +714,12 @@ async function downloadOneFile(file, { signal, preferMirror, onBytes, sourcePref
 
         // 到这一步才改名成正式文件——见文件开头的设计要点 1
         fs.renameSync(partPath, file.saveTo)
+        // 侧车（分段用的进度小文件）跟着一起清掉，别在游戏目录里留垃圾
+        try {
+          fs.unlinkSync(sidecarPath)
+        } catch {
+          /* 没分段的话本来就没有 */
+        }
         return { bytes, usedMirror: candidate.isMirror }
       } catch (error) {
         lastError = error
@@ -397,6 +738,14 @@ async function downloadOneFile(file, { signal, preferMirror, onBytes, sourcePref
             fs.unlinkSync(partPath)
           } catch {
             /* 本来就不在就算了 */
+          }
+          // 【侧车必须跟着半截一起走】侧车还在、`.part` 没了的话，下次分段续传
+          // 会以为"那几段都下好了"，拼出一个中间全是洞的文件（大小检查会拦下，
+          // 但白折腾一轮）。所以两份永远同生共死。
+          try {
+            fs.unlinkSync(segmentSidecar(partPath))
+          } catch {
+            /* 没分段的话本来就没有 */
           }
         }
 
