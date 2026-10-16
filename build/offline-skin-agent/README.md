@@ -4,9 +4,13 @@
 
 ## 它是谁写的、什么许可
 
-- **`src/cn/kamucl/skin/OfflineSkinAgent.java`** ——
+- **`src/cn/maoqiu/skin/OfflineSkinAgent.java`** ——
   [KAMUCL](https://github.com/kamubaba-i/KAMUCL) 的原创组件，**GPL-3.0-or-later**。
-  **毛球一个字没改**（与原版逐字节一致）。
+  **逻辑一个字没改**；只在 2026-10-16 改了「名字」：
+  包名 `cn.kamucl.skin` → `cn.maoqiu.skin`（文件名跟着挪到 `cn/maoqiu/skin/`），
+  外加几处会露在游戏日志/游戏界面上的字符串（线程名、启动那行提示、发给游戏的服务名）。
+  **署名和许可一处没动**（就在这一节和根目录的 THIRD_PARTY_NOTICES.md）——
+  GPL 要求署名的部分**必须留着**，删了就是抄。
 - 许可证全文：[`licenses/GPL-3.0.txt`](licenses/GPL-3.0.txt)
 - 上游对它的说明原文（KAMUCL 的 THIRD_PARTY_NOTICES.md）：
 

@@ -27,7 +27,7 @@ const { execFileSync } = require('node:child_process')
 
 const root = path.resolve(__dirname, '..')
 const project = path.join(root, 'build', 'offline-skin-agent')
-const source = path.join(project, 'src', 'cn', 'kamucl', 'skin', 'OfflineSkinAgent.java')
+const source = path.join(project, 'src', 'cn', 'maoqiu', 'skin', 'OfflineSkinAgent.java')
 const classes = path.join(project, 'build', 'classes')
 const manifest = path.join(project, 'build', 'MANIFEST.MF')
 const output = path.join(root, 'assets', 'offline-skin', 'maoqiu-offline-skin.jar')
@@ -91,7 +91,7 @@ fs.mkdirSync(path.dirname(manifest), { recursive: true })
 fs.writeFileSync(
   manifest,
   'Manifest-Version: 1.0\n' +
-    'Premain-Class: cn.kamucl.skin.OfflineSkinAgent\n' +
+    'Premain-Class: cn.maoqiu.skin.OfflineSkinAgent\n' +
     'Can-Redefine-Classes: false\n' +
     'Can-Retransform-Classes: false\n\n'
 )

@@ -57,13 +57,15 @@
 「离线账号进游戏也穿自己挑的那张皮肤」（M25）用到的 Java 小代理
 `assets/offline-skin/maoqiu-offline-skin.jar` **随安装包一起发**。
 
-- **来源**：`offline-skin-agent/src/cn/kamucl/skin/OfflineSkinAgent.java` ——
+- **来源**：`offline-skin-agent/src/cn/maoqiu/skin/OfflineSkinAgent.java`
+  （上游路径 `offline-skin-agent/src/cn/kamucl/skin/OfflineSkinAgent.java`）——
   [KAMUCL](https://github.com/kamubaba-i/KAMUCL) 的原创组件，
   **GPL-3.0-or-later**（上游 `THIRD_PARTY_NOTICES.md` 里写明）。
 - **源码**：完整 Java 源码随本仓库提供，在
   [`build/offline-skin-agent/`](build/offline-skin-agent/)；许可证全文见
   [`build/offline-skin-agent/licenses/GPL-3.0.txt`](build/offline-skin-agent/licenses/GPL-3.0.txt)。
-- **对本文件的改动**：**没有**。源码与原版逐字节一致，毛球只自己编译它
+- **对本文件的改动**：**逻辑没有**（2026-10-16 只改了名字：包名 → `cn.maoqiu.skin`，
+  以及会露在游戏日志/界面上的几个字符串）。毛球只自己编译它
   （`npm run skin-agent`）。编译产物不含任何 Minecraft 代码。
 - **它做什么**：在被启动的那个游戏进程里开一个只监听 `127.0.0.1` 的小服务，
   把用户选的那张皮肤（只在本机）当成一个皮肤站的皮肤发给游戏。
