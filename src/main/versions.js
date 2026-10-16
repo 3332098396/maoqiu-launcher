@@ -124,6 +124,14 @@ function gameVersionFromJson(json, id) {
   const legacyHit = legacy.match(/--fml\.mcVersion\s+(\S+)/)
   if (legacyHit) return legacyHit[1]
 
+  // Fabric 的实例：它的库里有 `net.fabricmc:intermediary:<MC版本>` —— 版本就在名字里。
+  // （2026-10-16 从用户 E 盘那个 PCL 整合包实例上摸出来的：名字里没版本、没有 inheritsFrom、
+  //   也没有 --fml.mcVersion，可 intermediary 老老实实写着 1.20.1。）
+  for (const lib of Array.isArray(json?.libraries) ? json.libraries : []) {
+    const hit = String(lib?.name || '').match(/^net\.fabricmc:intermediary:(.+)$/)
+    if (hit) return hit[1]
+  }
+
   if (looksLikeGameVersion(id)) {
     // 名字开头就是版本号（`1.20.1-Fabric 0.15.11`）→ 取开头那一截
     const hit = String(id).match(/^(1\.\d+(?:\.\d+)?|2\d\.\d+(?:\.\d+)?)/)
