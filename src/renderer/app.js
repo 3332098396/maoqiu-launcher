@@ -3445,13 +3445,6 @@ async function renderJavaPanel(force = false) {
   javaHintEl.textContent = parts.join('')
 }
 
-/** 换哪个 Java 之后，两边（设置页 / 版本设置）都要跟着变 */
-function refreshJavaEverywhere() {
-  renderJavaPanel()
-  if (editingVersion && !verModalEl.hidden) renderVersionJava(editingVersion)
-  refreshLaunchFacts()
-}
-
 // ——— 上面那个开关：自动检测并下载 ———
 
 if (setAutoJavaEl) {

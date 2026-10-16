@@ -22,35 +22,6 @@ const path = require('node:path')
 const paths = require('./paths')
 const versions = require('./versions')
 
-/** 数一个文件夹有多大 */
-function dirSize(folder) {
-  let total = 0
-  const stack = [folder]
-  let guard = 0
-  while (stack.length > 0 && guard < 200000) {
-    guard++
-    const now = stack.pop()
-    let items = []
-    try {
-      items = fs.readdirSync(now, { withFileTypes: true })
-    } catch {
-      continue
-    }
-    for (const item of items) {
-      const full = path.join(now, item.name)
-      if (item.isDirectory()) stack.push(full)
-      else {
-        try {
-          total += fs.statSync(full).size
-        } catch {
-          // 读不到就不算
-        }
-      }
-    }
-  }
-  return total
-}
-
 /** 整个文件夹复制过去（符号链接跳过） */
 function copyDir(from, to) {
   fs.mkdirSync(to, { recursive: true })
@@ -90,7 +61,7 @@ function planSaveMove(versionId, dir) {
     const to = path.join(dest, item.name)
     let bytes = 0
     try {
-      bytes = dirSize(from)
+      bytes = paths.dirSize(from)
     } catch {
       bytes = 0
     }

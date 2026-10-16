@@ -25,6 +25,7 @@
 
 const crypto = require('node:crypto')
 const { openStream, postJson, fetchJson, HttpError } = require('./http')
+const { dashedUuid } = require('./uuid')
 
 /** 界面上的预填值。只是"默认"，用户随时能改成别的服务器 */
 const DEFAULT_SERVER = 'littleskin.cn'
@@ -42,22 +43,6 @@ function trimSlash(url) {
 /** 登录时用的"客户端令牌"——本地随机生成一个，用来之后续期 */
 function newClientToken() {
   return crypto.randomUUID()
-}
-
-/**
- * 把 Yggdrasil 给的 UUID（一串 32 位十六进制，没有横杠）补成标准格式。
- * 我们的离线账号存的是带横杠的，统一成一样，别的地方就不用分情况处理了。
- */
-function dashedUuid(raw) {
-  const hex = String(raw ?? '').replace(/-/g, '').toLowerCase()
-  if (!/^[0-9a-f]{32}$/.test(hex)) return ''
-  return [
-    hex.slice(0, 8),
-    hex.slice(8, 12),
-    hex.slice(12, 16),
-    hex.slice(16, 20),
-    hex.slice(20)
-  ].join('-')
 }
 
 /**

@@ -25,23 +25,9 @@ const paths = require('./paths')
 const { fetchJson } = require('./http')
 const zip = require('./zip')
 const downloader = require('./downloader')
+const { compareNewerFirst } = require('./vercmp')
 
 const BMCLAPI = 'https://bmclapi2.bangbang93.com'
-
-/**
- * 版本号比较：新的在前。
- * 【为什么不能用字符串比】"47.1.10" 按字符串排会跑到 "47.1.9" 前面去（10 比 9"小"）。
- */
-function compareNewerFirst(a, b) {
-  const pa = String(a).split(/[^0-9]+/).filter(Boolean).map(Number)
-  const pb = String(b).split(/[^0-9]+/).filter(Boolean).map(Number)
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const x = pa[i] || 0
-    const y = pb[i] || 0
-    if (x !== y) return y - x
-  }
-  return 0
-}
 
 /**
  * 某个游戏版本有哪些 OptiFine（新的在前，正式版排在预览版前面）。

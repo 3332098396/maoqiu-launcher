@@ -27,6 +27,7 @@
 const crypto = require('node:crypto')
 const { BrowserWindow } = require('electron')
 const { post, postJson, postForm, putJson, del, fetchJson, HttpError } = require('./http')
+const { dashedUuid } = require('./uuid')
 
 /**
  * 微软登录的"入口"有两个，**必须和应用的配置对上**，对不上会被当场拒。
@@ -73,19 +74,6 @@ function makePkce() {
   const verifier = base64url(crypto.randomBytes(32))
   const challenge = base64url(crypto.createHash('sha256').update(verifier).digest())
   return { verifier, challenge }
-}
-
-/** 标准 UUID 格式（8-4-4-4-12），游戏档案给的是不带横杠的 */
-function dashedUuid(raw) {
-  const hex = String(raw ?? '').replace(/-/g, '').toLowerCase()
-  if (!/^[0-9a-f]{32}$/.test(hex)) return ''
-  return [
-    hex.slice(0, 8),
-    hex.slice(8, 12),
-    hex.slice(12, 16),
-    hex.slice(16, 20),
-    hex.slice(20)
-  ].join('-')
 }
 
 // ——————————————————————————————————————————————

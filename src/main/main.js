@@ -428,9 +428,6 @@ let contentRunning = false
 function registerIpcHandlers() {
   voxlink = new VoxLink()
 
-  /** 本机已装了哪些版本（跨所有认得的游戏目录，每项带着它在哪儿） */
-  ipcMain.handle('versions:installed', () => paths.listAllInstalledVersions(settings.knownGameDirs()))
-
   /**
    * 装一个版本。进度通过 install:progress 主动推给界面。
    *

@@ -562,35 +562,6 @@ function importFiles(versionId, type, dir, sourcePaths) {
 // 存档（世界）
 // ——————————————————————————————————————————————
 
-/** 数一个文件夹有多大（存档大小要显示给用户看） */
-function dirSize(folder) {
-  let total = 0
-  let stack = [folder]
-  let guard = 0
-  while (stack.length > 0 && guard < 200000) {
-    guard++
-    const now = stack.pop()
-    let items = []
-    try {
-      items = fs.readdirSync(now, { withFileTypes: true })
-    } catch {
-      continue
-    }
-    for (const item of items) {
-      const full = path.join(now, item.name)
-      if (item.isDirectory()) stack.push(full)
-      else {
-        try {
-          total += fs.statSync(full).size
-        } catch {
-          // 读不到就不算
-        }
-      }
-    }
-  }
-  return total
-}
-
 /**
  * 列出能看见的存档，带上大小和上次玩的时间。
  * 转调 content.listSaves（那套"版本自己的 + 公共的都要找"的逻辑不能重写一份）。
@@ -601,7 +572,7 @@ function listWorlds(versionId, dir) {
     let size = 0
     let sizeFailed = false
     try {
-      size = dirSize(full)
+      size = paths.dirSize(full)
     } catch {
       sizeFailed = true
     }

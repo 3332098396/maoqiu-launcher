@@ -305,7 +305,41 @@ function listAllInstalledVersions(dirs) {
   return out
 }
 
+/**
+ * 数一个文件夹有多大：一路走下去，把所有文件的大小加起来。
+ * 版本隔离（搬存档）和存档列表（显示大小）都要用，所以共用这一份，别各抄各的。
+ * guard 是防呆：万一目录里绕成了一个环，也不会转到天荒地老。
+ */
+function dirSize(folder) {
+  let total = 0
+  const stack = [folder]
+  let guard = 0
+  while (stack.length > 0 && guard < 200000) {
+    guard++
+    const now = stack.pop()
+    let items = []
+    try {
+      items = fs.readdirSync(now, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const item of items) {
+      const full = path.join(now, item.name)
+      if (item.isDirectory()) stack.push(full)
+      else {
+        try {
+          total += fs.statSync(full).size
+        } catch {
+          // 读不到就不算
+        }
+      }
+    }
+  }
+  return total
+}
+
 module.exports = {
+  dirSize,
   configDir,
   cacheDir,
   manifestCacheFile,
