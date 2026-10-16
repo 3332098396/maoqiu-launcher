@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Package renamed for Maoqiu; origin and full attribution: see THIRD_PARTY_NOTICES.md.
+// Original author: KAMUCL -- https://github.com/kamubaba-i/KAMUCL (GPL-3.0-or-later).
+// Modified for Maoqiu: only the package name (cn.kamucl.skin -> cn.maoqiu.skin) and a few
+// user-visible strings were changed; the logic is untouched. Full attribution and license:
+// see THIRD_PARTY_NOTICES.md in the repository root.
 package cn.maoqiu.skin;
 
 import java.io.*;

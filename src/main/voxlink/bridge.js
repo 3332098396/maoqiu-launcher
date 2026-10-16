@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-// Copyright (c) 2026 毛球 (Maoqiu) · https://github.com/3332098396/maoqiu-launcher —— 移植/改编自 VoxLink，本文件按 LGPL-3.0 提供（见 THIRD_PARTY_NOTICES.md）
+// 原作者：VoxLink —— https://github.com/AUGUHDAR/VoxLink （LGPL-3.0-only）；本文件转译自 KAMUCL —— https://github.com/kamubaba-i/KAMUCL 的 JS 实现（作者：KAMUCL contributors）
+// 毛球只做了移植/改写：Copyright (c) 2026 毛球 (Maoqiu) · https://github.com/3332098396/maoqiu-launcher —— 本文件按 LGPL-3.0-only 提供（详见 THIRD_PARTY_NOTICES.md）
 //
 // 逐语句移植自 KAMUCL 的 `src/main/core/voxlink/bridge.ts`。
 // 见 THIRD_PARTY_NOTICES.md —— 本文件**不适用**仓库根的 MIT，按 LGPL-3.0-only 提供。
