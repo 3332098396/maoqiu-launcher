@@ -1,7 +1,7 @@
 {
   "name": "mc-launcher",
   "productName": "毛球",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "毛球 — Minecraft Java 版启动器（Windows 本地）",
   "main": "src/main/main.js",
   "private": true,
