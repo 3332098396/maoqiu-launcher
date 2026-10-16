@@ -326,6 +326,20 @@ let segmentingNow = 0
 /** 排队等分段名额的 */
 const segmentWaiters = []
 
+/**
+ * "本该分段、结果没分"的次数，分类记着。
+ *
+ * 【为什么要留这个痕】这些情况都是**悄悄地变回单连接、悄悄变慢**：不报错、界面上也看不出来。
+ * 以后有人问"某某包怎么下得这么慢"，有这个计数就能一眼看出来是"没哈希所以没分段"，
+ * 不用从头查一遍。（方块工程 2026-10-17 复核时提的，本鱼认。）
+ */
+const segmentationSkips = { noHash: 0, throttled: 0 }
+
+/** 给探针/排查用：看看有哪些大文件没走分段、为什么 */
+function segmentSkipStats() {
+  return { ...segmentationSkips, segmentingNow, waiting: segmentWaiters.length }
+}
+
 /** 抢一个"分段名额"（满了就排队），跑完自动让给下一个 */
 function withSegmentSlot(run) {
   return new Promise((resolve, reject) => {
@@ -653,6 +667,18 @@ async function downloadOneFile(file, { signal, preferMirror, onBytes, sourcePref
         // ——— 这次分段还是单连接（M30）———
         // （没 sha1 的不分段：理由见文件上方第 4 条规矩）
         const wantSegments = throttle || !file.sha1 ? 1 : segmentCountFor(file.size)
+        // 本该分段却没分 → 留个痕（不然"怎么变慢了"要重查一遍）
+        if (wantSegments === 1 && segmentCountFor(file.size) > 1) {
+          if (!file.sha1) {
+            segmentationSkips.noHash++
+            console.log(
+              `[下载] ${file.name || path.basename(file.saveTo)}（${(file.size / 1048576).toFixed(1)} MB）` +
+              '清单里没给哈希，为安全走单连接，会慢一些'
+            )
+          } else if (throttle) {
+            segmentationSkips.throttled++
+          }
+        }
         const sidecarPath = segmentSidecar(partPath)
 
         // 【分段留下的半截，这次不分段了就整份清掉】分段是把各段按偏移写进**同一个**
@@ -1058,6 +1084,7 @@ function createTask(files, options = {}) {
 
 module.exports = {
   createTask,
+  segmentSkipStats,
   sha1OfFile,
   existingFileIsGood,
   DEFAULT_CONCURRENCY,
