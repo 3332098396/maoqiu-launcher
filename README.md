@@ -44,7 +44,7 @@
 
 ## 下载安装
 
-到 [Releases](../../releases) 页下载安装包（最新 0.4.2）。
+到 [Releases](../../releases) 页下载安装包（最新 0.4.3）。
 
 > GitHub 的下载文件名里**不能带中文**（会被吃掉），所以那儿的文件名是
 > `maoqiu-<版本号>-setup.exe` —— 下载下来双击就行，跟你手上的
@@ -54,18 +54,19 @@
 
 - **夸克网盘**：<https://pan.quark.cn/s/1d5c852a0703>
   （口令 `/~9d093bUBe9~:/`，打开夸克网盘 App 复制整段也能拿到）
+  —— 网盘里那份**比 Releases 慢半步**（要手动传），刚发新版时以 Releases 为准。
 
-**或者走 GitHub 加速站**（不用网盘会员，点开直接下，2026-10-16 实测都能到 1 MB/s 上下）：
+**或者走 GitHub 加速站**（不用网盘会员，点开直接下，2026-10-17 实测都能到 1 MB/s 以上）：
 
-- <https://gh-proxy.com/https://github.com/3332098396/maoqiu-launcher/releases/download/v0.4.2/maoqiu-0.4.2-setup.exe>
-  （实测最快，约 1.4 MB/s）
-- <https://ghproxy.net/https://github.com/3332098396/maoqiu-launcher/releases/download/v0.4.2/maoqiu-0.4.2-setup.exe>
-  （约 1.1 MB/s）
-- <https://ghfast.top/https://github.com/3332098396/maoqiu-launcher/releases/download/v0.4.2/maoqiu-0.4.2-setup.exe>
-  （约 1.0 MB/s）
+- <https://gh-proxy.com/https://github.com/3332098396/maoqiu-launcher/releases/download/v0.4.3/maoqiu-0.4.3-setup.exe>
+  （实测最快，约 2.6 MB/s）
+- <https://ghfast.top/https://github.com/3332098396/maoqiu-launcher/releases/download/v0.4.3/maoqiu-0.4.3-setup.exe>
+  （约 2.5 MB/s）
+- <https://ghproxy.net/https://github.com/3332098396/maoqiu-launcher/releases/download/v0.4.3/maoqiu-0.4.3-setup.exe>
+  （约 1.2 MB/s）
 
 > 这三家是**公开的免费加速站**，谁都可以用、也可能哪天就挂了——**一条不通就换下一条**。
-> 换版本时把链接里的版本号（`v0.4.2`）改掉即可。
+> 换版本时把链接里的版本号（`v0.4.3`）改掉即可。
 
 **装新版本不用先卸载**——直接双击新的安装包，它会就地覆盖旧版，设置、皮肤、存档都不动。
 
