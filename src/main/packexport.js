@@ -21,6 +21,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const paths = require('./paths')
 const zipwriter = require('./zipwriter')
+const appinfo = require('./appinfo')
 
 /**
  * 这些东西一律不进包（**名字完全匹配**，用相对版本文件夹的路径比）。
@@ -131,6 +132,7 @@ async function exportPack({ versionId, outPath, dir, onStage } = {}) {
   // ——— 附一份说明。对方解压前应该知道这是什么、里面有没有他要小心的东西 ———
   const readme = [
     `毛球导出的整合包：${versionId}`,
+    `（导出它的毛球：${appinfo.versionLabel()}）`,
     '',
     '怎么用：直接把整个压缩包拖进毛球的窗口，它会自己认出这是整合包并装好。',
     '用别的启动器的话，解压到游戏目录（让它覆盖 .minecraft 那一层）一般也能认出。',

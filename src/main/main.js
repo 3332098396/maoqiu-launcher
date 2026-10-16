@@ -281,13 +281,14 @@ ipcMain.handle('win:isMaximized', (event) =>
   Boolean(BrowserWindow.fromWebContents(event.sender)?.isMaximized())
 )
 
-// 界面问"我是哪个版本的"——答案直接来自 package.json。
+// 界面问"我是哪个版本的"——答案来自 `appinfo`（那儿按路径读死 package.json）。
 // 【为什么不能写死在界面上】以前左下角把 0.1.0 写死了，package.json 升到 0.2.0
-// 它也纹丝不动，用户看到写着 0.1.0、装的其实是 0.2.0。以后升版本只改 package.json 一处。
+// 它也纹丝不动，用户看到写着 0.1.0、装的其实是 0.2.0。
 // 【为什么不用 app.getVersion()】它认的是"App 目录里的 package.json"，开发模式下
-// 入口是脚本文件、认不出来，会退回** Electron 自己的版本号**（实测返回 44.6.0）。
-// 直接按路径读死，开发跑和装完跑结果一样。
-const APP_VERSION = require(path.join(__dirname, '..', '..', 'package.json')).version
+// 入口是脚本文件、认不出来，会退回 **Electron 自己的版本号**（实测返回 44.6.0）。
+// 【为什么挪进 appinfo】导出的诊断包/整合包也要盖章"这是哪一版毛球"——
+// 版本号只留一处真相，界面和导出都去那儿拿。
+const { APP_VERSION } = require('./appinfo')
 ipcMain.handle('app:version', () => APP_VERSION)
 
 /** 设置页那个「卸载毛球」（M26）：这个毛球是不是装出来的（开发模式跑的不算） */

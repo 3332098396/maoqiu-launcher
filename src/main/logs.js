@@ -18,6 +18,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const paths = require('./paths')
 const zipwriter = require('./zipwriter')
+const appinfo = require('./appinfo')
 
 /** 启动器日志最多留几份（够翻最近几次，又不会堆成山） */
 const KEEP_LOGS = 20
@@ -210,16 +211,24 @@ async function exportDiagnostics({ outPath, dir, versionId } = {}) {
     }
 
     // ——— ② 游戏日志 ———
+    //
+    // 【文件名别再带序号】以前是按数组下标拼的（出来叫 `0.latest.log`、`2.latest.log`），
+    // 而说明里写的是"游戏自己的日志（latest.log）"——**对不上**，拿到包的人看着莫名其妙
+    // （2026-10-17 用户点出来的）。现在文件叫什么就写什么；版本隔离开着时多出来的那份
+    // （在**实例文件夹**里的）加个前缀区分，免得跟游戏目录那份重名。
     const gameLogs = [
-      path.join(gameDir, 'logs', 'latest.log'),
-      path.join(gameDir, 'logs', 'debug.log')
+      { name: 'latest.log', file: path.join(gameDir, 'logs', 'latest.log') },
+      { name: 'debug.log', file: path.join(gameDir, 'logs', 'debug.log') }
     ]
     if (versionId) {
-      gameLogs.push(path.join(paths.versionDir(versionId, dir), 'logs', 'latest.log'))
+      gameLogs.push({
+        name: '实例-latest.log',
+        file: path.join(paths.versionDir(versionId, dir), 'logs', 'latest.log')
+      })
     }
-    gameLogs.forEach((one, index) => {
-      if (fs.existsSync(one)) addFile(`游戏日志/${index}.${path.basename(one)}`, one)
-    })
+    for (const one of gameLogs) {
+      if (fs.existsSync(one.file)) addFile(`游戏日志/${one.name}`, one.file)
+    }
 
     // ——— ③ 崩溃报告（最近 5 份）———
     for (const one of newestFiles(path.join(gameDir, 'crash-reports'), (n) => n.endsWith('.txt'), 5)) {
@@ -227,15 +236,40 @@ async function exportDiagnostics({ outPath, dir, versionId } = {}) {
     }
 
     // ——— ④ 说明（用户看一眼就知道包里是什么、哪些被抹了）———
+    //
+    // 【为什么要写"哪一版、哪个实例"】2026-10-17 实测踩的：用户导了个包过来，
+    // 第一件要知道的恰恰是"这是装着的旧版、还是改过的开发版"——说明里没写，
+    // 只能去翻启动日志里那行 `-javaagent:…\resources\app.asar.unpacked\…`
+    // 才认出是安装版（带 app.asar 才是打包过的）。这句话本该在第一行。
+    //
+    // 【版本从哪儿来】`appinfo.versionLabel()`（读 package.json，不用 app.getVersion()——
+    // 开发模式下它给的是 Electron 自己的版本，实测写出个 44.6.0）。
+    // "安装版 / 开发版"也在那一行里：两者代码可能差一大截，拿到包的人必须知道在看哪一份。
+    //
+    // 【下面那条游戏目录要单独脱敏】说明整份是"我们自己写的、不过脱敏"（见 addRawText
+    // 的注释：里面的 C:\Users\某某 只是举例）。但**游戏目录是用户的真实路径**，
+    // 里面带着 Windows 用户名——原样写进去，就等于自己把"用户名已抹掉"这句承诺撕了。
+    // 所以它单独过一遍 redact，只有它一个人过。
+    const safeGameDir = redact(gameDir).text
+    const versionLine = appinfo.versionLabel()
+    const instanceLine = versionId
+      ? `${versionId}　游戏目录：${safeGameDir}`
+      : `没指定实例　游戏目录：${safeGameDir}`
+
     addRawText(
       '说明.txt',
       [
-        '这是毛球导出的诊断包，给帮你排查问题的人看的。',
+        '这是毛球导出的诊断包，给帮你排查问题的人和 AI 看的。',
         '',
         '里面有什么：',
-        '  · 启动器日志（最近几次启动的完整记录）',
-        '  · 游戏自己的日志（latest.log）',
+        '  · 启动器日志（最近几次启动的完整记录，在 启动器日志/ 里）',
+        '  · 游戏自己的日志（latest.log / debug.log；开了版本隔离的话，',
+        '    实例文件夹里那份叫 实例-latest.log）',
         '  · 游戏的崩溃报告（如果有）',
+        '',
+        '这一份是拿哪个毛球、从哪个实例导出来的：',
+        `  · 毛球：${versionLine}`,
+        `  · 实例：${instanceLine}`,
         '',
         '已经抹掉的东西：',
         '  · 登录令牌、刷新令牌、client secret',
