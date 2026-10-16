@@ -272,13 +272,30 @@ async function prepare(loader, gameVersion, { onStage, onProgress, onTask, dir, 
 // 处理器的写法是安装器自己给的（install_profile.json 的 processors）：
 // 一段 Java 程序 + 一串参数，参数里有 {MINECRAFT_JAR} 这种变量要替换。
 
-/** 把 "[net.minecraftforge:forge:1.2.3:client]" 这种坐标转成库文件路径 */
+/**
+ * 把 "[net.minecraftforge:forge:1.2.3:client]" 这种坐标转成库文件路径。
+ *
+ * 【末尾的 @扩展名】Maven 的坐标可以用 @zip / @txt 指定文件类型，比如
+ *   net.neoforged:neoform:1.21.1-20240808.144430@zip
+ * 官方仓库里的文件叫 `neoform-1.21.1-20240808.144430.zip`——**不是 .jar**。
+ * 【2026-10-16 实测的坑】以前把 @zip 当成版本号的一部分，拼出来的是
+ * `…@zip.jar` 这种**哪个源都没有**的文件名，NeoForge 21.1.x 就卡在
+ * "打补丁要用的库没下齐"。不写扩展名就是 jar（`:client` / `:all` / `:fatjar`
+ * 这些是分类器，不是扩展名，别搞混）。
+ */
 function coordToPath(coord) {
-  const inner = String(coord).replace(/^\[/, '').replace(/\]$/, '')
+  let inner = String(coord).replace(/^\[/, '').replace(/\]$/, '')
+  let ext = 'jar'
+  const at = inner.lastIndexOf('@')
+  if (at >= 0) {
+    const raw = inner.slice(at + 1).trim()
+    if (raw) ext = raw
+    inner = inner.slice(0, at)
+  }
   const parts = inner.split(':')
   const [group, artifact, version, classifier] = parts
   if (!group || !artifact || !version) return null
-  const file = `${artifact}-${version}${classifier ? `-${classifier}` : ''}.jar`
+  const file = `${artifact}-${version}${classifier ? `-${classifier}` : ''}.${ext}`
   return `${group.replace(/\./g, '/')}/${artifact}/${version}/${file}`
 }
 
@@ -289,20 +306,38 @@ function substituteVars(text, vars) {
   )
 }
 
+/**
+ * 参数里**直接写着**的 [坐标] 换成库文件路径。
+ *
+ * 【为什么非换不可】安装说明里有两处写坐标：一处是 {变量} 的值（那种走上面的变量表），
+ * 另一处是**参数本身**，比如 NeoForge 21.1.x 的
+ *   `--input [net.neoforged:neoform:1.21.1-20240808.144430@zip]`
+ * 官方安装器会把它换成库文件路径；毛球以前原样传给 Java，而那个步骤（installertools）
+ * 把 --input 当**文件路径**用 → 一开口就是 "Input does not exist"，必炸。
+ * 2026-10-16 实测：就是卡在这儿。
+ */
+function substituteCoords(text, librariesDir) {
+  return String(text).replace(/\[([^[\]]+)\]/g, (whole, inner) => {
+    const rel = coordToPath(inner)
+    return rel ? path.join(librariesDir, rel) : whole
+  })
+}
+
 /** 处理器的参数可能混着字符串和 {"--key": "值"} 这种对象，都摊平 */
-function resolveArgs(args, vars) {
+function resolveArgs(args, vars, librariesDir) {
   const out = []
+  const fix = (text) => substituteCoords(substituteVars(text, vars), librariesDir)
 
   for (const arg of args || []) {
     if (typeof arg === 'string') {
-      out.push(substituteVars(arg, vars))
+      out.push(fix(arg))
       continue
     }
     if (arg && typeof arg === 'object') {
       for (const [key, value] of Object.entries(arg)) {
-        out.push(substituteVars(key, vars))
+        out.push(fix(key))
         if (value !== undefined && value !== null && value !== '') {
-          out.push(substituteVars(String(value), vars))
+          out.push(fix(String(value)))
         }
       }
     }
@@ -352,18 +387,21 @@ async function runPatchers({ profile, jar, gameVersion, dir }, { onStage, onProg
   const profileLibs = (profile.libraries || [])
     .filter((lib) => lib && lib.name)
     .map((lib) => {
-      const relPath = coordToPath(lib.name)
+      // 【优先照抄安装器自己写的下载信息】它连文件名、下载地址、sha1 都写好了
+      // （sha1 就是"下完要验的哈希"，有它才验得动）。没有这个字段的
+      // （有些加载器不写）才自己按坐标拼路径。
+      const artifact = lib.downloads && lib.downloads.artifact
+      const relPath = (artifact && artifact.path) || coordToPath(lib.name)
       if (!relPath) return null
-      const official = `https://maven.minecraftforge.net/${relPath}`
-      const neoOfficial = `https://maven.neoforged.net/releases/${relPath}`
+      const official =
+        (artifact && artifact.url) || `https://maven.minecraftforge.net/${relPath}`
       const mirrored = mirror.toMirror(official) || (`https://bmclapi2.bangbang93.com/maven/${relPath}`)
       return {
         name: relPath,
         url: mirrored,
         saveTo: path.join(paths.librariesDir(dir), relPath),
-        sha1: (lib.downloads && lib.downloads.artifact && lib.downloads.artifact.sha1) || '',
-        size: 0,
-        _neo: neoOfficial
+        sha1: (artifact && artifact.sha1) || '',
+        size: (artifact && artifact.size) || 0
       }
     })
     .filter(Boolean)
@@ -385,8 +423,11 @@ async function runPatchers({ profile, jar, gameVersion, dir }, { onStage, onProg
   const mcJar = paths.versionJarFile(gameVersion, dir)
   if (!fs.existsSync(mcJar)) throw new Error(`找不到原版 ${gameVersion} 的客户端文件，先把它装好`)
 
-  const javaExe = findJava(gameVersion)
+  const javaExe = findJava(gameVersion, dir)
   if (!javaExe) throw new Error('找不到 Java，没法打补丁')
+
+  // 实例自己那份客户端 jar（原版那份的副本，名字得跟实例一样）——见下面 ensureInstanceJar
+  ensureInstanceJar(jar, gameVersion, dir)
 
   let ran = 0
 
@@ -397,7 +438,9 @@ async function runPatchers({ profile, jar, gameVersion, dir }, { onStage, onProg
     }
 
     // 这一侧要用到的变量（data 段里 client 那份）
-    const vars = { MINECRAFT_JAR: mcJar, ROOT: paths.gameDir(dir) }
+    // SIDE 不在 data 段里，是安装器自己定的"这次装的是哪一边"——
+    // 有个步骤（下载官方映射表）拿它挑 client/server，不填就会收到字面量 {SIDE} 而报错。
+    const vars = { MINECRAFT_JAR: mcJar, ROOT: paths.gameDir(dir), SIDE: 'client' }
     for (const [key, value] of Object.entries(profile.data || {})) {
       const raw =
         value && typeof value === 'object' ? value.client ?? value.server ?? '' : value
@@ -428,7 +471,7 @@ async function runPatchers({ profile, jar, gameVersion, dir }, { onStage, onProg
     const mainClass = readMainClass(jarPath)
     if (!mainClass) throw new Error(`处理器 ${processor.jar} 里没有主类，装不了`)
 
-    const args = resolveArgs(processor.args, vars)
+    const args = resolveArgs(processor.args, vars, paths.librariesDir(dir))
     stage('正在给游戏文件打补丁（这步要几秒到一分钟）…')
 
     const { spawn } = require('node:child_process')
@@ -480,11 +523,46 @@ function readMainClass(jarPath) {
   }
 }
 
+/**
+ * 在实例文件夹里放一份跟实例同名的客户端 jar（内容就是原版那份的副本）。
+ *
+ * 【为什么非放不可】NeoForge 21.1.x 的启动参数里写着
+ *   -DignoreList=client-extra,${version_name}.jar
+ * 它要忽略的是**实例名字那个 jar**。毛球以前一个实例文件夹里什么都不放，
+ * 启动时只好把父版本的原版 jar（versions\1.21.1\1.21.1.jar）传进去，
+ * 名字对不上 → 原版 jar 被 FML 当成模块扫了 → 当场崩：
+ * `Modules _1._21._1 and minecraft export package net.minecraft.server`。
+ * 官方安装器就是在这儿放一份副本（2026-10-16 实测：那份 26 836 906 字节，
+ * 跟原版一模一样）。PCL 装出来的实例也是这个形状。
+ *
+ * 有就不动（用户自己换过、整合包自带的那种，别覆盖）。
+ *
+ * @returns {string} 放好的路径；没放（不需要 / 原件不在）返回空串
+ */
+function ensureInstanceJar(jar, gameVersion, dir) {
+  const id = String((jar && jar.version && jar.version.id) || '')
+  if (!id || id === gameVersion) return '' // 原版自己就是实例，不用复制
+  const src = paths.versionJarFile(gameVersion, dir)
+  if (!fs.existsSync(src)) return ''
+  const dest = paths.versionJarFile(id, dir)
+  if (fs.existsSync(dest)) return dest
+  try {
+    paths.ensureDir(path.dirname(dest))
+    fs.copyFileSync(src, dest)
+    return dest
+  } catch {
+    return '' // 复制不了也别把安装整个搞挂：启动时还有"退回去用父版本那份"这一手
+  }
+}
+
 /** 找 Java（处理器要用；和启动游戏用的是同一套逻辑） */
-function findJava(versionId) {
+function findJava(versionId, dir) {
   try {
     const javaUtil = require('./java')
-    const json = JSON.parse(fs.readFileSync(paths.versionJsonFile(versionId), 'utf8'))
+    // 【dir 必须带上】不带就会去**默认游戏目录**找这个版本的 json；
+    // 版本装在别的目录（比如 D:\.MINECRAFT）时永远找不到 → 报"找不到 Java，没法打补丁"。
+    // 2026-10-16 实测：装到非默认目录 100% 卡这儿。
+    const json = JSON.parse(fs.readFileSync(paths.versionJsonFile(versionId, dir), 'utf8'))
     const found = javaUtil.findJava(json)
     return found ? found.path : ''
   } catch {
@@ -499,5 +577,10 @@ module.exports = {
   extractBundledLibraries,
   pointLibrariesToMirror,
   runPatchers,
-  coordToPath
+  ensureInstanceJar,
+  coordToPath,
+  // 下面几个是给探针用的（摸清"参数怎么解出来""Java 去哪找"这类事，见 .probe/）
+  resolveArgs,
+  substituteCoords,
+  findJava
 }

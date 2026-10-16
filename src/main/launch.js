@@ -197,9 +197,19 @@ function buildCommand(versionId, versionJson, { account, memoryMB, logConfigPath
     }
   }
 
-  // 客户端 jar：装了 Mod 加载器的版本自己没有，用最底下那个父版本的
+  // 客户端 jar：**优先用实例自己那份**，实例文件夹里没有才退回去用父版本的。
+  //
+  // 【为什么实例那份优先】装了 Mod 加载器的版本自己有 jar 的时候（Forge / NeoForge
+  // 装完会在实例文件夹里放一份原版 jar 的副本、名字跟实例一样），必须用那一份：
+  // NeoForge 21.1.x 的启动参数写着 `-DignoreList=client-extra,${version_name}.jar`，
+  // 它按**实例名**认哪个 jar 该被忽略。拿父版本那份名字对不上 → 原版 jar 被 FML
+  // 当成模块扫 → 崩（`Modules _1._21._1 and minecraft export package
+  // net.minecraft.server`）。2026-10-16 实测。
+  //
+  // Fabric 这类"自己确实没有 jar"的版本文件夹里是空的，走下面的父版本那条路。
   const jarOwner = rootId || versionId
-  const clientJar = paths.versionJarFile(jarOwner, dir)
+  const ownJar = paths.versionJarFile(versionId, dir)
+  const clientJar = fs.existsSync(ownJar) ? ownJar : paths.versionJarFile(jarOwner, dir)
   cpFiles.push(clientJar)
   if (!fs.existsSync(clientJar)) {
     const client = versionJson.downloads && versionJson.downloads.client
