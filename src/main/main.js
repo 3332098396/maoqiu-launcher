@@ -2587,6 +2587,11 @@ async function runLoaderInstall({ gameVersion, loader, loaderVersion, dir, send,
     const loaderLabel = `${labels[loader]} ${built.loaderVersion}`
 
     if (paths.isVersionInstalled(built.versionId, where)) {
+      // 【顺手把老装法升级成自成一体的（2026-10-17）】以前装的版本还带着 inheritsFrom；
+      // 用户再点一次「安装 / 加装加载器」时本来会被当成"已经装好了"直接跳过，
+      // 现在借这个机会转一下（不动 mod、存档、设置，只重写版本 json + 补客户端 jar）。
+      // 本来就是自成一体的会原样返回（changed=false）。
+      install.makeSelfContained(built.versionId, where)
       return { ok: true, already: true, versionId: built.versionId, loaderVersion: built.loaderVersion, loaderLabel }
     }
 

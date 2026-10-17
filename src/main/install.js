@@ -382,6 +382,49 @@ function extractNatives(versionId, natives, dir) {
 // ——————————————————————————————————————————————
 
 /**
+ * 把一个"靠继承"的已装版本改成"自成一体的"（2026-10-17 起的新装法，照 PCL）。
+ *
+ * 【什么时候用】用户之前装好的加载器版本还带着 `inheritsFrom`；他在下载页再点一次
+ * 「安装 / 加装加载器」时，本来会被当成"已经装好了"直接跳过。改成顺手转一下，
+ * **不动 mod、存档、设置**，只重写版本 json + 补一份客户端 jar。
+ *
+ * @returns {{ok: boolean, changed: boolean, error?: string}}
+ */
+function makeSelfContained(versionId, dir) {
+  try {
+    const file = paths.versionJsonFile(versionId, dir)
+    const json = JSON.parse(fs.readFileSync(file, 'utf8'))
+    // 已经是自成一体的（没有 inheritsFrom）就不用动
+    if (!json.inheritsFrom) return { ok: true, changed: false }
+
+    const resolved = inherit.resolveVersion(versionId, json, dir)
+    if (resolved.missingParent) {
+      return {
+        ok: false,
+        changed: false,
+        error: `这个版本是装在 ${resolved.missingParent} 上面的，得先把它装好`
+      }
+    }
+
+    const merged = { ...resolved.json, clientVersion: String(resolved.rootId) }
+    delete merged.inheritsFrom
+    fs.writeFileSync(file, JSON.stringify(merged, null, 2), 'utf8')
+
+    // 自成一体的版本要自带客户端 jar（跟 installVersion 里那条一个道理）
+    const src = paths.versionJarFile(resolved.rootId, dir)
+    const dest = paths.versionJarFile(versionId, dir)
+    if (fs.existsSync(src) && !fs.existsSync(dest)) {
+      paths.ensureDir(path.dirname(dest))
+      fs.copyFileSync(src, dest)
+    }
+
+    return { ok: true, changed: true }
+  } catch (error) {
+    return { ok: false, changed: false, error: String(error?.message ?? error) }
+  }
+}
+
+/**
  * 装一个版本。
  *
  * @param {string} versionId 版本号，比如 '1.21.4'
@@ -631,6 +674,7 @@ function dropPartialInstall(versionId, { removeVersionDir, downloaded = [], dir 
 
 module.exports = {
   installVersion,
+  makeSelfContained,
   ensureJavaComponent,
   buildFileList,
   rulesAllow,
