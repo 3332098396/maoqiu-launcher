@@ -435,7 +435,7 @@ function registerIpcHandlers() {
    * 勾了加载器就"先装原版，再把加载器装上去"一气呵成；
    * 不勾（或没传）就是老样子，只装原版。
    */
-  ipcMain.handle('install:start', async (event, versionId, choice) => {
+  ipcMain.handle('install:start', async (event, versionId, choice, installName) => {
     if (currentInstall) {
       return { ok: false, error: '已经有一个安装任务在跑了，等它完成或取消它' }
     }
@@ -484,8 +484,25 @@ function registerIpcHandlers() {
       }
       if (!base.ok) return base
 
+      /**
+       * 装完之后按用户填的名字改名（2026-10-17：PCL 装的时候就能起名，用户要这个）。
+       * 没填 / 跟原名一样就原样返回。改名失败不影响"装好了"这个结果——
+       * 只是把原因带回去，界面会说一句。
+       */
+      const applyName = (id, where, { renameFolder = true } = {}) => {
+        const wanted = String(installName || '').trim()
+        if (!wanted || wanted === String(id)) return { id, error: '' }
+        // 加载器版本：真的改名（文件夹、jar、json 里的 id 三样一起）
+        // 纯原版：只改显示名——原版文件夹名是"底座"，社区搜索和加装加载器都靠它（见 versions.setDisplayName）
+        const done = renameFolder ? versions.renameVersion(id, wanted, where) : versions.setDisplayName(id, wanted, where)
+        return done.ok ? { id: done.versionId || id, error: '' } : { id, error: done.error }
+      }
+
       // ——— ② 没勾加载器就到这儿 ———
-      if (!choice || !choice.loader) return base
+      if (!choice || !choice.loader) {
+        const named = applyName(base.versionId || versionId, '', { renameFolder: false })
+        return { ...base, versionId: named.id, renameError: named.error }
+      }
 
       // ——— ③ 勾了就接着把加载器装上去 ———
       const loaded = await runLoaderInstall({
@@ -502,11 +519,13 @@ function registerIpcHandlers() {
       }
       if (!loaded.ok) return loaded
 
+      const named = applyName(loaded.versionId, known(choice.dir))
       return {
         ...base,
-        versionId: loaded.versionId,
+        versionId: named.id,
         loaderLabel: loaded.loaderLabel,
-        loaderAlready: loaded.already === true
+        loaderAlready: loaded.already === true,
+        renameError: named.error
       }
     } catch (error) {
       return { ok: false, error: String(error?.message ?? error) }

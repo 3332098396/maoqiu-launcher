@@ -302,6 +302,101 @@ function updateVersion(id, { name, note, icon, category, favorite } = {}, dir) {
 }
 
 /**
+ * 只改"列表里显示的名字"，不动版本文件夹（纯原版用这个）。
+ *
+ * 【为什么原版不直接改文件夹名】原版文件夹名（`1.21`）是**底座**：社区搜索按它认游戏版本、
+ * 装加载器也按它找"这是哪个版本"。改了名，下载页会以为 1.21 没装、加装加载器也找不到它。
+ * 所以原版只改显示名（列表里显示成「我的世界（1.21）」），文件夹照旧。
+ */
+function setDisplayName(id, name, dir) {
+  const key = settings.versionKey(dir, id)
+  const config = settings.readConfig()
+  const all = { ...(config.versions || {}) }
+  const trimmed = String(name || '').trim().slice(0, MAX_NAME)
+  if (!trimmed) return { ok: true }
+  all[key] = { ...(all[key] || {}), name: trimmed }
+  try {
+    settings.writeConfig({ versions: all })
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, error: String(error?.message ?? error) }
+  }
+}
+
+/** 版本名里不能有的字符（Windows 文件名禁用）+ 不能是 . / .. */
+function isValidVersionName(name) {
+  const text = String(name || '')
+  if (!text || text === '.' || text === '..') return false
+  return !/[\\/:*?"<>|]/.test(text)
+}
+
+/**
+ * 把装好的版本改个名字（2026-10-17 用户要的：PCL 装的时候就能起名）。
+ *
+ * 【为什么三样一起改】游戏/加载器是按**版本名**找东西的——NeoForge 的启动参数里写着
+ * `${version_name}.jar`，只改文件夹的话 jar 名字对不上（M11.3 整合包踩过同一个坑）。
+ * 所以：**文件夹名、jar 名、json 里的 id** 三样一起改。
+ *
+ * 改名顺手补一个 `clientVersion`（改完名字就认不出"这是哪个游戏版本"了）——
+ * 社区搜索、加载器提示都要它。
+ *
+ * @returns {{ok: boolean, versionId?: string, error?: string}}
+ */
+function renameVersion(id, newId, dir) {
+  const from = String(id || '').trim()
+  const to = String(newId || '').trim()
+  // 没填 / 跟原名一样 = 什么都不用做（用户只是没改名）
+  if (!from || !to || from === to) return { ok: true, versionId: from }
+  if (to.length > MAX_NAME) return { ok: false, error: `版本名字最多 ${MAX_NAME} 个字` }
+  if (!isValidVersionName(to)) {
+    return { ok: false, error: '版本名字里不能有 \\ / : * ? " < > | 这些符号' }
+  }
+
+  const fromDir = paths.versionDir(from, dir)
+  const toDir = paths.versionDir(to, dir)
+  if (!fs.existsSync(paths.versionJsonFile(from, dir))) {
+    return { ok: false, error: '这个版本已经不在了' }
+  }
+  if (fs.existsSync(toDir)) {
+    return { ok: false, error: `已经有一个叫「${to}」的版本了，换个名字` }
+  }
+
+  // 改名前先问清楚"这到底是哪个游戏版本"——改完名字就认不出来了
+  const gameVersion = baseGameVersion(from, dir)
+
+  try {
+    fs.renameSync(fromDir, toDir)
+
+    // ① jar 跟着改名（NeoForge 的 ignoreList 认的就是这个名字）
+    const oldJar = path.join(toDir, `${from}.jar`)
+    if (fs.existsSync(oldJar)) fs.renameSync(oldJar, path.join(toDir, `${to}.jar`))
+
+    // ② json 文件名 + 里面的 id（顺手补 clientVersion）
+    const oldJson = path.join(toDir, `${from}.json`)
+    const json = JSON.parse(fs.readFileSync(oldJson, 'utf8'))
+    json.id = to
+    if (!json.clientVersion && gameVersion) json.clientVersion = gameVersion
+    fs.writeFileSync(path.join(toDir, `${to}.json`), JSON.stringify(json, null, 2), 'utf8')
+    if (fs.existsSync(oldJson)) fs.unlinkSync(oldJson)
+
+    // ③ 配置里那条（名字/备注/收藏）跟着搬到新键上，别让它丢了
+    const config = settings.readConfig()
+    const all = { ...(config.versions || {}) }
+    const oldKey = settings.versionKey(dir, from)
+    const newKey = settings.versionKey(dir, to)
+    if (all[oldKey]) {
+      all[newKey] = all[oldKey]
+      delete all[oldKey]
+      settings.writeConfig({ versions: all })
+    }
+
+    return { ok: true, versionId: to }
+  } catch (error) {
+    return { ok: false, error: String(error?.message ?? error) }
+  }
+}
+
+/**
  * 记一下这个版本什么时候玩的（M14.3：版本页要显示最近游玩）。
  *
  * 【为什么单独有这么个函数】改名/备注那条路（updateVersion）要求传名字和备注，
@@ -543,6 +638,8 @@ module.exports = {
   markPlayed,
   baseGameVersion,
   updateVersion,
+  renameVersion,
+  setDisplayName,
   versionSize,
   openFolder,
   deleteVersion,

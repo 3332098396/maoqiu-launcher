@@ -1907,6 +1907,20 @@
           想顺手加装一个 Mod 加载器吗？点一下选它；不想装就直接开始，纯原版一样能玩。
         </p>
         <ul class="loaderlist" id="loader-list"></ul>
+        <!-- 装的时候先起个名字（2026-10-17 用户要的：以前只有整合包能改名） -->
+        <label class="field" id="loader-name-field">
+          <span class="field__label">给装出来的版本起个名字（不填也行）</span>
+          <input
+            class="input"
+            id="loader-name"
+            type="text"
+            maxlength="40"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="比如：我的 NeoForge 生存"
+          />
+          <span class="field__hint">只在毛球的列表里显示，不会改版本文件夹的名字。</span>
+        </label>
         <p class="delbox" id="loader-hint"></p>
         <div class="modal__actions modal__actions--end">
           <button class="btn btn--ghost" type="button" id="loader-cancel">取消</button>

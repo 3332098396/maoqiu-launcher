@@ -72,7 +72,8 @@ contextBridge.exposeInMainWorld('api', {
    *   下载页勾了 Mod 加载器时的选择（不勾就传 null / 不传）
    * @returns {Promise<{ok: boolean, stats?, versionId?: string, loaderLabel?: string, error?}>}
    */
-  startInstall: (versionId, choice) => ipcRenderer.invoke('install:start', versionId, choice),
+  startInstall: (versionId, choice, name) =>
+    ipcRenderer.invoke('install:start', versionId, choice, name),
 
   /**
    * 取消正在跑的安装。

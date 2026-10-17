@@ -387,7 +387,7 @@ async function loadInstalled() {
   }
 }
 
-async function startInstall(versionId, choice) {
+async function startInstall(versionId, choice, name = '') {
   if (installingVersion) return
   installingVersion = versionId
 
@@ -400,7 +400,7 @@ async function startInstall(versionId, choice) {
   setDetail('—')
   installCancelEl.hidden = false
 
-  const result = await window.api.startInstall(versionId, choice || null)
+  const result = await window.api.startInstall(versionId, choice || null, name)
   installingVersion = ''
   // 【装完要收起来，不能只置灰】用户反馈："安装完成之后右下角还是取消安装"——
   // 光禁用的话它还杵在那儿、点又点不动，看着像坏了。
@@ -433,12 +433,18 @@ async function startInstall(versionId, choice) {
     setDetail('装好了')
   }
 
+  // 改名字没成功的话说一句（版本本身是装好了的）
+  if (result.renameError) {
+    setDetail(`装好了，但改名字没成功：${result.renameError}`)
+  }
+
   // 装完立刻刷新列表，让这一行变成「已安装」
   await loadInstalled()
+  // 版本列表也要重读：装出了带加载器的新版本、或者用户改了名字，都得按新的来
+  await refreshLaunchFacts()
 
-  // 装出了带加载器的新版本 → 把启动页选中的版本切过去，省得用户自己找
-  if (result.loaderLabel) {
-    await refreshLaunchFacts()
+  // 带加载器的新版本 / 改过名字的版本 → 把启动页选中的切过去，省得用户自己找
+  if (result.loaderLabel || finalId !== versionId) {
     const installedNow = findVersion(finalId, '')
     if (installedNow) {
       selectedVersion = installedNow.id
@@ -458,11 +464,14 @@ const loaderModalEl = document.getElementById('loader-modal')
 const loaderTitleEl = document.getElementById('loader-title')
 const loaderSubEl = document.getElementById('loader-sub')
 const loaderListEl = document.getElementById('loader-list')
+const loaderNameEl = document.getElementById('loader-name')
 const loaderHintEl = document.getElementById('loader-hint')
 const loaderGoEl = document.getElementById('loader-go')
 
 /** 弹窗的当前状态；null = 没开着 */
 let loaderPicker = null
+/** 名字框上一次"自动填"的值——用来判断用户有没有自己改过（改过就别覆盖他） */
+let loaderNameAuto = ''
 
 function closeLoaderPicker() {
   loaderModalEl.hidden = true
@@ -488,6 +497,9 @@ async function openLoaderPicker(versionId, installed) {
   waiting.textContent = '正在查各家加载器都有哪些版本…'
   loaderListEl.appendChild(waiting)
 
+  // 名字框默认就是版本号（PCL 那样），选了加载器后 renderLoaderPicker 会跟着换
+  loaderNameEl.value = versionId
+  loaderNameAuto = versionId
   loaderHintEl.textContent = ''
   loaderGoEl.textContent = installed ? '开始安装' : '开始下载'
   loaderGoEl.disabled = installed // 已装的版本：没挑加载器就没什么可装的
@@ -516,6 +528,17 @@ async function openLoaderPicker(versionId, installed) {
 function renderLoaderPicker() {
   const state = loaderPicker
   if (!state || !state.data) return
+
+  // 【名字框的默认值跟着选择走】（2026-10-17 用户要的：PCL 那样"默认显示版本号、可以改"）
+  //   没选加载器 → 原版版本号（1.21）
+  //   选了        → 1.21-NeoForge_21.0.167
+  // 用户自己改过（值不等于上一次的默认值）就不动它。
+  const LOADER_LABELS = { fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge', optifine: 'OptiFine' }
+  const suggested = state.picked
+    ? `${state.versionId}-${LOADER_LABELS[state.picked.loader] || state.picked.loader}_${state.picked.version}`
+    : state.versionId
+  if (loaderNameEl.value === loaderNameAuto || !loaderNameEl.value) loaderNameEl.value = suggested
+  loaderNameAuto = suggested
 
   loaderListEl.textContent = ''
 
@@ -635,12 +658,22 @@ loaderListEl.addEventListener('click', (event) => {
 loaderGoEl.addEventListener('click', () => {
   const state = loaderPicker
   if (!state) return
+
+  // 用户填的名字：先在这儿拦一道明显不对的（跟 Windows 文件名一个规矩），
+  // 免得整包装完才说"名字不合法"
+  const name = loaderNameEl.value.trim()
+  if (name && /[\\/:*?"<>|]/.test(name)) {
+    loaderHintEl.textContent = '版本名字里不能有 \\ / : * ? " < > | 这些符号，改一下再开始'
+    loaderNameEl.focus()
+    return
+  }
+
   const choice = state.picked
     ? { loader: state.picked.loader, loaderVersion: state.picked.version }
     : null
   const id = state.versionId
   closeLoaderPicker()
-  startInstall(id, choice)
+  startInstall(id, choice, name)
 })
 
 document.getElementById('loader-cancel').addEventListener('click', closeLoaderPicker)
