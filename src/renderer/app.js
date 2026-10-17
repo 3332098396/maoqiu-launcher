@@ -1168,7 +1168,11 @@ function dirTail(dir) {
  * 点标题右边的箭头才展开全部——展开后列表自己也带滚动条，最多占 38% 屏高。
  */
 function renderPickList() {
-  const all = versionList()
+  // 【纯底座不进下拉】装了 Mod 加载器的版本会带一个"它继承自的原版"，两个一起列出来，
+  // 看着就像"装一次出来两个"（2026-10-17 用户报的）。底座的文件和继承关系一个字没动
+  // —— 加载器版本照常启动；只是它不在下拉里单独占一行。
+  // 「已安装版本」那页仍然看得到它（那里是管理用的，删加载器它就回到下拉里）。
+  const all = versionList().filter((one) => !one.usedAsBase)
   const current = selectedItem()
 
   // 收藏的排前面（sort 是稳定的，所以收藏之间还是原来的顺序）

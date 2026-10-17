@@ -34,12 +34,29 @@ const MAX_NOTE = 200
  * 跨**所有认得的游戏目录**列，每项带着"它在哪个目录"——启动页那个列表就是它渲染的。
  *
  * @param {string[]} [dirs] 要列哪些目录；不传 = 默认目录
- * @returns {Array<{id, dir, key, isDefault, name, note, loader, base}>}
+ * @returns {Array<{id, dir, key, isDefault, name, note, loader, base, usedAsBase}>}
  */
 function listAllVersions(dirs) {
   const custom = settings.readConfig().versions || {}
+  const installed = paths.listAllInstalledVersions(dirs)
 
-  return paths.listAllInstalledVersions(dirs).map(({ id, dir, isDefault }) => {
+  /**
+   * 【哪些版本只是"给别人当底座"】
+   * 装了 Mod 加载器的版本写着一句 `inheritsFrom`（继承自某个原版），那个原版
+   * 会跟加载器版本一起出现在列表里 —— 用户看到的就是"装一个版本出来两个"
+   * （2026-10-17 报的；PCL 是把原版内容合并进实例所以只有一个）。
+   *
+   * 这里只**标一个记号**，不删不改：界面把纯底座从启动页的下拉里收起来，
+   * 文件、继承关系一个字不动，加载器版本照常启动。
+   * "纯底座" = 它自己不再继承别人（是链条最底下那个原版）、并且有别人继承它。
+   */
+  const parentKeys = new Set()
+  for (const { id, dir } of installed) {
+    const parent = inheritsFromOf(id, dir)
+    if (parent) parentKeys.add(`${String(dir).toLowerCase()}|${parent}`)
+  }
+
+  return installed.map(({ id, dir, isDefault }) => {
     const key = settings.versionKey(dir, id)
     return {
       id,
@@ -54,9 +71,21 @@ function listAllVersions(dirs) {
       lastPlayed: Number(custom[key]?.lastPlayed) || 0,
       loader: loaderName(id, dir),
       type: versionType(id, dir),
-      base: baseGameVersion(id, dir)
+      base: baseGameVersion(id, dir),
+      usedAsBase:
+        parentKeys.has(`${String(dir).toLowerCase()}|${id}`) && !inheritsFromOf(id, dir)
     }
   })
+}
+
+/** 这个版本继承自谁（没有就返回空串）。读不出来也当没有——别让一个坏文件把整张列表拖垮 */
+function inheritsFromOf(id, dir) {
+  try {
+    const json = JSON.parse(fs.readFileSync(paths.versionJsonFile(id, dir), 'utf8'))
+    return json.inheritsFrom ? String(json.inheritsFrom) : ''
+  } catch {
+    return ''
+  }
 }
 
 /**
