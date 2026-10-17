@@ -51,13 +51,22 @@ function listAllVersions(dirs) {
    * "纯底座" = 它自己不再继承别人（是链条最底下那个原版）、并且有别人继承它。
    */
   const parentKeys = new Set()
+  const links = new Map()
   for (const { id, dir } of installed) {
-    const parent = inheritsFromOf(id, dir)
-    if (parent) parentKeys.add(`${String(dir).toLowerCase()}|${parent}`)
+    const key = `${String(dir).toLowerCase()}|${id}`
+    const here = versionLinksOf(id, dir)
+    links.set(key, here)
+    // 两种"指向底座"的写法都算：
+    //   · inheritsFrom —— 老装法（还没合并的实例、整合包）
+    //   · clientVersion —— 自成一体的装法（2026-10-17 起，跟 PCL 一样）
+    if (here.inheritsFrom) parentKeys.add(`${String(dir).toLowerCase()}|${here.inheritsFrom}`)
+    if (here.clientVersion) parentKeys.add(`${String(dir).toLowerCase()}|${here.clientVersion}`)
   }
 
   return installed.map(({ id, dir, isDefault }) => {
     const key = settings.versionKey(dir, id)
+    const here = links.get(`${String(dir).toLowerCase()}|${id}`) || {}
+    const loader = loaderName(id, dir)
     return {
       id,
       dir,
@@ -69,22 +78,27 @@ function listAllVersions(dirs) {
       category: custom[key]?.category || '',
       favorite: Boolean(custom[key]?.favorite),
       lastPlayed: Number(custom[key]?.lastPlayed) || 0,
-      loader: loaderName(id, dir),
+      loader,
       type: versionType(id, dir),
       base: baseGameVersion(id, dir),
+      // 纯底座 = 自己被别人指着 + 自己不再继承谁 + **自己不是加载器版本**
+      // （加载器版本即使被整合包继承也要露出来，用户要能单独启动它）
       usedAsBase:
-        parentKeys.has(`${String(dir).toLowerCase()}|${id}`) && !inheritsFromOf(id, dir)
+        parentKeys.has(`${String(dir).toLowerCase()}|${id}`) && !here.inheritsFrom && !loader
     }
   })
 }
 
-/** 这个版本继承自谁（没有就返回空串）。读不出来也当没有——别让一个坏文件把整张列表拖垮 */
-function inheritsFromOf(id, dir) {
+/** 这个版本指向谁、被谁指（读不出来就当没有——别让一个坏文件把整张列表拖垮） */
+function versionLinksOf(id, dir) {
   try {
     const json = JSON.parse(fs.readFileSync(paths.versionJsonFile(id, dir), 'utf8'))
-    return json.inheritsFrom ? String(json.inheritsFrom) : ''
+    return {
+      inheritsFrom: json.inheritsFrom ? String(json.inheritsFrom) : '',
+      clientVersion: json.clientVersion ? String(json.clientVersion) : ''
+    }
   } catch {
-    return ''
+    return { inheritsFrom: '', clientVersion: '' }
   }
 }
 
@@ -144,6 +158,11 @@ function looksLikeGameVersion(text) {
  * （这两条兜底是 2026-10-16 方块工程那条会话来消息时给的，他们在真机上撞出来的。）
  */
 function gameVersionFromJson(json, id) {
+  // 【自成一体的实例】2026-10-17 起装的加载器版本会写一个 `clientVersion`
+  // （跟 PCL 一样），直接就是"这是哪个原版"——最省事，优先认它
+  const clientVersion = String(json?.clientVersion || '').trim()
+  if (clientVersion) return clientVersion
+
   const args = Array.isArray(json?.arguments?.game) ? json.arguments.game : []
   for (let i = 0; i < args.length - 1; i++) {
     if (args[i] === '--fml.mcVersion' && args[i + 1]) return String(args[i + 1])

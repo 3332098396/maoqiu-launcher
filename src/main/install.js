@@ -427,12 +427,23 @@ async function installVersion(versionId, options = {}) {
     const { files, natives } = await buildFileList(versionId, fullJson, { onStage: stage, rootId, dir })
 
     // ——— 3. 版本 JSON 本身也存一份 ———
-    // 存"它自己那份"（带 inheritsFrom 的原样），不是合并后的——
-    // 合并是每次用的时候现算的，存合并版会把继承关系弄丢
+    // 【自成一体的存法（2026-10-17 用户拍板，照 PCL 的样子）】
+    // 带 inheritsFrom 的版本（Fabric / Forge / NeoForge / OptiFine）以前存"自己那份"，
+    // 用的时候现合并。现在存**合并后的完整版**：去掉 inheritsFrom、写上 `clientVersion`
+    // （就是它底下那个原版）。好处：
+    //   · 底座版本哪天被删/被换掉，这个实例照样能启动（不再依赖别人）
+    //   · 列表里不会出现"底座 + 加载器"两个（底座靠 clientVersion 认出来）
+    // 底座文件夹**不删**——那可能是用户还要单独玩的原版；只是被标成"底座"。
+    const selfContained = Boolean(versionJson.inheritsFrom) && String(rootId) !== String(versionId)
+    let storedJson = versionJson
+    if (selfContained) {
+      storedJson = { ...fullJson, clientVersion: String(rootId) }
+      delete storedJson.inheritsFrom
+    }
     paths.ensureDir(paths.versionDir(versionId, dir))
     fs.writeFileSync(
       paths.versionJsonFile(versionId, dir),
-      JSON.stringify(versionJson, null, 2),
+      JSON.stringify(storedJson, null, 2),
       'utf8'
     )
 
@@ -474,6 +485,19 @@ async function installVersion(versionId, options = {}) {
     if (natives.length > 0) {
       stage('正在解压运行库…')
       extractNatives(versionId, natives, dir)
+    }
+
+    // ——— 5.5 自成一体的版本要自带一份客户端 jar ———
+    // 合并后的实例不再继承谁，主程序必须在自己文件夹里（名字得跟实例一样）。
+    // Forge / NeoForge 打补丁时已经放了一份；Fabric / OptiFine 靠这里补。
+    // 底座那份原样留着不动。
+    if (selfContained) {
+      const src = paths.versionJarFile(rootId, dir)
+      const dest = paths.versionJarFile(versionId, dir)
+      if (fs.existsSync(src) && !fs.existsSync(dest)) {
+        paths.ensureDir(path.dirname(dest))
+        fs.copyFileSync(src, dest)
+      }
     }
 
     // 装全了，把"装到一半"的标记拔掉
