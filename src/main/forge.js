@@ -86,7 +86,13 @@ async function listBuilds(loader, gameVersion) {
       })
       .map((item) => ({
         version: item.version,
-        installerUrl: `${BMCLAPI}${item.installerPath}`,
+        // 【别直接存镜像地址】BMCLAPI 的 /maven 是个 302 跳板，跳到一台慢 CDN
+        // （2026-10-17 实测同一个安装器：镜像 47 KB/s、用户那边 10 KB/s）；
+        // 存官方地址，下载器会按 mirror.officialFastPair 换成 **官方自家** 的快 CDN
+        // （forgecdn，实测 539 KB/s），真不行再退回镜像。
+        // installerPath 形如 /maven/net/neoforged/neoforge/<版本>/…-installer.jar，
+        // 官方地址 = maven.neoforged.net + **releases** + 去掉 /maven 的那截。
+        installerUrl: `https://maven.neoforged.net/releases${String(item.installerPath).replace(/^\/maven/, '')}`,
         sha1: ''
       }))
   }
@@ -187,6 +193,12 @@ function pointLibrariesToMirror(version) {
   fixed.libraries = (version.libraries || []).map((lib) => {
     const artifact = lib.downloads && lib.downloads.artifact
     if (!artifact || !artifact.url) return lib
+
+    // 【NeoForge 的库留在官方地址】不是因为我们偏爱官方，而是为了**给下载器两条路**：
+    // 写死成镜像的话候选只剩一个，下载器那套"太慢就换边"的机制就没别的可换
+    // （2026-10-17 用户实测：库全走 BMCLAPI，整批卡在 8 KB/秒）。
+    // 留官方地址 ⇒ 候选 = [forgecdn 官方快 CDN, BMCLAPI 镜像]，快慢由下载器实测决定。
+    if (mirror.isNeoForgeUrl(artifact.url)) return lib
 
     const mirrored = mirror.toMirror(artifact.url)
     if (!mirrored) return lib
@@ -379,9 +391,18 @@ async function runPatchers({ profile, jar, gameVersion, dir }, { onStage, onProg
       const artifact = lib.downloads && lib.downloads.artifact
       const relPath = (artifact && artifact.path) || coordToPath(lib.name)
       if (!relPath) return null
-      const official =
-        (artifact && artifact.url) || `https://maven.minecraftforge.net/${relPath}`
-      const mirrored = mirror.toMirror(official) || (`https://bmclapi2.bangbang93.com/maven/${relPath}`)
+      // 安装器没写下载地址时按坐标拼：**neoforged 的包在 neoforged 仓库**，
+      // 拼成 minecraftforge 那个域名会 404（以前就是这样，只是很少走到这条）
+      const fallbackBase = /^net\/neoforged\//.test(relPath)
+        ? 'https://maven.neoforged.net/releases'
+        : 'https://maven.minecraftforge.net'
+      const official = (artifact && artifact.url) || `${fallbackBase}/${relPath}`
+      // 【NeoForge 的包留官方地址】给下载器留两条路（forgecdn / BMCLAPI），
+      // 快慢由它按实测速度自己换边。写死成镜像的话候选只剩一个，换源机制就废了
+      // （2026-10-17 用户实测：库全走 BMCLAPI，整批卡在 8 KB/秒）。
+      const mirrored = mirror.isNeoForgeUrl(official)
+        ? official
+        : mirror.toMirror(official) || `https://bmclapi2.bangbang93.com/maven/${relPath}`
       return {
         name: relPath,
         url: mirrored,

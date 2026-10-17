@@ -639,7 +639,7 @@ async function downloadOneFile(file, { signal, preferMirror, onBytes, sourcePref
   const candidates = []
   if (preferMirror && mirrorUrl) candidates.push({ url: mirrorUrl, isMirror: true })
   candidates.push({ url: official ? official.fast : file.url, isMirror: false })
-  if (official && official.slow !== official.fast) {
+  if (official && official.slow && official.slow !== official.fast) {
     candidates.push({ url: official.slow, isMirror: false })
   }
   // 用户选了"只用官方"就绝不碰镜像（设置里写的明白，不能偷着用）
