@@ -43,28 +43,35 @@ const FABRIC_META_MIRROR = 'https://bmclapi2.bangbang93.com/fabric-meta/v2'
  *   · 选了"只用官方" → 只试官方（慢也认）
  *   · 其他情况 → 先镜像（官方实测 20 秒起，等得人心焦；镜像 1.2 秒）
  * 镜像不行会自动回官方，不会因为镜像抽风就装不上。
+ *
+ * 【失败时把**官方**回的 HTTP 状态码挂到错误上】调用方要分辨"服务器说没有"和"没连上"：
+ *   · Fabric 压根不支持某个游戏版本时，官方回 **400**（正文是 `[]`），镜像回 **404**
+ *     —— 这是"听懂了，回答是没有"，不是网络问题（2026-10-17 实测 1.12.1）
+ *   · 只认**官方**的 400/404；镜像缺件可能只是镜像没跟上，不能当"游戏版本不存在"
  */
 async function fetchFabricJson(pathAfterVersion) {
   const errors = []
   const source = settings.downloadSource()
 
+  const official = { name: '官方', url: `${FABRIC_META_OFFICIAL}${pathAfterVersion}`, timeout: 90000, isOfficial: true }
   const tries =
     source === 'official'
-      ? [{ name: '官方', url: `${FABRIC_META_OFFICIAL}${pathAfterVersion}`, timeout: 90000 }]
-      : [
-          { name: '国内镜像', url: `${FABRIC_META_MIRROR}${pathAfterVersion}`, timeout: 30000 },
-          { name: '官方', url: `${FABRIC_META_OFFICIAL}${pathAfterVersion}`, timeout: 90000 }
-        ]
+      ? [official]
+      : [{ name: '国内镜像', url: `${FABRIC_META_MIRROR}${pathAfterVersion}`, timeout: 30000 }, official]
 
+  let officialStatus = 0
   for (const attempt of tries) {
     try {
       return await fetchJson(attempt.url, { timeout: attempt.timeout })
     } catch (error) {
       errors.push(`${attempt.name}：${error.message}`)
+      if (attempt.isOfficial) officialStatus = Number(error?.statusCode) || 0
     }
   }
 
-  throw new Error(`Fabric 的接口连不上。\n${errors.join('\n')}`)
+  const failure = new Error(`Fabric 的接口连不上。\n${errors.join('\n')}`)
+  failure.statusCode = officialStatus
+  throw failure
 }
 
 /**
@@ -115,10 +122,23 @@ function normalizeFabricProfile(profile) {
 
 /**
  * 查某个游戏版本能用哪些 Fabric 加载器版本。
+ *
+ * 【返回空数组 = Fabric 不支持这个游戏版本】比如 1.12.1：官方明确回 400（正文 `[]`）、
+ * 镜像回 404。以前一律当"接口连不上"抛出，界面上就成了「查不到（网络不好？）」——
+ * 把"人家根本没有"说成"你网络不好"，会把人指去折腾网络（2026-10-17 用户看出来的）。
+ * 现在：400/404 → 空数组（界面会说「这个游戏版本没有它」）；其余失败照旧抛。
+ *
  * @returns {Promise<Array<{version: string, stable: boolean}>>}
  */
 async function listFabricLoaders(gameVersion) {
-  const list = await fetchFabricJson(`/versions/loader/${encodeURIComponent(gameVersion)}`)
+  let list
+  try {
+    list = await fetchFabricJson(`/versions/loader/${encodeURIComponent(gameVersion)}`)
+  } catch (error) {
+    const status = Number(error?.statusCode) || 0
+    if (status === 400 || status === 404) return []
+    throw error
+  }
   return (Array.isArray(list) ? list : [])
     .filter((item) => item && item.loader && item.loader.version)
     .map((item) => ({ version: item.loader.version, stable: Boolean(item.loader.stable) }))
